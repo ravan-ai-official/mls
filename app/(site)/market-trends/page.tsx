@@ -147,7 +147,7 @@ async function HeaderKpis({ filters }: { filters: Filters }) {
 
   const cards = [
     {
-      label: "Median sale price",
+      label: "Median price",
       value: latest?.medianSoldPrice ? formatPriceCompact(latest.medianSoldPrice) : EMPTY,
       change: priceChange === null ? null : formatPercent(priceChange),
       up: (priceChange ?? 0) >= 0,
@@ -248,7 +248,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
 
           <section className="rounded-2xl border border-line bg-surface p-6">
             <div className="mb-6">
-              <h3 className="text-[20px] font-semibold text-ink">Median sold price</h3>
+              <h3 className="text-[20px] font-semibold text-ink">Median price</h3>
               <p className="mt-1 text-[13px] text-ink-muted">
                 Closed transactions, last {sold.windowMonths || range.months} months
                 {sold.generatedAt ? ` · as of ${formatDate(sold.generatedAt)}` : ""}
@@ -258,7 +258,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
 
             {sold.unavailable ? (
               <p className="text-small text-ink-muted">
-                Sold-transaction data is temporarily unavailable. Median sold price, days on market and
+                Sold-transaction data is temporarily unavailable. Median price, days on market and
                 sale-to-list will appear here once the sold feed is back.
               </p>
             ) : soldMonths.length === 0 ? (
@@ -268,7 +268,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             ) : (
               <>
                 <TrendChart
-                  label="Median sold price"
+                  label="Median price"
                   detailLabel="Units sold"
                   dots="none"
                   series={soldMonths.map((month) => ({
@@ -416,7 +416,7 @@ function Heatmap({
       </div>
       <p className="mb-5 text-[13px] text-ink-muted">
         {showHeat
-          ? "Median sold price over the last 90 days. Colour is how many homes sold compared with what is listed."
+          ? "Median price over the last 90 days. Colour is how many homes sold compared with what is listed."
           : "Median price by city. Sold totals are unavailable, so there is no heat reading."}
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -487,7 +487,7 @@ function MonthlyTable({
         <thead>
           <tr className="border-b border-line text-left text-[12px] text-ink-muted">
             <th scope="col" className="py-2 pr-4 font-medium">Month</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Median sold</th>
+            <th scope="col" className="py-2 pr-4 font-medium">Median price</th>
             <th scope="col" className="py-2 pr-4 font-medium">Days on market</th>
             <th scope="col" className="py-2 pr-4 font-medium">Sale-to-list</th>
             <th scope="col" className="py-2 font-medium">Units sold</th>
