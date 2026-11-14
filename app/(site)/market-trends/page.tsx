@@ -441,14 +441,6 @@ function periodSpanLabel(months: SoldTrends["months"]): string | null {
   return firstLabel === lastLabel ? firstLabel : `${firstLabel} – ${lastLabel}`;
 }
 
-/** e.g. "Jan–Nov 2026" — YTD with the months covered so far. */
-function ytdMonthRangeLabel(now = new Date()): string {
-  const year = now.getFullYear();
-  const start = new Date(year, 0, 1).toLocaleDateString("en-CA", { month: "short" });
-  const end = now.toLocaleDateString("en-CA", { month: "short" });
-  return start === end ? `${start} ${year}` : `${start}–${end} ${year}`;
-}
-
 function medianOf(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -514,8 +506,6 @@ function Heatmap({
 }) {
   if (cities.length === 0) return null;
 
-  const ytdMonthsLabel = ytdMonthRangeLabel();
-  const ytdLabel = `YTD · ${ytdMonthsLabel}`;
   const scored = cities.map((row) => ({
     row,
     absorption:
@@ -551,8 +541,8 @@ function Heatmap({
       </div>
       <p className="mb-5 text-[13px] text-ink-muted">
         {showHeat
-          ? `Median price year to date (${ytdMonthsLabel}). Colour is how many homes sold this year compared with what is listed. The month range grows as each month's sold data lands.`
-          : `Median price year to date (${ytdMonthsLabel}). Sold totals are unavailable, so there is no heat reading.`}
+          ? "Median price year to date (YTD). Colour is how many homes sold this year compared with what is listed."
+          : "Median price year to date (YTD). Sold totals are unavailable, so there is no heat reading."}
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {scored.map(({ row, absorption }) => {
@@ -576,7 +566,7 @@ function Heatmap({
               <span className="text-[11px] opacity-80">
                 {row.soldCountYtd === null
                   ? `${formatNumber(row.activeCount)} listed`
-                  : `${formatNumber(row.soldCountYtd)} sales · ${ytdLabel}`}
+                  : `${formatNumber(row.soldCountYtd)} sales · YTD`}
               </span>
               {showHeat && (
                 <span className={cn("mt-1 rounded-full px-2 py-0.5 text-center text-[10px] font-semibold", heat === "cool" || heat === "very" ? "bg-ink/10" : "bg-white/30")}>
