@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cache, Suspense } from "react";
 import { ArrowLeft, ChevronDown } from "lucide-react";
-import { DaysOnMarketChart, SalesListingsChart, TypeMix } from "@/components/market/InsightCharts";
+import { DaysOnMarketChart, PropertyTypeDistribution, SalesListingsChart } from "@/components/market/InsightCharts";
 import { MarketFilterBar } from "@/components/market/MarketFilterBar";
 import { TrendChart } from "@/components/market/TrendChart";
 import { WatchAreaButton } from "@/components/market/WatchAreaButton";
@@ -85,7 +85,7 @@ const loadTrends = cache((city: string, months: number) =>
 /**
  * Market Insights: dark summary, sticky filter bar (city → community →
  * property type → period), then heatmap, sold-price chart, activity charts,
- * property-type mix and community reports. Figures are live.
+ * property-type distribution and community reports. Figures are live.
  */
 export default async function MarketTrendsPage({ searchParams }: PageProps<"/market-trends">) {
   const params = await searchParams;
@@ -321,9 +321,11 @@ async function MarketBoard({ filters }: { filters: Filters }) {
 
         {(trends?.bySubtype.length ?? 0) > 0 && (
           <section className="rounded-2xl border border-line bg-surface p-6">
-            <h2 className="mb-1 text-[18px] font-semibold text-ink">Property type mix</h2>
-            <p className="mb-5 text-[13px] text-ink-muted">Active listings in {city}. This is the catalogue, not closed sales.</p>
-            <TypeMix rows={trends?.bySubtype ?? []} />
+            <h2 className="mb-1 text-[18px] font-semibold text-ink">Property type distribution</h2>
+            <p className="mb-5 text-[13px] text-ink-muted">
+              How active listings in {city} break down by type. Catalogue asking stock, not closed sales.
+            </p>
+            <PropertyTypeDistribution rows={trends?.bySubtype ?? []} />
           </section>
         )}
 

@@ -285,10 +285,16 @@ export function DaysOnMarketChart({
   );
 }
 
-/** Donut plus share bars, the property-type block on the HomeAtlas market page. */
-export function TypeMix({ rows }: { rows: Array<{ name: string; count: number }> }) {
+/**
+ * Property type distribution — share of active listings by subtype.
+ * Replaces the old donut "mix" chart with count + % bars so the split is obvious.
+ */
+export function PropertyTypeDistribution({ rows }: { rows: Array<{ name: string; count: number }> }) {
   const [active, setActive] = useState<number | null>(null);
-  const items = rows.filter((row) => row.count > 0).slice(0, 5);
+  const items = [...rows]
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
   const total = items.reduce((sum, row) => sum + row.count, 0);
   if (total === 0) return null;
 
@@ -298,68 +304,45 @@ export function TypeMix({ rows }: { rows: Array<{ name: string; count: number }>
     color: MIX_COLORS[index % MIX_COLORS.length],
   }));
 
-  const radius = 70;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
-  const tip = active !== null ? slices[active] : null;
-
   return (
-    <div className="flex flex-col items-center gap-8 sm:flex-row" onMouseLeave={() => setActive(null)}>
-      <div className="relative shrink-0">
-        <svg viewBox="0 0 220 220" className="h-[220px] w-[220px]" role="img" aria-label="Property type mix">
-          <g transform="rotate(-90 110 110)">
-            {slices.map((slice, index) => {
-              const length = (slice.pct / 100) * circumference;
-              const node = (
-                <circle
-                  key={slice.name}
-                  cx="110"
-                  cy="110"
-                  r={radius}
-                  fill="none"
-                  stroke={slice.color}
-                  strokeWidth="28"
-                  strokeDasharray={`${length} ${circumference - length}`}
-                  strokeDashoffset={-offset}
-                  className="cursor-pointer transition-opacity"
-                  opacity={active === null || active === index ? 1 : 0.45}
-                  onMouseEnter={() => setActive(index)}
+    <div className="space-y-4" onMouseLeave={() => setActive(null)}>
+      <p className="text-[13px] text-ink-muted">
+        {formatNumber(total)} active listing{total === 1 ? "" : "s"} in this catalogue
+      </p>
+      <ul className="space-y-3" aria-label="Property type distribution">
+        {slices.map((slice, index) => {
+          const isActive = active === null || active === index;
+          return (
+            <li
+              key={slice.name}
+              className="space-y-1.5 transition-opacity"
+              style={{ opacity: isActive ? 1 : 0.45 }}
+              onMouseEnter={() => setActive(index)}
+            >
+              <div className="flex items-baseline justify-between gap-3 text-small">
+                <span className="flex min-w-0 items-center gap-2 font-medium text-ink">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: slice.color }} />
+                  <span className="truncate">{slice.name}</span>
+                </span>
+                <span className="shrink-0 tabular-nums text-ink-muted">
+                  <span className="font-semibold text-ink">{Math.round(slice.pct)}%</span>
+                  <span className="mx-1.5 text-ink-subtle">·</span>
+                  {formatNumber(slice.count)}
+                </span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-surface-alt">
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{ width: `${Math.max(slice.pct, 1.5)}%`, background: slice.color }}
                 />
-              );
-              offset += length;
-              return node;
-            })}
-          </g>
-        </svg>
-        {tip ? (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 w-max -translate-x-1/2 -translate-y-1/2 rounded-md bg-ink px-2.5 py-1.5 text-[11px] text-white shadow-pop">
-            <p className="font-medium">{tip.name}</p>
-            <p className="text-white/80">
-              {formatNumber(tip.count)} · {Math.round(tip.pct)}%
-            </p>
-          </div>
-        ) : null}
-      </div>
-      <dl className="w-full flex-1 space-y-3">
-        {slices.map((slice, index) => (
-          <div
-            key={slice.name}
-            className="flex cursor-pointer items-center justify-between gap-4"
-            onMouseEnter={() => setActive(index)}
-          >
-            <dt className="flex min-w-0 items-center gap-2 text-small text-ink">
-              <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: slice.color }} />
-              <span className="truncate">{slice.name}</span>
-            </dt>
-            <dd className="flex items-center gap-3">
-              <span className="h-2 w-24 overflow-hidden rounded-full bg-surface-alt">
-                <span className="block h-2 rounded-full" style={{ width: `${slice.pct}%`, background: slice.color }} />
-              </span>
-              <span className="w-10 text-right text-small font-semibold text-ink">{Math.round(slice.pct)}%</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
+
+/** @deprecated Prefer PropertyTypeDistribution — kept for older imports. */
+export const TypeMix = PropertyTypeDistribution;
