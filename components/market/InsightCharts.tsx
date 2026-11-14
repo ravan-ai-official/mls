@@ -40,26 +40,12 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
   );
 }
 
-/** Smooth open curve through points (Catmull-Rom → cubic Bézier). */
-function smoothLinePath(coords: Array<{ x: number; y: number }>): string {
+/** Straight segments between points — no spline overshoot below zero. */
+function linePath(coords: Array<{ x: number; y: number }>): string {
   if (coords.length === 0) return "";
-  if (coords.length === 1) return `M${coords[0].x},${coords[0].y}`;
-  if (coords.length === 2) {
-    return `M${coords[0].x},${coords[0].y} L${coords[1].x},${coords[1].y}`;
-  }
-  let d = `M${coords[0].x},${coords[0].y}`;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const p0 = coords[i - 1] ?? coords[i];
-    const p1 = coords[i];
-    const p2 = coords[i + 1];
-    const p3 = coords[i + 2] ?? p2;
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-  }
-  return d;
+  return coords
+    .map((point, i) => `${i === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+    .join(" ");
 }
 
 /**
@@ -109,8 +95,8 @@ export function SalesListingsChart({
   // curve through the series so the legend stays consistent.
   const activeCoords = points.map((row, i) => ({ x: xAt(i), y: y(row.active) }));
   const hasActiveSeries = points.some((row) => row.active > 0);
-  const newPath = smoothLinePath(newCoords);
-  const activePath = hasActiveSeries ? smoothLinePath(activeCoords) : "";
+  const newPath = linePath(newCoords);
+  const activePath = hasActiveSeries ? linePath(activeCoords) : "";
 
   return (
     <figure>
