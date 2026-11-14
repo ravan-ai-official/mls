@@ -57,12 +57,16 @@ export function MarketFilterBar({
     const href = hrefFor[key];
     if (!href) return;
     navigate(href, { scroll: false });
-    // Period drives the charts below the heatmap — scroll there so the update is visible.
-    // City / community / type still land on the heatmap comparison.
-    requestAnimationFrame(() => {
-      const target = key.startsWith("range:") ? "market-selected" : "market-heatmap";
-      document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    // Selected market remounts after the filter load — retry until the section exists.
+    const scrollToSelected = (attempts = 0) => {
+      const section = document.getElementById("market-selected");
+      if (section) {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (attempts < 40) window.setTimeout(() => scrollToSelected(attempts + 1), 50);
+    };
+    requestAnimationFrame(() => scrollToSelected());
   }
 
   return (
