@@ -180,7 +180,7 @@ export function PriceDistribution({
   return (
     <div className="rounded-2xl border border-line p-4 sm:p-5">
       <h3 className="mb-1 text-[15px] font-semibold text-ink">
-        {soldChart ? "Sold Price Distribution" : "Asking Price Distribution"}
+        {soldChart ? "Sold Price Distribution" : "Listing Price Distribution"}
       </h3>
       <p className="mb-4 text-[12px] text-ink-muted">
         {soldChart ? "Recent sold listings" : "Active listings"}

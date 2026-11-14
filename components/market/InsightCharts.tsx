@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { smoothLinePath } from "@/lib/utils/chartPath";
 import { formatMonthLabel, formatNumber } from "@/lib/utils/format";
 
 /** "Sep 2024" → "Sep '24", for crowded chart axes. */
@@ -38,14 +39,6 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
       ))}
     </g>
   );
-}
-
-/** Straight segments between points — no spline overshoot below zero. */
-function linePath(coords: Array<{ x: number; y: number }>): string {
-  if (coords.length === 0) return "";
-  return coords
-    .map((point, i) => `${i === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
-    .join(" ");
 }
 
 /**
@@ -93,8 +86,8 @@ export function SalesListingsChart({
 
   const newCoords = points.map((row, i) => ({ x: xAt(i), y: yLeft(row.newListings) }));
   const activeCoords = points.map((row, i) => ({ x: xAt(i), y: yRight(row.active) }));
-  const newPath = linePath(newCoords);
-  const activePath = hasActive ? linePath(activeCoords) : "";
+  const newPath = smoothLinePath(newCoords);
+  const activePath = hasActive ? smoothLinePath(activeCoords) : "";
 
   return (
     <figure>
@@ -309,7 +302,7 @@ export function DaysOnMarketChart({
   const hi = max + pad;
   const x = (i: number) => inset.left + (i / (rows.length - 1)) * plotW;
   const y = (value: number) => inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
-  const line = rows.map((row, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(row.days).toFixed(1)}`).join(" ");
+  const line = smoothLinePath(rows.map((row, i) => ({ x: x(i), y: y(row.days) })));
 
   return (
     <figure>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { smoothAreaPath, smoothLinePath } from "@/lib/utils/chartPath";
 import { formatMonthLabel, formatNumber, formatPrice, formatPriceCompact } from "@/lib/utils/format";
 
 /**
@@ -144,10 +145,12 @@ export function TrendChart({
   const yDays = (value: number) => inset.top + plotH - (value / dayHi) * plotH;
   const hDays = (value: number) => (value / dayHi) * plotH;
 
-  const line = points
-    .map((point, i) => `${i === 0 ? "M" : "L"}${xCenter(i).toFixed(1)},${yPrice(point.value).toFixed(1)}`)
-    .join(" ");
-  const area = `${line} L${xCenter(points.length - 1).toFixed(1)},${baseY.toFixed(1)} L${xCenter(0).toFixed(1)},${baseY.toFixed(1)} Z`;
+  const priceCoords = points.map((point, i) => ({
+    x: xCenter(i),
+    y: yPrice(point.value),
+  }));
+  const line = smoothLinePath(priceCoords);
+  const area = smoothAreaPath(priceCoords, baseY);
 
   const priceTicks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
   const dayTicks = showDays ? Array.from({ length: 4 }, (_, i) => (dayHi * i) / 3) : [];
@@ -158,17 +161,25 @@ export function TrendChart({
   const hasPdom = points.some((point) => pdomOf(point) != null);
   const labelEvery = Math.max(1, Math.ceil(points.length / 7));
 
-  const pdomLine = hasPdom
-    ? points
-        .map((point, i) => {
-          const pdom = pdomOf(point);
-          if (pdom == null) return null;
-          const cmd = i === 0 || pdomOf(points[i - 1]) == null ? "M" : "L";
-          return `${cmd}${xCenter(i).toFixed(1)},${yDays(pdom).toFixed(1)}`;
-        })
-        .filter(Boolean)
-        .join(" ")
-    : "";
+  // Smooth each continuous PDOM run so gaps stay as breaks, not invented spans.
+  let pdomLine = "";
+  if (hasPdom) {
+    const segments: Array<Array<{ x: number; y: number }>> = [];
+    let current: Array<{ x: number; y: number }> = [];
+    points.forEach((point, i) => {
+      const pdom = pdomOf(point);
+      if (pdom == null) {
+        if (current.length) {
+          segments.push(current);
+          current = [];
+        }
+        return;
+      }
+      current.push({ x: xCenter(i), y: yDays(pdom) });
+    });
+    if (current.length) segments.push(current);
+    pdomLine = segments.map((segment) => smoothLinePath(segment)).join(" ");
+  }
 
   void secondaryLabel;
 
