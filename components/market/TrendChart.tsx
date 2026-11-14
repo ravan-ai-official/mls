@@ -111,7 +111,9 @@ export function TrendChart({
   });
   const showDays = dayTotals.some((total) => total > 0);
   const dayMax = showDays ? Math.max(...dayTotals, 1) : 1;
-  const dayHi = dayMax * 1.15;
+  // Keep DOM/PDOM bars in the lower ~40% of the plot so they don't crowd
+  // the median-price line (axis ceiling ≈ 2.4× the tallest month).
+  const dayHi = dayMax * 2.4;
 
   const width = 720;
   const inset = { top: 20, right: showDays ? 44 : 16, bottom: 36, left: 56 };
