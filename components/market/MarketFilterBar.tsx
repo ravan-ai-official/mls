@@ -55,7 +55,12 @@ export function MarketFilterBar({
 
   function go(key: string) {
     const href = hrefFor[key];
-    if (href) navigate(href, { scroll: false });
+    if (!href) return;
+    navigate(href, { scroll: false });
+    // Keep the sticky filter bar in view and bring the heatmap back into frame.
+    requestAnimationFrame(() => {
+      document.getElementById("market-heatmap")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   return (

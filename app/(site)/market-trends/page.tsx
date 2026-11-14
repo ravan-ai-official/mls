@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cache, Suspense } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import { DaysOnMarketChart, SalesListingsChart, TypeMix } from "@/components/market/InsightCharts";
 import { MarketFilterBar } from "@/components/market/MarketFilterBar";
 import { TrendChart } from "@/components/market/TrendChart";
@@ -277,8 +277,14 @@ async function MarketBoard({ filters }: { filters: Filters }) {
                     detail: month.unitsSold,
                   }))}
                 />
-                <details className="mt-6">
-                  <summary className="cursor-pointer text-small font-medium text-navy">Monthly figures</summary>
+                <details className="group mt-6">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-control border border-navy/25 bg-navy-tint px-4 py-3 text-small font-semibold text-navy transition-colors hover:border-navy hover:bg-navy/5 [&::-webkit-details-marker]:hidden">
+                    <span>Monthly figures</span>
+                    <ChevronDown
+                      className="size-4 shrink-0 text-navy transition-transform duration-200 group-open:rotate-180"
+                      aria-hidden="true"
+                    />
+                  </summary>
                   <MonthlyTable title={soldTitle} rows={[...soldMonths].reverse()} />
                 </details>
                 <p className="mt-4 text-[12px] text-ink-muted">
@@ -396,7 +402,7 @@ function Heatmap({
   }
 
   return (
-    <section className="rounded-2xl border border-line bg-surface p-6">
+    <section id="market-heatmap" className="scroll-mt-48 rounded-2xl border border-line bg-surface p-6 lg:scroll-mt-52">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[22px] font-semibold text-ink">GTA market heatmap</h2>
         {showHeat && (
