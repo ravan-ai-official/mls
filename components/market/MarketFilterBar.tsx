@@ -57,9 +57,11 @@ export function MarketFilterBar({
     const href = hrefFor[key];
     if (!href) return;
     navigate(href, { scroll: false });
-    // Keep the sticky filter bar in view and bring the heatmap back into frame.
+    // Period drives the charts below the heatmap — scroll there so the update is visible.
+    // City / community / type still land on the heatmap comparison.
     requestAnimationFrame(() => {
-      document.getElementById("market-heatmap")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const target = key.startsWith("range:") ? "market-selected" : "market-heatmap";
+      document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 

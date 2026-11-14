@@ -140,7 +140,9 @@ export default async function MarketTrendsPage({ searchParams }: PageProps<"/mar
 
 async function HeaderKpis({ filters }: { filters: Filters }) {
   const sold = await loadSold(filters.city, filters.range.months, filters.community ?? "", filters.type ?? "");
-  const months = sold.unavailable ? [] : sold.months.filter((month) => month.unitsSold > 0);
+  const months = sold.unavailable
+    ? []
+    : monthsForPeriod(sold.months, filters.range.months);
   const latest = months.at(-1);
   const earliest = months[0];
   const priceChange =
@@ -152,18 +154,19 @@ async function HeaderKpis({ filters }: { filters: Filters }) {
       ? Math.round(latest.avgDaysOnMarket - earliest.avgDaysOnMarket)
       : null;
   const ratio = latest?.saleToListRatio ?? null;
+  const periodNote = periodSpanLabel(months) ?? `last ${filters.range.label}`;
 
   const cards = [
     {
-      label: "Median price",
+      label: `Median price · ${filters.range.label}`,
       value: latest?.medianSoldPrice ? formatPriceCompact(latest.medianSoldPrice) : EMPTY,
-      change: priceChange === null ? null : formatPercent(priceChange),
+      change: priceChange === null ? null : `${formatPercent(priceChange)} · ${periodNote}`,
       up: (priceChange ?? 0) >= 0,
     },
     {
       label: "Avg. days on market",
       value: latest?.avgDaysOnMarket == null ? EMPTY : `${Math.round(latest.avgDaysOnMarket)} days`,
-      change: domDelta === null ? null : `${domDelta > 0 ? "↑" : "↓"}${Math.abs(domDelta)} days`,
+      change: domDelta === null ? null : `${domDelta > 0 ? "↑" : "↓"}${Math.abs(domDelta)} days · ${periodNote}`,
       up: false,
     },
     {
@@ -225,13 +228,16 @@ async function MarketBoard({ filters }: { filters: Filters }) {
   for (const option of SOLD_PROPERTY_TYPES) hrefFor[`type:${option.key}`] = trendsHref(filters, { type: option.key });
   for (const option of MARKET_RANGES) hrefFor[`range:${option.key}`] = trendsHref(filters, { range: option.key });
 
-  const soldMonths = sold.unavailable ? [] : sold.months.filter((month) => month.unitsSold > 0);
-  // Full selected window — a hard 8-month slice made 1y/2y/3y look identical.
-  const compareRows = comparisonRows(trends?.series ?? [], sold.unavailable ? [] : sold.months);
+  const soldMonths = sold.unavailable ? [] : monthsForPeriod(sold.months, range.months);
+  const compareRows = comparisonRows(
+    trends?.series ?? [],
+    sold.unavailable ? [] : monthsForPeriod(sold.months, range.months, false),
+  );
   const domRows = soldMonths
     .filter((month): month is typeof month & { avgDaysOnMarket: number } => month.avgDaysOnMarket !== null)
     .map((month) => ({ month: month.month, days: month.avgDaysOnMarket }));
   const reports = [...citySold.communities].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 6);
+  const periodSpan = periodSpanLabel(soldMonths);
 
   return (
     <div className="space-y-8">
@@ -248,20 +254,24 @@ async function MarketBoard({ filters }: { filters: Filters }) {
         <div className="space-y-8">
         <Heatmap cities={heatmapCities} selected={city} filters={filters} />
 
-        <div className="space-y-6">
+        <div id="market-selected" className="scroll-mt-48 space-y-6 lg:scroll-mt-52">
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[1.6px] text-ink-muted">Selected market</p>
               <h2 className="mt-1 text-[22px] font-semibold text-ink">{soldTitle}</h2>
             </div>
-            <p className="text-[13px] text-ink-muted">Last {range.label}</p>
+            <p className="text-[13px] text-ink-muted">
+              Last {range.label}
+              {periodSpan ? ` · ${periodSpan}` : ""}
+            </p>
           </div>
 
           <section className="rounded-2xl border border-line bg-surface p-6">
             <div className="mb-6">
               <h3 className="text-[20px] font-semibold text-ink">Median price</h3>
               <p className="mt-1 text-[13px] text-ink-muted">
-                Closed transactions, last {sold.windowMonths || range.months} months
+                Closed transactions · {range.label}
+                {periodSpan ? ` (${periodSpan})` : ` · last ${range.months} months`}
                 {sold.generatedAt ? ` · as of ${formatDate(sold.generatedAt)}` : ""}
                 {sold.stale ? " · these may be a few hours old" : ""}
               </p>
@@ -279,6 +289,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             ) : (
               <>
                 <TrendChart
+                  key={`median-${range.key}-${soldMonths.length}-${soldMonths[0]?.month}-${soldMonths.at(-1)?.month}`}
                   label="Median price"
                   detailLabel="Units sold"
                   dots="none"
@@ -288,9 +299,12 @@ async function MarketBoard({ filters }: { filters: Filters }) {
                     detail: month.unitsSold,
                   }))}
                 />
-                <details className="group mt-6">
+                <details className="group mt-6" key={`monthly-${range.key}-${soldMonths.length}`}>
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-control border border-navy/25 bg-navy-tint px-4 py-3 text-small font-semibold text-navy transition-colors hover:border-navy hover:bg-navy/5 [&::-webkit-details-marker]:hidden">
-                    <span>Monthly figures</span>
+                    <span>
+                      Monthly figures · {range.label}
+                      {periodSpan ? ` · ${periodSpan}` : ""}
+                    </span>
                     <ChevronDown
                       className="size-4 shrink-0 text-navy transition-transform duration-200 group-open:rotate-180"
                       aria-hidden="true"
@@ -308,13 +322,19 @@ async function MarketBoard({ filters }: { filters: Filters }) {
           <div className="grid gap-6 sm:grid-cols-2">
             <section className="rounded-2xl border border-line bg-surface p-6">
               <h3 className="text-[16px] font-semibold text-ink">Sales vs. new listings</h3>
-              <p className="mb-4 mt-1 text-[13px] text-ink-muted">Closed sales beside new listings in {city}.</p>
-              <SalesListingsChart rows={compareRows} />
+              <p className="mb-4 mt-1 text-[13px] text-ink-muted">
+                Closed sales beside new listings in {city} · {range.label}
+                {periodSpan ? ` (${periodSpan})` : ""}.
+              </p>
+              <SalesListingsChart key={`sales-${range.key}-${compareRows.length}`} rows={compareRows} />
             </section>
             <section className="rounded-2xl border border-line bg-surface p-6">
               <h3 className="text-[16px] font-semibold text-ink">Avg. days on market</h3>
-              <p className="mb-4 mt-1 text-[13px] text-ink-muted">How long homes in this selection took to sell.</p>
-              <DaysOnMarketChart rows={domRows} />
+              <p className="mb-4 mt-1 text-[13px] text-ink-muted">
+                How long homes in this selection took to sell · {range.label}
+                {periodSpan ? ` (${periodSpan})` : ""}.
+              </p>
+              <DaysOnMarketChart key={`dom-${range.key}-${domRows.length}`} rows={domRows} />
             </section>
           </div>
         </div>
@@ -378,17 +398,35 @@ function selectionLabel(filters: Filters) {
     .join(" · ");
 }
 
-/** One heatmap tile: YTD sold figures + current active listings for heat colour. */
-type HeatmapCity = {
-  city: (typeof MARKET_CITIES)[number];
-  activeCount: number;
-  medianPrice: number | null;
-  /** Null when the sold feed was unavailable for this city. */
-  soldCountYtd: number | null;
-};
-
 function monthKey(value: string) {
   return value.slice(0, 7);
+}
+
+/** Keep the trailing N months so 1y / 2y / 3y always bind to the Period control. */
+function monthsForPeriod(
+  months: SoldTrends["months"],
+  rangeMonths: number,
+  requireSales = true,
+): SoldTrends["months"] {
+  const sorted = [...months].sort((a, b) => monthKey(a.month).localeCompare(monthKey(b.month)));
+  const scoped = requireSales ? sorted.filter((month) => month.unitsSold > 0) : sorted;
+  return scoped.slice(-rangeMonths);
+}
+
+function periodSpanLabel(months: SoldTrends["months"]): string | null {
+  if (months.length === 0) return null;
+  const firstLabel = formatMonthLabel(months[0]?.month);
+  const lastLabel = formatMonthLabel(months.at(-1)?.month);
+  if (!firstLabel || firstLabel === EMPTY || !lastLabel || lastLabel === EMPTY) return null;
+  return firstLabel === lastLabel ? firstLabel : `${firstLabel} – ${lastLabel}`;
+}
+
+/** e.g. "Jan–Nov 2026" — YTD with the months covered so far. */
+function ytdMonthRangeLabel(now = new Date()): string {
+  const year = now.getFullYear();
+  const start = new Date(year, 0, 1).toLocaleDateString("en-CA", { month: "short" });
+  const end = now.toLocaleDateString("en-CA", { month: "short" });
+  return start === end ? `${start} ${year}` : `${start}–${end} ${year}`;
 }
 
 function medianOf(values: number[]): number | null {
@@ -403,6 +441,15 @@ function ytdSoldMonths(months: SoldTrends["months"], now = new Date()) {
   const start = `${now.getFullYear()}-01`;
   return months.filter((month) => monthKey(month.month) >= start && month.unitsSold > 0);
 }
+
+/** One heatmap tile: YTD sold figures + current active listings for heat colour. */
+type HeatmapCity = {
+  city: (typeof MARKET_CITIES)[number];
+  activeCount: number;
+  medianPrice: number | null;
+  /** Null when the sold feed was unavailable for this city. */
+  soldCountYtd: number | null;
+};
 
 function buildHeatmapCities(catalog: CityCatalogStat[], soldByCity: SoldTrends[]): HeatmapCity[] {
   const activeByCity = new Map(
@@ -447,7 +494,8 @@ function Heatmap({
 }) {
   if (cities.length === 0) return null;
 
-  const ytdLabel = `YTD ${new Date().getFullYear()}`;
+  const ytdMonthsLabel = ytdMonthRangeLabel();
+  const ytdLabel = `YTD · ${ytdMonthsLabel}`;
   const scored = cities.map((row) => ({
     row,
     absorption:
@@ -483,8 +531,8 @@ function Heatmap({
       </div>
       <p className="mb-5 text-[13px] text-ink-muted">
         {showHeat
-          ? `Median price year to date (${ytdLabel}). Colour is how many homes sold this year compared with what is listed. Updates as each month's sold data lands.`
-          : `Median price year to date (${ytdLabel}). Sold totals are unavailable, so there is no heat reading.`}
+          ? `Median price year to date (${ytdMonthsLabel}). Colour is how many homes sold this year compared with what is listed. The month range grows as each month's sold data lands.`
+          : `Median price year to date (${ytdMonthsLabel}). Sold totals are unavailable, so there is no heat reading.`}
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {scored.map(({ row, absorption }) => {
