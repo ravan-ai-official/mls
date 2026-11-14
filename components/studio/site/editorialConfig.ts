@@ -107,9 +107,9 @@ export const EDITORIAL_RESOURCES: Record<EditorialResource, EditorialResourceCon
   news: {
     resource: "news",
     title: "News",
-    createTitle: "New headline",
-    lede: "Add headlines for the homepage Daily News strip, or hide an off-topic feed item. Feed ingest can still bring new stories in — hidden ones stay off the homepage.",
-    createLede: "Add a headline and link for the Daily News strip. Hide it later from the list if it should leave the homepage.",
+    createTitle: "News",
+    lede: "Homepage Daily News is a live GTA real-estate feed. Manual headlines are no longer created here.",
+    createLede: "Manual headlines were removed. Use the News list to preview the live feed.",
     listHref: "/studio/news",
     idKey: "id",
     fields: ["title", "source", "url", "image_url", "is_hidden"],

@@ -78,8 +78,16 @@ export const NEARBY_RADIUS_MAX_KM = 5;
 /* News (Server Component read)                                                */
 /* -------------------------------------------------------------------------- */
 
-/** Latest headlines, or null when the backend is unreachable. */
-export async function getNews(limit = 3): Promise<HomeNewsArticle[] | null> {
+/**
+ * Latest headlines for the homepage Daily News strip.
+ * Prefers free GTA real-estate RSS (Google News / CBC); falls back to the
+ * backend curated feed when the live RSS is empty.
+ */
+export async function getNews(limit = 4): Promise<HomeNewsArticle[] | null> {
+  const { getGtaRealEstateNews } = await import("@/lib/api/gtaNews");
+  const live = await getGtaRealEstateNews(limit).catch(() => []);
+  if (live.length > 0) return live;
+
   return safeFetch(
     apiFetch<{ results?: HomeNewsArticle[] }>(`${BASE}/news/`, {
       params: { limit },

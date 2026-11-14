@@ -2,6 +2,7 @@ import { SafeImage } from "@/components/ui/SafeImage";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Section } from "@/components/ui/Section";
+import { GTA_NEWS_MORE_HREF } from "@/lib/api/gtaNews";
 import { getNews, type HomeNewsArticle } from "@/lib/api/homeForms";
 import { newsArticles } from "@/lib/home/contentSections";
 import { textOf } from "@/lib/site/read";
@@ -11,13 +12,12 @@ import { NewsletterForm } from "./NewsletterForm";
 /**
  * "Daily Real Estate & Financial News" — HomeAtlasUI HomePage L1130-1189.
  *
- * Live headlines come from mls-v2 `GET /api/home/news/` (curated feed, 15-min
- * cache); each card opens the original article in a new tab. When the feed is
- * empty or unreachable, the reference's sample headlines render instead and
- * link to the blog, the site's own editorial hub.
+ * Live headlines come from free GTA real-estate RSS (Google News / CBC),
+ * cached ~15 minutes. Each card opens the original article. When the feed is
+ * empty, sample headlines render and link to the blog.
  */
 export async function DailyNews({ content }: { content?: Record<string, unknown> }) {
-  const news = await getNews(3);
+  const news = await getNews(4);
   // Only http(s) links are rendered; anything else is dropped, not linked.
   const safe = (news ?? []).filter((article) => /^https?:\/\//i.test(article.url));
   const live = safe.length > 0 ? safe : null;
@@ -26,10 +26,14 @@ export async function DailyNews({ content }: { content?: Record<string, unknown>
     <Section
       eyebrow={textOf(content, "eyebrow", "Stay informed")}
       title={textOf(content, "title", "Daily Real Estate & Financial News")}
-      description={textOf(content, "description", "Latest updates on GTA market, mortgage rates, and investment trends")}
+      description={textOf(
+        content,
+        "description",
+        "Latest updates on GTA housing, mortgage rates, and investment trends",
+      )}
       action={{
         label: textOf(content, "actionLabel", "All News"),
-        href: textOf(content, "actionHref", "/blog"),
+        href: textOf(content, "actionHref", GTA_NEWS_MORE_HREF),
       }}
     >
       {live ? <LiveNews articles={live} /> : <SampleNews />}

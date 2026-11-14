@@ -1,13 +1,6 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { EditorialCreateForm } from "@/components/studio/site/EditorialCreateForm";
-import { requireStudioAccess } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "New headline" };
-export const dynamic = "force-dynamic";
-
-export default async function NewNewsPage() {
-  const session = await requireStudioAccess();
-  if (!session?.user.isStaff) notFound();
-  return <EditorialCreateForm resource="news" />;
+/** Manual headlines were removed — Daily News is a live GTA feed only. */
+export default function NewNewsRedirect() {
+  redirect("/studio/news");
 }

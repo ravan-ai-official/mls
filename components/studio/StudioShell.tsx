@@ -88,7 +88,6 @@ const GROUPS: Array<{
 
 const CREATE_LINKS: Array<{ href: string; label: string; staff?: boolean }> = [
   { href: "/studio/new", label: "New blog post" },
-  { href: "/studio/news/new", label: "New headline", staff: true },
   { href: "/studio/incentives/new", label: "New incentive", staff: true },
   { href: "/studio/partners/new", label: "New partner", staff: true },
   { href: "/studio/listings/new", label: "New listing", staff: true },
