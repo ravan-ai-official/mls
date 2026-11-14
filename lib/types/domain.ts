@@ -123,6 +123,12 @@ export interface PropertyDetail extends PropertySummary {
   daysOnMarket: number | null;
   sqftAboveGrade: number | null;
   familyRoom: boolean | null;
+  /** Stories / floors from the feed. */
+  stories: number | null;
+  /** Ownership title (Freehold, Condo/Strata, …). */
+  ownership: string | null;
+  /** Age in years when year built is known. */
+  propertyAge: number | null;
   potlMonthlyFees: number | null;
   rentalItems: string | null;
   /** Grouped facts for the detail spec sections; empty groups are dropped. */

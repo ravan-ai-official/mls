@@ -5,6 +5,7 @@ import {
   deriveDaysOnMarket,
   deriveLocker,
   deriveRentalItems,
+  deriveRoomSignals,
   mapPropertyDetail,
   mapPropertySummary,
   resolvePropertyType,
@@ -116,6 +117,17 @@ describe("resolvePropertyType", () => {
 });
 
 describe("listing key-fact helpers", () => {
+  it("derives kitchens and family room from room rows", () => {
+    expect(
+      deriveRoomSignals([
+        { room_type: "Kitchen", room_level: "Main", room_length: null, room_width: null, room_dimensions: null },
+        { room_type: "Family Room", room_level: "Main", room_length: null, room_width: null, room_dimensions: null },
+        { room_type: "Kitchen", room_level: "Basement", room_length: null, room_width: null, room_dimensions: null },
+      ]),
+    ).toEqual({ kitchens: 2, familyRoom: true });
+    expect(deriveRoomSignals([])).toEqual({ kitchens: null, familyRoom: null });
+  });
+
   it("derives condo level and skips house-style room levels", () => {
     expect(
       deriveCondoLevel([

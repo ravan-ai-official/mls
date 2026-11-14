@@ -122,6 +122,8 @@ export interface BackendPropertyDetail extends Omit<BackendPropertySummary, "med
   kitchens?: number | null;
   bedrooms_above_grade?: number | null;
   bedrooms_below_grade?: number | null;
+  /** Freehold / Condo/Strata ownership title from the feed. */
+  common_interest?: string | null;
   zoning?: string | null;
   water_source?: string | null;
   sewer?: string | null;

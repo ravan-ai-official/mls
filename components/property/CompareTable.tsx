@@ -26,6 +26,7 @@ export const COMPARE_ROWS: Array<{
   { label: "Municipality", value: (p) => p.community ?? EMPTY },
   { label: "Community", value: (p) => p.neighbourhood ?? EMPTY },
   { label: "Address", value: (p) => p.address || EMPTY },
+  { label: "Ownership / Title", value: (p) => p.ownership ?? EMPTY },
   { label: "Level", value: (p) => p.level ?? EMPTY },
   { label: "Unit #", value: (p) => p.unitNumber ?? EMPTY },
   {
@@ -93,15 +94,15 @@ export const COMPARE_ROWS: Array<{
     lowerIsBetter: true,
   },
   {
-    label: "Square feet above ground",
+    label: "Square footage",
     value: (p) => {
-      const area = p.sqftAboveGrade ?? p.sqft;
+      const area = p.sqft ?? p.sqftAboveGrade;
       return area === null ? EMPTY : `${formatNumber(area)} sq ft`;
     },
-    numeric: (p) => p.sqftAboveGrade ?? p.sqft,
+    numeric: (p) => p.sqft ?? p.sqftAboveGrade,
   },
   {
-    label: "Garage parking spaces",
+    label: "Number of garages",
     value: (p) => (p.garageSpaces === null ? EMPTY : formatNumber(p.garageSpaces)),
     numeric: (p) => p.garageSpaces,
   },
@@ -111,6 +112,20 @@ export const COMPARE_ROWS: Array<{
     numeric: (p) => p.parkingTotal,
   },
   { label: "Year built", value: (p) => (p.yearBuilt === null ? EMPTY : String(p.yearBuilt)) },
+  {
+    label: "Property age",
+    value: (p) =>
+      p.propertyAge === null
+        ? EMPTY
+        : `${p.propertyAge} year${p.propertyAge === 1 ? "" : "s"}`,
+    numeric: (p) => p.propertyAge,
+    lowerIsBetter: true,
+  },
+  {
+    label: "Number of floors",
+    value: (p) => (p.stories === null ? EMPTY : formatNumber(p.stories)),
+    numeric: (p) => p.stories,
+  },
   {
     label: "Number of bedrooms",
     value: (p) => p.bedsLabel ?? (p.beds === null ? EMPTY : formatNumber(p.beds)),

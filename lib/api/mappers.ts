@@ -28,6 +28,7 @@ import type {
   UiPropertyType,
 } from "@/lib/types/domain";
 import {
+  EMPTY,
   daysSince,
   splitFeatures,
   titleCase,
@@ -359,8 +360,15 @@ export function deriveRentalItems(
 function fact(label: string, value: string | number | null | undefined): PropertyFact | null {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
-  if (!text || text === "0") return null;
+  if (!text) return null;
   return { label, value: text };
+}
+
+/** Always keep the row — client-requested fields should still appear when unknown. */
+function factOrDash(label: string, value: string | number | null | undefined): PropertyFact {
+  if (value === null || value === undefined) return { label, value: EMPTY };
+  const text = String(value).trim();
+  return { label, value: text || EMPTY };
 }
 
 function group(title: string, facts: Array<PropertyFact | null>) {
@@ -368,11 +376,32 @@ function group(title: string, facts: Array<PropertyFact | null>) {
   return kept.length > 0 ? { title, facts: kept } : null;
 }
 
+/**
+ * Kitchen count + family-room flag from room rows (same signals as the AVM
+ * report) when the dedicated feed columns are empty.
+ */
+export function deriveRoomSignals(rooms: BackendRoom[] | null | undefined): {
+  kitchens: number | null;
+  familyRoom: boolean | null;
+} {
+  if (!rooms?.length) return { kitchens: null, familyRoom: null };
+  let kitchens = 0;
+  let familyRoom = false;
+  for (const room of rooms) {
+    const type = (room.room_type || "").toLowerCase();
+    if (type.includes("kitchen")) kitchens += 1;
+    if (type.includes("family")) familyRoom = true;
+  }
+  return {
+    kitchens: kitchens > 0 ? kitchens : null,
+    familyRoom: familyRoom || null,
+  };
+}
+
 export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
   const summary = mapPropertySummary(raw as unknown as BackendPropertySummary);
   const images = mapImages(raw.media);
 
-  const livingArea = toNumber(raw.living_area);
   const taxAnnual = toNumber(raw.tax_annual_amount);
   const assocFee = toNumber(raw.association_fee);
   const lotFrontage = toNumber(raw.frontage_length_numeric);
@@ -381,7 +410,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
   const below = toNumber(raw.bedrooms_below_grade);
   const bedsLabel =
     above !== null && below !== null && below > 0 ? `${above}+${below}` : null;
-  const garageSpaces = toNumber(raw.garages);
+  const roomSignals = deriveRoomSignals(raw.rooms);
   const roomCount = (raw.rooms ?? []).filter((room) => titleCase(room.room_type)).length;
 
   const level = deriveCondoLevel(raw.rooms);
@@ -396,9 +425,27 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
   const associationFeeIncludes = titleCase(raw.association_fee_includes);
   const lotDepth = lotDepthLabel(raw.lot_size_dimensions);
   const sqftAboveGrade = toNumber(raw.above_grade_finished_area);
-  const kitchens = raw.kitchens ?? null;
+  const sqft =
+    summary.sqft ??
+    toNumber(raw.building_area_total) ??
+    toNumber(raw.living_area) ??
+    sqftAboveGrade;
+  const kitchens = raw.kitchens ?? roomSignals.kitchens;
   const familyRoom =
-    typeof raw.family_room === "boolean" ? raw.family_room : null;
+    typeof raw.family_room === "boolean" ? raw.family_room : roomSignals.familyRoom;
+  // Prefer dedicated garage column; fall back to parking total when the feed
+  // describes garage parking (same rule the listing filters use).
+  const parkingFeatures = (raw.parking_features || "").toLowerCase();
+  const garageSpaces =
+    toNumber(raw.garages) ??
+    (/(garage|carport)/.test(parkingFeatures) ? raw.parking_total ?? null : null);
+  const stories = raw.stories ?? null;
+  const ownership = titleCase(raw.common_interest);
+  const yearBuilt = raw.year_built ?? summary.yearBuilt;
+  const propertyAge =
+    yearBuilt != null && yearBuilt > 1800
+      ? Math.max(0, new Date().getFullYear() - yearBuilt)
+      : null;
   const potlMonthlyFees = toNumber(
     raw.potl_monthly_fees !== undefined && raw.potl_monthly_fees !== null
       ? String(raw.potl_monthly_fees)
@@ -411,7 +458,8 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       fact("Status", statusLabel(summary.status)),
       fact("Property type", summary.type),
       fact("Style", style),
-      fact("Level", level),
+      factOrDash("Ownership / Title", ownership),
+      factOrDash("Level", level),
       fact("Unit #", raw.unit_number?.trim()),
       locker === null ? null : fact("Locker", locker ? "Yes" : "No"),
       fact("Community", summary.neighbourhood),
@@ -423,7 +471,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
             "Days on market",
             `${daysOnMarket} day${daysOnMarket === 1 ? "" : "s"}`,
           ),
-      familyRoom === null ? null : fact("Family room", familyRoom ? "Yes" : "No"),
+      factOrDash("Family room", familyRoom === null ? null : familyRoom ? "Yes" : "No"),
       potlMonthlyFees === null ? null : fact("POTL monthly fees", formatPrice(potlMonthlyFees)),
     ]),
     group("Building", [
@@ -431,22 +479,31 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       fact("Bathrooms", summary.baths),
       fact("Partial baths", raw.bathrooms_partial),
       fact("Basement", basement),
-      fact("Kitchens", kitchens),
+      factOrDash("Number of kitchens", kitchens),
       fact("Rooms", roomCount || null),
-      fact("Square feet", livingArea ? `${formatNumber(livingArea)} sq ft` : null),
+      factOrDash(
+        "Square footage",
+        sqft && sqft > 0 ? `${formatNumber(sqft)} sq ft` : null,
+      ),
       fact(
         "Square feet above ground",
-        sqftAboveGrade ? `${formatNumber(sqftAboveGrade)} sq ft` : null,
+        sqftAboveGrade && sqftAboveGrade > 0 ? `${formatNumber(sqftAboveGrade)} sq ft` : null,
       ),
-      fact("Year built", raw.year_built),
-      fact("Stories", raw.stories),
+      factOrDash("Year built", yearBuilt),
+      factOrDash(
+        "Property age",
+        propertyAge === null
+          ? null
+          : `${propertyAge} year${propertyAge === 1 ? "" : "s"}`,
+      ),
+      factOrDash("Number of floors", stories),
       fact("Construction", titleCase(raw.construction_materials)),
       fact("Flooring", titleCase(raw.flooring)),
     ]),
     group("Parking & Garage", [
       fact("Garage type", titleCase(raw.garage_size)),
-      fact("Garage spaces", garageSpaces),
-      fact("Parking space", raw.parking_total),
+      factOrDash("Number of garages", garageSpaces),
+      fact("Parking spaces", raw.parking_total),
       fact("Parking features", titleCase(raw.parking_features)),
     ]),
     group("Land", [
@@ -476,6 +533,8 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
 
   return {
     ...summary,
+    sqft: sqft && sqft > 0 ? sqft : null,
+    yearBuilt,
     // Detail carries the full media array; prefer it over the summary's single image.
     image: images[0]?.url ?? summary.image,
     images,
@@ -508,6 +567,9 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     daysOnMarket,
     sqftAboveGrade,
     familyRoom,
+    stories,
+    ownership,
+    propertyAge,
     potlMonthlyFees,
     rentalItems,
     factGroups,

@@ -209,13 +209,22 @@ export default async function PropertyPage({
             <StatPill label="Bathrooms" value={formatNumber(property.baths)} />
           )}
           {property.garageSpaces !== null && (
-            <StatPill label="Garage" value={formatNumber(property.garageSpaces)} />
+            <StatPill label="Garages" value={formatNumber(property.garageSpaces)} />
           )}
           {property.parkingTotal !== null && (
-            <StatPill label="Parking Space" value={formatNumber(property.parkingTotal)} />
+            <StatPill label="Parking" value={formatNumber(property.parkingTotal)} />
           )}
           {property.sqft !== null && (
             <StatPill label="Sq Ft" value={formatNumber(property.sqft)} />
+          )}
+          {property.stories !== null && (
+            <StatPill label="Floors" value={formatNumber(property.stories)} />
+          )}
+          {property.yearBuilt !== null && (
+            <StatPill label="Year built" value={String(property.yearBuilt)} />
+          )}
+          {property.kitchens !== null && (
+            <StatPill label="Kitchens" value={formatNumber(property.kitchens)} />
           )}
         </dl>
 
