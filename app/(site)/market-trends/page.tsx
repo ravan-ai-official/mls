@@ -341,8 +341,9 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             <section className="rounded-2xl border border-line bg-surface p-6">
               <h3 className="text-[16px] font-semibold text-ink">Sold, Active and New Listing</h3>
               <p className="mb-4 mt-1 text-[13px] text-ink-muted">
-                Closed sales, current open inventory and new listings in {city} · {range.label}
-                {periodSpan ? ` (${periodSpan})` : ""}. Active is shown on the latest month.
+                Closed sales and new listings in {city} · {range.label}
+                {periodSpan ? ` (${periodSpan})` : ""}. Active is current open inventory (latest
+                month only — monthly history is not in the feed).
               </p>
               <SalesListingsChart key={`sales-${range.key}-${compareRows.length}`} rows={compareRows} />
             </section>
@@ -588,13 +589,13 @@ function comparisonRows(
 ) {
   const rows = new Map<
     string,
-    { month: string; sold: number; active: number; newListings: number }
+    { month: string; sold: number; active: number | null; newListings: number }
   >();
   for (const point of series) {
     rows.set(point.month.slice(0, 7), {
       month: point.month,
       sold: 0,
-      active: 0,
+      active: null,
       newListings: point.newListings,
     });
   }
@@ -603,15 +604,14 @@ function comparisonRows(
     const current = rows.get(key) ?? {
       month: month.month,
       sold: 0,
-      active: 0,
+      active: null,
       newListings: 0,
     };
     current.sold = month.unitsSold;
     rows.set(key, current);
   }
   const ordered = [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, row]) => row);
-  // Catalogue velocity only exposes current open inventory — attach it to the
-  // latest month so the chart can show Sold / Active / New Listing together.
+  // Feed only has current open inventory — never invent 0s for past months.
   if (ordered.length > 0 && activeCurrent != null && activeCurrent > 0) {
     ordered[ordered.length - 1] = {
       ...ordered[ordered.length - 1],

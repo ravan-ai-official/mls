@@ -49,18 +49,20 @@ function linePath(coords: Array<{ x: number; y: number }>): string {
 }
 
 /**
- * Sold bars with Active and New Listing as curves on the Market Insights page.
- * Sold = closed transactions; New Listing = new catalogue rows that month;
- * Active = open inventory when provided for that month.
+ * Sold bars + New Listing line (left axis). Active uses the right axis and is
+ * only drawn for months that have a real value — past months stay blank instead
+ * of a fake 0 (the feed only exposes current open inventory).
  */
 export function SalesListingsChart({
   rows,
 }: {
-  rows: Array<{ month: string; sold: number; active: number; newListings: number }>;
+  rows: Array<{ month: string; sold: number; active: number | null; newListings: number }>;
 }) {
   const [tip, setTip] = useState<Tip | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const points = rows.filter((row) => row.sold > 0 || row.active > 0 || row.newListings > 0);
+  const points = rows.filter(
+    (row) => row.sold > 0 || row.newListings > 0 || (row.active != null && row.active > 0),
+  );
   if (points.length < 2) {
     return (
       <p className="rounded-control bg-surface-alt px-4 py-8 text-center text-small text-ink-muted">
@@ -71,32 +73,43 @@ export function SalesListingsChart({
 
   const width = 640;
   const height = 210;
-  const inset = { top: 14, right: 10, bottom: 36, left: 36 };
+  const hasActive = points.some((row) => row.active != null && row.active > 0);
+  const inset = { top: 14, right: hasActive ? 40 : 10, bottom: 36, left: 36 };
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
-  const max = Math.max(
-    ...points.flatMap((row) => [row.sold, row.active, row.newListings]),
+
+  // Scale Sold / New listing on their own — do not let a single Active snapshot
+  // (often hundreds of listings) flatten every other series to the baseline.
+  const leftMax = Math.max(
+    ...points.flatMap((row) => [row.sold, row.newListings]),
     1,
   );
+  const activeValues = points
+    .map((row) => row.active)
+    .filter((value): value is number => value != null && value > 0);
+  const rightMax = Math.max(...activeValues, 1);
+
   const group = plotW / points.length;
   const bar = Math.min(18, group * 0.42);
 
   const xAt = (i: number) => inset.left + group * i + group / 2;
-  const y = (value: number) => inset.top + plotH - (value / max) * plotH;
-  const h = (value: number) => (value / max) * plotH;
+  const yLeft = (value: number) => inset.top + plotH - (value / leftMax) * plotH;
+  const hLeft = (value: number) => (value / leftMax) * plotH;
+  const yRight = (value: number) => inset.top + plotH - (value / rightMax) * plotH;
 
   const SOLD = "var(--color-navy)";
   const ACTIVE = "var(--color-gold)";
   const NEW = "#5b7c99";
 
-  const newCoords = points.map((row, i) => ({ x: xAt(i), y: y(row.newListings) }));
-  // Active inventory is often only known for the latest month — still draw a
-  // curve through the series so the legend stays consistent.
-  const activeCoords = points.map((row, i) => ({ x: xAt(i), y: y(row.active) }));
-  const hasActiveSeries = points.some((row) => row.active > 0);
+  const newCoords = points.map((row, i) => ({ x: xAt(i), y: yLeft(row.newListings) }));
+  const activeCoords = points
+    .map((row, i) =>
+      row.active != null && row.active > 0 ? { x: xAt(i), y: yRight(row.active) } : null,
+    )
+    .filter((point): point is { x: number; y: number } => point !== null);
   const newPath = linePath(newCoords);
-  const activePath = hasActiveSeries ? linePath(activeCoords) : "";
+  const activePath = activeCoords.length >= 2 ? linePath(activeCoords) : "";
 
   return (
     <figure>
@@ -104,7 +117,7 @@ export function SalesListingsChart({
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full"
         role="img"
-        aria-label="Sold bars with active and new listing curves by month"
+        aria-label="Sold bars with active and new listing lines by month"
         onMouseLeave={() => {
           setTip(null);
           setActiveIndex(null);
@@ -115,12 +128,36 @@ export function SalesListingsChart({
             key={tick}
             x1={inset.left}
             x2={width - inset.right}
-            y1={y(max * tick)}
-            y2={y(max * tick)}
+            y1={yLeft(leftMax * tick)}
+            y2={yLeft(leftMax * tick)}
             stroke="var(--color-line)"
             strokeDasharray="3 3"
           />
         ))}
+        {[0, 0.5, 1].map((tick) => (
+          <text
+            key={`l-${tick}`}
+            x={inset.left - 6}
+            y={yLeft(leftMax * tick) + 3}
+            textAnchor="end"
+            className="fill-[var(--color-ink-subtle)] text-[9px]"
+          >
+            {Math.round(leftMax * tick)}
+          </text>
+        ))}
+        {hasActive
+          ? [0, 1].map((tick) => (
+              <text
+                key={`r-${tick}`}
+                x={width - inset.right + 6}
+                y={yRight(rightMax * tick) + 3}
+                textAnchor="start"
+                className="fill-[var(--color-ink-subtle)] text-[9px]"
+              >
+                {Math.round(rightMax * tick)}
+              </text>
+            ))
+          : null}
 
         {points.map((row, i) => {
           const cx = xAt(i);
@@ -128,9 +165,9 @@ export function SalesListingsChart({
             <g key={`sold-${row.month}`}>
               <rect
                 x={cx - bar / 2}
-                y={y(row.sold)}
+                y={yLeft(row.sold)}
                 width={bar}
-                height={Math.max(h(row.sold), row.sold > 0 ? 2 : 0)}
+                height={Math.max(hLeft(row.sold), row.sold > 0 ? 2 : 0)}
                 rx="2"
                 fill={SOLD}
                 opacity={activeIndex === null || activeIndex === i ? 0.9 : 0.35}
@@ -164,11 +201,11 @@ export function SalesListingsChart({
           const cx = xAt(i);
           const month = formatMonthLabel(row.month);
           const tipY = Math.min(
-            y(Math.max(row.sold, 1)),
-            y(Math.max(row.active, 1)),
-            y(Math.max(row.newListings, 1)),
+            yLeft(Math.max(row.sold, 1)),
+            yLeft(Math.max(row.newListings, 1)),
           );
           const showDot = activeIndex === i || i === points.length - 1;
+          const activeValue = row.active != null && row.active > 0 ? row.active : null;
           return (
             <g
               key={row.month}
@@ -181,7 +218,9 @@ export function SalesListingsChart({
                   lines: [
                     month,
                     `Sold ${formatNumber(row.sold)}`,
-                    `Active ${formatNumber(row.active)}`,
+                    activeValue != null
+                      ? `Active ${formatNumber(activeValue)}`
+                      : "Active —",
                     `New listing ${formatNumber(row.newListings)}`,
                   ],
                 });
@@ -189,12 +228,24 @@ export function SalesListingsChart({
             >
               <rect x={cx - group / 2} y={inset.top} width={group} height={plotH} fill="transparent" />
               {showDot ? (
-                <>
-                  <circle cx={cx} cy={y(row.newListings)} r={activeIndex === i ? 4.5 : 3.5} fill={NEW} stroke="#fff" strokeWidth="1.5" />
-                  {row.active > 0 || activeIndex === i ? (
-                    <circle cx={cx} cy={y(row.active)} r={activeIndex === i ? 4.5 : 3.5} fill={ACTIVE} stroke="#fff" strokeWidth="1.5" />
-                  ) : null}
-                </>
+                <circle
+                  cx={cx}
+                  cy={yLeft(row.newListings)}
+                  r={activeIndex === i ? 4.5 : 3.5}
+                  fill={NEW}
+                  stroke="#fff"
+                  strokeWidth="1.5"
+                />
+              ) : null}
+              {activeValue != null ? (
+                <circle
+                  cx={cx}
+                  cy={yRight(activeValue)}
+                  r={activeIndex === i || i === points.length - 1 ? 5 : 3.5}
+                  fill={ACTIVE}
+                  stroke="#fff"
+                  strokeWidth="1.5"
+                />
               ) : null}
               {i % labelEvery === 0 || i === points.length - 1 ? (
                 <text
@@ -236,7 +287,7 @@ export function SalesListingsChart({
               <tr key={row.month}>
                 <th>{formatMonthLabel(row.month)}</th>
                 <td>{formatNumber(row.sold)}</td>
-                <td>{formatNumber(row.active)}</td>
+                <td>{row.active != null ? formatNumber(row.active) : "—"}</td>
                 <td>{formatNumber(row.newListings)}</td>
               </tr>
             ))}
