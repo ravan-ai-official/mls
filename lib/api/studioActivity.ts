@@ -12,6 +12,31 @@ export interface ActivityRow {
   contact?: number;
 }
 
+export interface ActivityTimelineItem {
+  at: string;
+  kind: string;
+  /** Primary title — address, project name, search query, etc. */
+  label: string;
+  /** Secondary line with MLS, price, beds, city, intent, etc. */
+  detail: string | null;
+  userEmail: string | null;
+  listingKey?: string | null;
+  mls?: string | null;
+  address?: string | null;
+  city?: string | null;
+  neighbourhood?: string | null;
+  price?: number | null;
+  beds?: number | null;
+  baths?: number | null;
+  propertyType?: string | null;
+  status?: string | null;
+  href?: string | null;
+  projectId?: number | null;
+  intent?: string | null;
+  message?: string | null;
+  resultCount?: number | null;
+}
+
 export interface StudioActivity {
   windowDays: number;
   userId: number | null;
@@ -24,7 +49,30 @@ export interface StudioActivity {
     newsletter: number;
     neighbourAlerts: number;
   };
-  timeline: { at: string; kind: string; label: string; userEmail: string | null }[];
+  timeline: ActivityTimelineItem[];
+}
+
+interface RawTimeline {
+  at?: string;
+  kind?: string;
+  label?: string;
+  detail?: string | null;
+  user_email?: string | null;
+  listing_key?: string | null;
+  mls?: string | null;
+  address?: string | null;
+  city?: string | null;
+  neighbourhood?: string | null;
+  price?: number | null;
+  beds?: number | null;
+  baths?: number | null;
+  property_type?: string | null;
+  status?: string | null;
+  href?: string | null;
+  project_id?: number | null;
+  intent?: string | null;
+  message?: string | null;
+  result_count?: number | null;
 }
 
 interface Raw {
@@ -46,7 +94,7 @@ interface Raw {
     newsletter?: number;
     neighbour_alerts?: number;
   };
-  timeline?: { at?: string; kind?: string; label?: string; user_email?: string | null }[];
+  timeline?: RawTimeline[];
 }
 
 /** Staff activity report. Calls mls-v2 directly with the Studio token. */
@@ -111,7 +159,23 @@ export async function getStudioActivity(
       at: row.at ?? "",
       kind: row.kind ?? "",
       label: row.label ?? "",
+      detail: row.detail ?? null,
       userEmail: row.user_email ?? null,
+      listingKey: row.listing_key ?? null,
+      mls: row.mls ?? null,
+      address: row.address ?? null,
+      city: row.city ?? null,
+      neighbourhood: row.neighbourhood ?? null,
+      price: row.price ?? null,
+      beds: row.beds ?? null,
+      baths: row.baths ?? null,
+      propertyType: row.property_type ?? null,
+      status: row.status ?? null,
+      href: row.href ?? null,
+      projectId: row.project_id ?? null,
+      intent: row.intent ?? null,
+      message: row.message ?? null,
+      resultCount: row.result_count ?? null,
     })),
   };
 }

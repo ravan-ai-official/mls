@@ -12,9 +12,14 @@ import {
   studioTh,
 } from "@/components/studio/chrome";
 import { ApiError } from "@/lib/api/client";
-import { getStudioActivity, type StudioActivity } from "@/lib/api/studioActivity";
+import {
+  getStudioActivity,
+  type ActivityTimelineItem,
+  type StudioActivity,
+} from "@/lib/api/studioActivity";
 import { requireStudioAccess } from "@/lib/auth/session";
 import { cn } from "@/lib/utils/cn";
+import { EMPTY, formatNumber, formatPrice } from "@/lib/utils/format";
 
 export const metadata: Metadata = { title: "Activity" };
 export const dynamic = "force-dynamic";
@@ -137,8 +142,19 @@ export default async function StudioActivityPage({
                       {report.topListings.map((row) => (
                         <tr key={row.listingKey}>
                           <td className={studioTd}>
-                            <span className="studio-cell-title">{row.address || row.listingKey}</span>
-                            {row.city ? <span className="studio-cell-meta">{row.city}</span> : null}
+                            {row.listingKey ? (
+                              <Link
+                                href={`/property/${row.listingKey}`}
+                                className="studio-cell-title text-navy underline-offset-2 hover:underline"
+                              >
+                                {row.address || row.listingKey}
+                              </Link>
+                            ) : (
+                              <span className="studio-cell-title">{row.address || EMPTY}</span>
+                            )}
+                            <span className="studio-cell-meta">
+                              {[row.city, row.listingKey].filter(Boolean).join(" · ")}
+                            </span>
                           </td>
                           <td className={cn(studioTd, "text-right tabular-nums text-ink-muted")}>{row.views}</td>
                         </tr>
@@ -168,7 +184,16 @@ export default async function StudioActivityPage({
                       {report.topProjects.map((row) => (
                         <tr key={row.id}>
                           <td className={studioTd}>
-                            <span className="studio-cell-title">{row.title}</span>
+                            {row.id ? (
+                              <Link
+                                href={`/preconstruction/${row.id}`}
+                                className="studio-cell-title text-navy underline-offset-2 hover:underline"
+                              >
+                                {row.title}
+                              </Link>
+                            ) : (
+                              <span className="studio-cell-title">{row.title}</span>
+                            )}
                             <span className="studio-cell-meta">
                               Floor plans {row.floorPlans} · Pricing {row.pricing} · Contact {row.contact}
                             </span>
@@ -218,19 +243,23 @@ export default async function StudioActivityPage({
           <StudioPanel
             title={
               report.userId
-                ? `Timeline for user #${report.userId}`
-                : "Recent timeline"
+                ? `Detailed timeline for user #${report.userId}`
+                : "Detailed recent timeline"
             }
+            description="Property address, MLS®, price and other context for each event — not just ids."
           >
             {report.timeline.length === 0 ? (
               <Empty />
             ) : (
               <div className={studioTableWrap}>
-                <table className={cn(studioTable, "min-w-[40rem]")}>
+                <table className={cn(studioTable, "min-w-[52rem]")}>
                   <thead>
                     <tr>
                       <th scope="col" className={studioTh}>
                         Event
+                      </th>
+                      <th scope="col" className={studioTh}>
+                        Property / detail
                       </th>
                       <th scope="col" className={studioTh}>
                         Who
@@ -242,10 +271,15 @@ export default async function StudioActivityPage({
                   </thead>
                   <tbody>
                     {report.timeline.map((row, index) => (
-                      <tr key={`${row.at}-${index}`}>
+                      <tr key={`${row.at}-${row.kind}-${index}`}>
                         <td className={studioTd}>
                           <span className="studio-cell-title">{KIND_LABELS[row.kind] ?? row.kind}</span>
-                          <span className="studio-cell-meta">{row.label}</span>
+                          {row.intent ? (
+                            <span className="studio-cell-meta capitalize">{row.intent.replace(/_/g, " ")}</span>
+                          ) : null}
+                        </td>
+                        <td className={studioTd}>
+                          <TimelineSubject row={row} />
                         </td>
                         <td className={cn(studioTd, "text-ink-muted")}>
                           {row.userEmail ? (
@@ -272,6 +306,38 @@ export default async function StudioActivityPage({
         </>
       )}
     </StudioPage>
+  );
+}
+
+function TimelineSubject({ row }: { row: ActivityTimelineItem }) {
+  const title = row.address || row.label || EMPTY;
+  const meta: string[] = [];
+  if (row.detail) meta.push(row.detail);
+  if (row.mls && !row.detail?.includes(row.mls)) meta.push(`MLS® ${row.mls}`);
+  if (row.price != null && !row.detail?.includes("$")) meta.push(formatPrice(row.price));
+  if (row.beds != null && !row.detail?.includes("bed")) meta.push(`${formatNumber(row.beds)} bed`);
+  if (row.baths != null && !row.detail?.includes("bath")) meta.push(`${formatNumber(row.baths)} bath`);
+  if (row.message) meta.push(row.message);
+
+  return (
+    <div className="min-w-0 space-y-0.5">
+      {row.href ? (
+        <Link
+          href={row.href}
+          className="studio-cell-title block text-navy underline-offset-2 hover:underline"
+        >
+          {title}
+        </Link>
+      ) : (
+        <span className="studio-cell-title block">{title}</span>
+      )}
+      {meta.length > 0 ? (
+        <span className="studio-cell-meta block whitespace-normal break-words">{meta.join(" · ")}</span>
+      ) : null}
+      {row.listingKey && row.listingKey !== title ? (
+        <span className="studio-cell-meta block text-[11px] text-ink-subtle">Key {row.listingKey}</span>
+      ) : null}
+    </div>
   );
 }
 
