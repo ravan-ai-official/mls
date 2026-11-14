@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { formatMonthLabel, formatNumber, formatPrice, formatPriceCompact } from "@/lib/utils/format";
 
-/** One month on the chart. `detail` is an extra column for the screen-reader table. */
+/** One month on the chart. `detail` / `secondary` are optional extras. */
 export interface ChartPoint {
   month: string;
   value: number | null;
   detail?: number | null;
+  /** Second series (e.g. days on market), plotted on the right axis. */
+  secondary?: number | null;
 }
 
 type Tip = { x: number; y: number; lines: string[] };
@@ -31,21 +33,24 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
 }
 
 /**
- * Monthly price line chart (median list price, median sold price).
- * Hover a point to see the exact month value.
+ * Monthly price line chart. Optional secondary series (days on market) uses a
+ * right-hand axis so price and DOM share one figure.
  */
 export function TrendChart({
   series,
   label,
   detailLabel,
+  secondaryLabel,
   height = 280,
   dots = "end",
 }: {
   series: ChartPoint[];
-  /** What the line measures, e.g. "Median sold price". */
+  /** What the primary line measures, e.g. "Median price". */
   label: string;
-  /** Heading for `detail` in the accessible table, when points carry one. */
+  /** Heading for `detail` in the accessible table / tooltip. */
   detailLabel?: string;
+  /** Heading for `secondary` (right axis), e.g. "Days on market". */
+  secondaryLabel?: string;
   height?: number;
   /** `end` marks only the latest month. `all` marks every month. */
   dots?: "end" | "all" | "none";
@@ -65,18 +70,34 @@ export function TrendChart({
   const values = points.map((p) => p.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  // Pad the domain so the line never sits flat against an edge.
   const pad = (max - min) * 0.15 || max * 0.05 || 1;
   const lo = Math.max(0, min - pad);
   const hi = max + pad;
 
+  const secondaryPoints = points
+    .map((point, index) =>
+      point.secondary != null && Number.isFinite(point.secondary)
+        ? { index, value: point.secondary }
+        : null,
+    )
+    .filter((point): point is { index: number; value: number } => point !== null);
+  const showSecondary = Boolean(secondaryLabel) && secondaryPoints.length >= 2;
+  const secondaryValues = secondaryPoints.map((point) => point.value);
+  const secondaryMin = showSecondary ? Math.min(...secondaryValues) : 0;
+  const secondaryMax = showSecondary ? Math.max(...secondaryValues) : 1;
+  const secondaryPad = (secondaryMax - secondaryMin) * 0.15 || secondaryMax * 0.05 || 1;
+  const secondaryLo = Math.max(0, secondaryMin - secondaryPad);
+  const secondaryHi = secondaryMax + secondaryPad;
+
   const width = 720;
-  const inset = { top: 16, right: 16, bottom: 28, left: 56 };
+  const inset = { top: 16, right: showSecondary ? 48 : 16, bottom: 28, left: 56 };
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
 
   const x = (i: number) => inset.left + (i / (points.length - 1)) * plotW;
   const y = (value: number) => inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
+  const ySecondary = (value: number) =>
+    inset.top + plotH - ((value - secondaryLo) / (secondaryHi - secondaryLo)) * plotH;
 
   const line = points
     .map((point, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(point.value).toFixed(1)}`)
@@ -84,8 +105,19 @@ export function TrendChart({
 
   const area = `${line} L${x(points.length - 1).toFixed(1)},${(inset.top + plotH).toFixed(1)} L${x(0).toFixed(1)},${(inset.top + plotH).toFixed(1)} Z`;
 
-  // Four horizontal gridlines including both bounds.
+  const secondaryLine = showSecondary
+    ? secondaryPoints
+        .map(
+          (point, i) =>
+            `${i === 0 ? "M" : "L"}${x(point.index).toFixed(1)},${ySecondary(point.value).toFixed(1)}`,
+        )
+        .join(" ")
+    : "";
+
   const ticks = Array.from({ length: 4 }, (_, i) => lo + ((hi - lo) * i) / 3);
+  const secondaryTicks = showSecondary
+    ? Array.from({ length: 4 }, (_, i) => secondaryLo + ((secondaryHi - secondaryLo) * i) / 3)
+    : [];
 
   const first = values[0];
   const last = values[values.length - 1];
@@ -93,18 +125,30 @@ export function TrendChart({
 
   return (
     <figure className="space-y-3">
+      {showSecondary && (
+        <div className="flex flex-wrap items-center gap-4 text-[12px] text-ink-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-4 rounded-full bg-navy" />
+            {label}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-4 rounded-full bg-gold" />
+            {secondaryLabel}
+          </span>
+        </div>
+      )}
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full"
         role="img"
-        aria-label={`${label} from ${formatMonthLabel(points[0].month)} to ${formatMonthLabel(points[points.length - 1].month)}, changing ${changePct >= 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} percent.`}
+        aria-label={`${label} from ${formatMonthLabel(points[0].month)} to ${formatMonthLabel(points[points.length - 1].month)}, changing ${changePct >= 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} percent.${showSecondary ? ` Also shows ${secondaryLabel}.` : ""}`}
         onMouseLeave={() => {
           setTip(null);
           setActive(null);
         }}
       >
         {ticks.map((tick) => (
-          <g key={tick}>
+          <g key={`price-${tick}`}>
             <line
               x1={inset.left}
               x2={width - inset.right}
@@ -124,6 +168,18 @@ export function TrendChart({
           </g>
         ))}
 
+        {secondaryTicks.map((tick) => (
+          <text
+            key={`dom-${tick}`}
+            x={width - inset.right + 8}
+            y={ySecondary(tick) + 4}
+            textAnchor="start"
+            className="fill-[var(--color-ink-subtle)] text-[10px]"
+          >
+            {Math.round(tick)}
+          </text>
+        ))}
+
         <path d={area} fill="var(--color-navy)" opacity="0.07" />
         <path
           d={line}
@@ -133,6 +189,18 @@ export function TrendChart({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+
+        {showSecondary && (
+          <path
+            d={secondaryLine}
+            fill="none"
+            stroke="var(--color-gold)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="6 4"
+          />
+        )}
 
         {points.map((point, i) => {
           const cx = x(i);
@@ -154,6 +222,9 @@ export function TrendChart({
                     lines: [
                       formatMonthLabel(point.month),
                       `${label} ${formatPrice(point.value)}`,
+                      ...(secondaryLabel && point.secondary != null
+                        ? [`${secondaryLabel} ${Math.round(point.secondary)}`]
+                        : []),
                       ...(detailLabel && point.detail != null
                         ? [`${detailLabel} ${formatNumber(point.detail)}`]
                         : []),
@@ -171,12 +242,19 @@ export function TrendChart({
                   }
                 />
               ) : null}
+              {showSecondary && point.secondary != null && (active === i || i === points.length - 1) ? (
+                <circle
+                  cx={cx}
+                  cy={ySecondary(point.secondary)}
+                  r={active === i ? 4 : 3}
+                  fill="var(--color-gold)"
+                />
+              ) : null}
             </g>
           );
         })}
 
         {points.map((point, i) =>
-          // Label roughly six ticks to avoid crowding on narrow screens.
           i % Math.ceil(points.length / 6) === 0 || i === points.length - 1 ? (
             <text
               key={`label-${point.month}`}
@@ -195,11 +273,15 @@ export function TrendChart({
 
       <figcaption className="sr-only">
         <table>
-          <caption>{label} by month</caption>
+          <caption>
+            {label}
+            {secondaryLabel ? ` and ${secondaryLabel}` : ""} by month
+          </caption>
           <thead>
             <tr>
               <th scope="col">Month</th>
               <th scope="col">{label}</th>
+              {secondaryLabel && <th scope="col">{secondaryLabel}</th>}
               {detailLabel && <th scope="col">{detailLabel}</th>}
             </tr>
           </thead>
@@ -208,6 +290,9 @@ export function TrendChart({
               <tr key={point.month}>
                 <th scope="row">{formatMonthLabel(point.month)}</th>
                 <td>{formatPriceCompact(point.value)}</td>
+                {secondaryLabel && (
+                  <td>{point.secondary != null ? Math.round(point.secondary) : ""}</td>
+                )}
                 {detailLabel && <td>{point.detail ?? ""}</td>}
               </tr>
             ))}

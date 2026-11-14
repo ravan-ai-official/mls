@@ -270,7 +270,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             <div className="mb-6">
               <h3 className="text-[20px] font-semibold text-ink">Median price</h3>
               <p className="mt-1 text-[13px] text-ink-muted">
-                Closed transactions · {range.label}
+                Closed transactions with days on market · {range.label}
                 {periodSpan ? ` (${periodSpan})` : ` · last ${range.months} months`}
                 {sold.generatedAt ? ` · as of ${formatDate(sold.generatedAt)}` : ""}
                 {sold.stale ? " · these may be a few hours old" : ""}
@@ -291,11 +291,13 @@ async function MarketBoard({ filters }: { filters: Filters }) {
                 <TrendChart
                   key={`median-${range.key}-${soldMonths.length}-${soldMonths[0]?.month}-${soldMonths.at(-1)?.month}`}
                   label="Median price"
+                  secondaryLabel="Days on market"
                   detailLabel="Units sold"
                   dots="none"
                   series={soldMonths.map((month) => ({
                     month: month.month,
                     value: month.medianSoldPrice,
+                    secondary: month.avgDaysOnMarket,
                     detail: month.unitsSold,
                   }))}
                 />
