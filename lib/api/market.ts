@@ -16,10 +16,19 @@
  */
 
 import { apiFetch, type RequestOptions } from "@/lib/api/client";
+import { HOME_TYPE_PARAM } from "@/lib/api/properties";
 import type { BackendCatalogStats } from "@/lib/types/backend";
 import type { CityCatalogStat, PlatformStats } from "@/lib/types/domain";
 
 const MLS = "/api/mls";
+
+/** Residential home types for the Market Insights pie (Detached / Semi / Townhome / Condo). */
+export const HOME_TYPE_DISTRIBUTION = [
+  { name: "Detached", type: "Detached" },
+  { name: "Semi-Detached", type: "Semi-Detached" },
+  { name: "Townhome", type: "Townhome" },
+  { name: "Condo", type: "Condo" },
+] as const;
 
 /** Cities the trends page offers. The backend matches `city` case-insensitively. */
 export const MARKET_CITIES = [
@@ -317,6 +326,39 @@ export async function getBulkCatalogStats(
     avgSoldPrice90d: num(row.avg_sold_price_90d),
     medianSoldPrice90d: num(row.median_sold_price_90d),
   }));
+}
+
+/**
+ * Active listing counts per residential home type for a city.
+ * Uses `home_type` with fallback off so Detached / Semi / Townhome / Condo stay distinct.
+ */
+export async function getHomeTypeDistribution(
+  city: string,
+  options: RequestOptions = {},
+): Promise<Array<{ name: string; count: number }>> {
+  if (!city.trim()) return [];
+  const rows = await Promise.all(
+    HOME_TYPE_DISTRIBUTION.map(async ({ name, type }) => {
+      try {
+        const data = await apiFetch<{ count?: number }>(`${MLS}/properties/filter/`, {
+          revalidate: 900,
+          ...options,
+          params: {
+            city,
+            status_group: "active",
+            transaction_type: "sale",
+            home_type: HOME_TYPE_PARAM[type],
+            limit: 1,
+            allow_fallback: "false",
+          },
+        });
+        return { name, count: data.count ?? 0 };
+      } catch {
+        return { name, count: 0 };
+      }
+    }),
+  );
+  return rows.filter((row) => row.count > 0);
 }
 
 /* -------------------------------------------------------------------------- */

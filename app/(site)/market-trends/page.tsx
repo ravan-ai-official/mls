@@ -11,6 +11,7 @@ import { ErrorState, Skeleton } from "@/components/ui/States";
 import { cn } from "@/lib/utils/cn";
 import {
   getBulkCatalogStats,
+  getHomeTypeDistribution,
   getMarketTrends,
   getSoldTrends,
   MARKET_CITIES,
@@ -196,12 +197,13 @@ async function MarketBoard({ filters }: { filters: Filters }) {
   const { city, range, type, community } = filters;
   const filtered = Boolean(type || community);
   // 12m covers Jan→now for the YTD heatmap; selected-city charts still use `range`.
-  const [trends, citySold, viewSold, cities, heatmapSold] = await Promise.all([
+  const [trends, citySold, viewSold, cities, heatmapSold, homeTypes] = await Promise.all([
     loadTrends(city, range.months),
     loadSold(city, range.months, "", ""),
     filtered ? loadSold(city, range.months, community ?? "", type ?? "") : Promise.resolve(null),
     getBulkCatalogStats({ cities: [...MARKET_CITIES] }).catch(() => [] as CityCatalogStat[]),
     Promise.all(MARKET_CITIES.map((name) => loadSold(name, 12, "", ""))),
+    getHomeTypeDistribution(city).catch(() => [] as Array<{ name: string; count: number }>),
   ]);
   const sold = viewSold ?? citySold;
   const heatmapCities = buildHeatmapCities(cities, heatmapSold);
@@ -341,13 +343,13 @@ async function MarketBoard({ filters }: { filters: Filters }) {
           </div>
         </div>
 
-        {(trends?.bySubtype.length ?? 0) > 0 && (
+        {homeTypes.length > 0 && (
           <section className="rounded-2xl border border-line bg-surface p-6">
             <h2 className="mb-1 text-[18px] font-semibold text-ink">Property type distribution</h2>
             <p className="mb-5 text-[13px] text-ink-muted">
-              How active listings in {city} break down by type. Catalogue asking stock, not closed sales.
+              Active listings in {city} by home type — Detached, Semi-Detached, Townhome and Condo.
             </p>
-            <PropertyTypeDistribution rows={trends?.bySubtype ?? []} />
+            <PropertyTypeDistribution rows={homeTypes} />
           </section>
         )}
 

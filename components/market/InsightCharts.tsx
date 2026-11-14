@@ -285,16 +285,35 @@ export function DaysOnMarketChart({
   );
 }
 
+function piePaths(counts: number[]): string[] {
+  const total = counts.reduce((sum, count) => sum + count, 0) || 1;
+  const cx = 110;
+  const cy = 110;
+  const radius = 90;
+  let angle = -Math.PI / 2;
+  return counts.map((count) => {
+    const sweep = (count / total) * Math.PI * 2;
+    const start = angle;
+    angle += sweep;
+    const large = sweep > Math.PI ? 1 : 0;
+    const x1 = cx + radius * Math.cos(start);
+    const y1 = cy + radius * Math.sin(start);
+    const x2 = cx + radius * Math.cos(angle);
+    const y2 = cy + radius * Math.sin(angle);
+    if (count >= total) {
+      return `M ${cx} ${cy - radius} A ${radius} ${radius} 0 1 1 ${cx - 0.01} ${cy - radius} Z`;
+    }
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2} Z`;
+  });
+}
+
 /**
- * Property type distribution — share of active listings by subtype.
- * Replaces the old donut "mix" chart with count + % bars so the split is obvious.
+ * Property type distribution pie — Detached / Semi-Detached / Townhome / Condo
+ * share of active listings (not MLS catalogue subtypes like "Single Family").
  */
 export function PropertyTypeDistribution({ rows }: { rows: Array<{ name: string; count: number }> }) {
   const [active, setActive] = useState<number | null>(null);
-  const items = [...rows]
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
+  const items = [...rows].filter((row) => row.count > 0).sort((a, b) => b.count - a.count);
   const total = items.reduce((sum, row) => sum + row.count, 0);
   if (total === 0) return null;
 
@@ -303,43 +322,67 @@ export function PropertyTypeDistribution({ rows }: { rows: Array<{ name: string;
     pct: (item.count / total) * 100,
     color: MIX_COLORS[index % MIX_COLORS.length],
   }));
+  const paths = piePaths(slices.map((slice) => slice.count));
+  const tip = active !== null ? slices[active] : null;
 
   return (
-    <div className="space-y-4" onMouseLeave={() => setActive(null)}>
-      <p className="text-[13px] text-ink-muted">
-        {formatNumber(total)} active listing{total === 1 ? "" : "s"} in this catalogue
-      </p>
-      <ul className="space-y-3" aria-label="Property type distribution">
-        {slices.map((slice, index) => {
-          const isActive = active === null || active === index;
-          return (
-            <li
-              key={slice.name}
-              className="space-y-1.5 transition-opacity"
-              style={{ opacity: isActive ? 1 : 0.45 }}
+    <div className="flex flex-col items-center gap-8 sm:flex-row" onMouseLeave={() => setActive(null)}>
+      <div className="relative shrink-0">
+        <svg
+          viewBox="0 0 220 220"
+          className="h-[220px] w-[220px]"
+          role="img"
+          aria-label="Property type distribution"
+        >
+          {paths.map((path, index) => (
+            <path
+              key={slices[index]?.name ?? index}
+              d={path}
+              fill={slices[index]?.color}
+              opacity={active === null || active === index ? 1 : 0.45}
+              className="cursor-pointer transition-opacity"
               onMouseEnter={() => setActive(index)}
             >
-              <div className="flex items-baseline justify-between gap-3 text-small">
-                <span className="flex min-w-0 items-center gap-2 font-medium text-ink">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: slice.color }} />
-                  <span className="truncate">{slice.name}</span>
-                </span>
-                <span className="shrink-0 tabular-nums text-ink-muted">
-                  <span className="font-semibold text-ink">{Math.round(slice.pct)}%</span>
-                  <span className="mx-1.5 text-ink-subtle">·</span>
-                  {formatNumber(slice.count)}
-                </span>
-              </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-surface-alt">
-                <div
-                  className="h-full rounded-full transition-[width]"
-                  style={{ width: `${Math.max(slice.pct, 1.5)}%`, background: slice.color }}
-                />
-              </div>
+              <title>
+                {`${slices[index]?.name}: ${formatNumber(slices[index]?.count ?? 0)} (${Math.round(slices[index]?.pct ?? 0)}%)`}
+              </title>
+            </path>
+          ))}
+        </svg>
+        {tip ? (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 w-max -translate-x-1/2 -translate-y-1/2 rounded-md bg-ink px-2.5 py-1.5 text-[11px] text-white shadow-pop">
+            <p className="font-medium">{tip.name}</p>
+            <p className="text-white/80">
+              {formatNumber(tip.count)} · {Math.round(tip.pct)}%
+            </p>
+          </div>
+        ) : null}
+      </div>
+      <div className="w-full flex-1 space-y-4">
+        <p className="text-[13px] text-ink-muted">
+          {formatNumber(total)} active listing{total === 1 ? "" : "s"} by home type
+        </p>
+        <ul className="space-y-3" aria-label="Property type shares">
+          {slices.map((slice, index) => (
+            <li
+              key={slice.name}
+              className="flex cursor-pointer items-center justify-between gap-4 text-small transition-opacity"
+              style={{ opacity: active === null || active === index ? 1 : 0.45 }}
+              onMouseEnter={() => setActive(index)}
+            >
+              <span className="flex min-w-0 items-center gap-2 font-medium text-ink">
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: slice.color }} />
+                <span className="truncate">{slice.name}</span>
+              </span>
+              <span className="shrink-0 tabular-nums text-ink-muted">
+                <span className="font-semibold text-ink">{Math.round(slice.pct)}%</span>
+                <span className="mx-1.5 text-ink-subtle">·</span>
+                {formatNumber(slice.count)}
+              </span>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
