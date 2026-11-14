@@ -40,8 +40,30 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
   );
 }
 
+/** Smooth open curve through points (Catmull-Rom → cubic Bézier). */
+function smoothLinePath(coords: Array<{ x: number; y: number }>): string {
+  if (coords.length === 0) return "";
+  if (coords.length === 1) return `M${coords[0].x},${coords[0].y}`;
+  if (coords.length === 2) {
+    return `M${coords[0].x},${coords[0].y} L${coords[1].x},${coords[1].y}`;
+  }
+  let d = `M${coords[0].x},${coords[0].y}`;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p0 = coords[i - 1] ?? coords[i];
+    const p1 = coords[i];
+    const p2 = coords[i + 1];
+    const p3 = coords[i + 2] ?? p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
 /**
- * Sold / Active / New Listing grouped bars for the Market Insights page.
+ * Sold bars with Active and New Listing as curves on the Market Insights page.
  * Sold = closed transactions; New Listing = new catalogue rows that month;
  * Active = open inventory when provided for that month.
  */
@@ -51,6 +73,7 @@ export function SalesListingsChart({
   rows: Array<{ month: string; sold: number; active: number; newListings: number }>;
 }) {
   const [tip, setTip] = useState<Tip | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const points = rows.filter((row) => row.sold > 0 || row.active > 0 || row.newListings > 0);
   if (points.length < 2) {
     return (
@@ -62,7 +85,7 @@ export function SalesListingsChart({
 
   const width = 640;
   const height = 210;
-  const inset = { top: 12, right: 8, bottom: 36, left: 36 };
+  const inset = { top: 14, right: 10, bottom: 36, left: 36 };
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
@@ -71,16 +94,23 @@ export function SalesListingsChart({
     1,
   );
   const group = plotW / points.length;
-  const bar = Math.min(10, group * 0.22);
-  const gap = 1.5;
+  const bar = Math.min(18, group * 0.42);
 
+  const xAt = (i: number) => inset.left + group * i + group / 2;
   const y = (value: number) => inset.top + plotH - (value / max) * plotH;
   const h = (value: number) => (value / max) * plotH;
 
   const SOLD = "var(--color-navy)";
   const ACTIVE = "var(--color-gold)";
-  /** Slate — light gray washed out on white; keep distinct from navy/gold. */
   const NEW = "#5b7c99";
+
+  const newCoords = points.map((row, i) => ({ x: xAt(i), y: y(row.newListings) }));
+  // Active inventory is often only known for the latest month — still draw a
+  // curve through the series so the legend stays consistent.
+  const activeCoords = points.map((row, i) => ({ x: xAt(i), y: y(row.active) }));
+  const hasActiveSeries = points.some((row) => row.active > 0);
+  const newPath = smoothLinePath(newCoords);
+  const activePath = hasActiveSeries ? smoothLinePath(activeCoords) : "";
 
   return (
     <figure>
@@ -88,8 +118,11 @@ export function SalesListingsChart({
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full"
         role="img"
-        aria-label="Sold, active and new listings by month"
-        onMouseLeave={() => setTip(null)}
+        aria-label="Sold bars with active and new listing curves by month"
+        onMouseLeave={() => {
+          setTip(null);
+          setActiveIndex(null);
+        }}
       >
         {[0, 0.5, 1].map((tick) => (
           <line
@@ -102,23 +135,60 @@ export function SalesListingsChart({
             strokeDasharray="3 3"
           />
         ))}
+
         {points.map((row, i) => {
-          const cx = inset.left + group * i + group / 2;
+          const cx = xAt(i);
+          return (
+            <g key={`sold-${row.month}`}>
+              <rect
+                x={cx - bar / 2}
+                y={y(row.sold)}
+                width={bar}
+                height={Math.max(h(row.sold), row.sold > 0 ? 2 : 0)}
+                rx="2"
+                fill={SOLD}
+                opacity={activeIndex === null || activeIndex === i ? 0.9 : 0.35}
+              />
+            </g>
+          );
+        })}
+
+        {newPath ? (
+          <path
+            d={newPath}
+            fill="none"
+            stroke={NEW}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+        {activePath ? (
+          <path
+            d={activePath}
+            fill="none"
+            stroke={ACTIVE}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+
+        {points.map((row, i) => {
+          const cx = xAt(i);
+          const month = formatMonthLabel(row.month);
           const tipY = Math.min(
             y(Math.max(row.sold, 1)),
             y(Math.max(row.active, 1)),
             y(Math.max(row.newListings, 1)),
           );
-          const month = formatMonthLabel(row.month);
-          const isActive = tip?.lines[0] === month;
-          const cluster = bar * 3 + gap * 2;
-          const x0 = cx - cluster / 2;
+          const showDot = activeIndex === i || i === points.length - 1;
           return (
             <g
               key={row.month}
               className="cursor-pointer"
-              opacity={tip && !isActive ? 0.55 : 1}
-              onMouseEnter={() =>
+              onMouseEnter={() => {
+                setActiveIndex(i);
                 setTip({
                   x: cx,
                   y: tipY,
@@ -128,34 +198,18 @@ export function SalesListingsChart({
                     `Active ${formatNumber(row.active)}`,
                     `New listing ${formatNumber(row.newListings)}`,
                   ],
-                })
-              }
+                });
+              }}
             >
               <rect x={cx - group / 2} y={inset.top} width={group} height={plotH} fill="transparent" />
-              <rect
-                x={x0}
-                y={y(row.sold)}
-                width={bar}
-                height={Math.max(h(row.sold), row.sold > 0 ? 2 : 0)}
-                rx="2"
-                fill={SOLD}
-              />
-              <rect
-                x={x0 + bar + gap}
-                y={y(row.active)}
-                width={bar}
-                height={Math.max(h(row.active), row.active > 0 ? 2 : 0)}
-                rx="2"
-                fill={ACTIVE}
-              />
-              <rect
-                x={x0 + (bar + gap) * 2}
-                y={y(row.newListings)}
-                width={bar}
-                height={Math.max(h(row.newListings), row.newListings > 0 ? 2 : 0)}
-                rx="2"
-                fill={NEW}
-              />
+              {showDot ? (
+                <>
+                  <circle cx={cx} cy={y(row.newListings)} r={activeIndex === i ? 4.5 : 3.5} fill={NEW} stroke="#fff" strokeWidth="1.5" />
+                  {row.active > 0 || activeIndex === i ? (
+                    <circle cx={cx} cy={y(row.active)} r={activeIndex === i ? 4.5 : 3.5} fill={ACTIVE} stroke="#fff" strokeWidth="1.5" />
+                  ) : null}
+                </>
+              ) : null}
               {i % labelEvery === 0 || i === points.length - 1 ? (
                 <text
                   x={cx}
@@ -176,10 +230,10 @@ export function SalesListingsChart({
           <span className="h-2.5 w-2.5 rounded-sm bg-navy" /> Sold
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-gold" /> Active
+          <span className="inline-block h-0.5 w-4 rounded-full bg-gold" /> Active
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[#5b7c99]" /> New listing
+          <span className="inline-block h-0.5 w-4 rounded-full bg-[#5b7c99]" /> New listing
         </span>
         <table className="sr-only">
           <caption>Sold, active and new listings by month</caption>
