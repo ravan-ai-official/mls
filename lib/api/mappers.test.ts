@@ -207,10 +207,42 @@ describe("mapPropertyDetail listing fields", () => {
     expect(facts["Unit #"]).toBe("1712");
     expect(facts["Locker"]).toBe("Yes");
     expect(facts["Property taxes"]).toBe("$3,200");
-    expect(facts["Maintenance fee"]).toMatch(/\$650/);
+    expect(facts["Maintenance"]).toMatch(/\$650/);
     expect(facts["Included in maintenance costs"]).toMatch(/Heat/i);
     expect(facts["Days on market"]).toBe("14 days");
     expect(facts["Rental items under contract"]).toBe("Hot Water Tank");
+
+    for (const label of [
+      "Municipality",
+      "Community",
+      "Address",
+      "Level",
+      "Unit #",
+      "Locker",
+      "POTL monthly fees",
+      "Maintenance",
+      "Included in maintenance costs",
+      "Property type",
+      "Style",
+      "Lot frontage",
+      "Lot depth",
+      "List price",
+      "Last sold price",
+      "Property taxes",
+      "Days on market",
+      "Square feet above ground",
+      "Garage parking spaces",
+      "Total parking spaces",
+      "Year built",
+      "Number of bedrooms",
+      "Number of washrooms",
+      "Family room",
+      "Basement (finished/unfinished)",
+      "Number of kitchens",
+      "Rental items under contract",
+    ]) {
+      expect(facts).toHaveProperty(label);
+    }
     vi.useRealTimers();
   });
 });

@@ -33,6 +33,7 @@ import {
   splitFeatures,
   titleCase,
   toNumber,
+  formatLeasePrice,
   formatNumber,
   formatPrice,
 } from "@/lib/utils/format";
@@ -452,44 +453,85 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       : null,
   );
 
+  const listPriceLabel =
+    summary.price === null
+      ? null
+      : summary.isLease
+        ? formatLeasePrice(summary.price)
+        : formatPrice(summary.price);
+  const lastSoldLabel =
+    summary.closePrice === null
+      ? null
+      : summary.isLease
+        ? formatLeasePrice(summary.closePrice)
+        : formatPrice(summary.closePrice);
+  const maintenanceLabel = assocFee
+    ? `${formatPrice(assocFee)}${raw.association_fee_frequency ? ` / ${raw.association_fee_frequency.toLowerCase()}` : ""}`
+    : null;
+  const daysOnMarketLabel =
+    daysOnMarket === null
+      ? null
+      : `${daysOnMarket} day${daysOnMarket === 1 ? "" : "s"}`;
+
+  // Client-required Key Facts — always render (dash when the feed has no value).
   const factGroups = [
-    group("Property", [
+    group("Overview", [
+      factOrDash("Municipality", summary.community),
+      factOrDash("Community", summary.neighbourhood),
+      factOrDash("Address", summary.address),
+      factOrDash("Level", level),
+      factOrDash("Unit #", raw.unit_number?.trim()),
+      factOrDash("Locker", locker === null ? null : locker ? "Yes" : "No"),
+      factOrDash(
+        "POTL monthly fees",
+        potlMonthlyFees === null ? null : formatPrice(potlMonthlyFees),
+      ),
+      factOrDash("Maintenance", maintenanceLabel),
+      factOrDash("Included in maintenance costs", associationFeeIncludes),
+      factOrDash("Property type", summary.type),
+      factOrDash("Style", style),
+      factOrDash(
+        "Lot frontage",
+        lotFrontage ? `${formatNumber(lotFrontage)} ft` : null,
+      ),
+      factOrDash("Lot depth", lotDepth),
+      factOrDash("List price", listPriceLabel),
+      factOrDash("Last sold price", lastSoldLabel),
+      factOrDash("Property taxes", taxAnnual ? formatPrice(taxAnnual) : null),
+      factOrDash("Days on market", daysOnMarketLabel),
+      factOrDash(
+        "Square feet above ground",
+        sqftAboveGrade && sqftAboveGrade > 0 ? `${formatNumber(sqftAboveGrade)} sq ft` : null,
+      ),
+      factOrDash(
+        "Garage parking spaces",
+        garageSpaces === null ? null : formatNumber(garageSpaces),
+      ),
+      factOrDash(
+        "Total parking spaces",
+        raw.parking_total === null || raw.parking_total === undefined
+          ? null
+          : formatNumber(raw.parking_total),
+      ),
+      factOrDash("Year built", yearBuilt),
+      factOrDash("Number of bedrooms", bedsLabel ?? summary.beds),
+      factOrDash("Number of washrooms", summary.baths),
+      factOrDash("Family room", familyRoom === null ? null : familyRoom ? "Yes" : "No"),
+      factOrDash("Basement (finished/unfinished)", basement),
+      factOrDash("Number of kitchens", kitchens),
+      factOrDash("Rental items under contract", rentalItems),
+    ]),
+    group("More details", [
       fact("Listing #", summary.mls),
       fact("Status", statusLabel(summary.status)),
-      fact("Property type", summary.type),
-      fact("Style", style),
       factOrDash("Ownership / Title", ownership),
-      factOrDash("Level", level),
-      fact("Unit #", raw.unit_number?.trim()),
-      locker === null ? null : fact("Locker", locker ? "Yes" : "No"),
-      fact("Community", summary.neighbourhood),
-      fact("Municipality", summary.community),
       fact("Directions", titleCase(raw.directions)),
-      daysOnMarket === null
-        ? null
-        : fact(
-            "Days on market",
-            `${daysOnMarket} day${daysOnMarket === 1 ? "" : "s"}`,
-          ),
-      factOrDash("Family room", familyRoom === null ? null : familyRoom ? "Yes" : "No"),
-      potlMonthlyFees === null ? null : fact("POTL monthly fees", formatPrice(potlMonthlyFees)),
-    ]),
-    group("Building", [
-      fact("Bedrooms", bedsLabel ?? summary.beds),
-      fact("Bathrooms", summary.baths),
       fact("Partial baths", raw.bathrooms_partial),
-      fact("Basement", basement),
-      factOrDash("Number of kitchens", kitchens),
       fact("Rooms", roomCount || null),
       factOrDash(
         "Square footage",
         sqft && sqft > 0 ? `${formatNumber(sqft)} sq ft` : null,
       ),
-      fact(
-        "Square feet above ground",
-        sqftAboveGrade && sqftAboveGrade > 0 ? `${formatNumber(sqftAboveGrade)} sq ft` : null,
-      ),
-      factOrDash("Year built", yearBuilt),
       factOrDash(
         "Property age",
         propertyAge === null
@@ -499,35 +541,14 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       factOrDash("Number of floors", stories),
       fact("Construction", titleCase(raw.construction_materials)),
       fact("Flooring", titleCase(raw.flooring)),
-    ]),
-    group("Parking & Garage", [
       fact("Garage type", titleCase(raw.garage_size)),
-      factOrDash("Number of garages", garageSpaces),
-      fact("Parking spaces", raw.parking_total),
       fact("Parking features", titleCase(raw.parking_features)),
-    ]),
-    group("Land", [
       fact("Lot size", raw.lot_size_dimensions),
-      fact("Frontage", lotFrontage ? `${formatNumber(lotFrontage)} ft` : null),
-      fact("Depth", lotDepth),
       fact("Zoning", titleCase(raw.zoning)),
-    ]),
-    group("Utilities", [
       fact("Water", titleCase(raw.water_source)),
       fact("Sewer", titleCase(raw.sewer)),
       fact("Cooling", titleCase(raw.cooling)),
       fact("Heating", titleCase(raw.heating)),
-    ]),
-    group("Financial", [
-      fact("Property taxes", taxAnnual ? formatPrice(taxAnnual) : null),
-      fact(
-        "Maintenance fee",
-        assocFee
-          ? `${formatPrice(assocFee)}${raw.association_fee_frequency ? ` / ${raw.association_fee_frequency.toLowerCase()}` : ""}`
-          : null,
-      ),
-      fact("Included in maintenance costs", associationFeeIncludes),
-      fact("Rental items under contract", rentalItems),
     ]),
   ].filter((g): g is { title: string; facts: PropertyFact[] } => g !== null);
 

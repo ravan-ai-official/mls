@@ -94,15 +94,13 @@ export const COMPARE_ROWS: Array<{
     lowerIsBetter: true,
   },
   {
-    label: "Square footage",
-    value: (p) => {
-      const area = p.sqft ?? p.sqftAboveGrade;
-      return area === null ? EMPTY : `${formatNumber(area)} sq ft`;
-    },
-    numeric: (p) => p.sqft ?? p.sqftAboveGrade,
+    label: "Square feet above ground",
+    value: (p) =>
+      p.sqftAboveGrade === null ? EMPTY : `${formatNumber(p.sqftAboveGrade)} sq ft`,
+    numeric: (p) => p.sqftAboveGrade,
   },
   {
-    label: "Number of garages",
+    label: "Garage parking spaces",
     value: (p) => (p.garageSpaces === null ? EMPTY : formatNumber(p.garageSpaces)),
     numeric: (p) => p.garageSpaces,
   },
