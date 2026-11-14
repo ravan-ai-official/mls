@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { formatMonthLabel, formatNumber, formatPrice, formatPriceCompact } from "@/lib/utils/format";
 
 /**
  * One month on the median-price combo chart.
  * `value` = median price (line, left axis).
- * `daysOnMarket` / `propertyDaysOnMarket` = stacked bars (right axis).
+ * `daysOnMarket` / `propertyDaysOnMarket` = bars + line (right axis).
  * `detail` = optional tooltip extra (e.g. units sold).
  */
 export interface ChartPoint {
@@ -21,22 +21,39 @@ export interface ChartPoint {
 
 type Tip = { x: number; y: number; lines: string[] };
 
+/** "Sep 2024" → "Sep '24" for crowded axes. */
+function axisMonth(value: string): string {
+  const label = formatMonthLabel(value);
+  const [month, year] = label.split(" ");
+  if (!month || !year || year.length < 2) return label;
+  return `${month} '${year.slice(-2)}`;
+}
+
 function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
   if (!tip) return null;
-  const boxW = Math.max(...tip.lines.map((line) => line.length)) * 7.2 + 20;
-  const boxH = tip.lines.length * 16 + 14;
+  const boxW = Math.max(...tip.lines.map((line) => line.length)) * 7.2 + 24;
+  const boxH = tip.lines.length * 17 + 16;
   const x = Math.min(Math.max(8, tip.x - boxW / 2), width - boxW - 8);
-  const y = Math.max(8, tip.y - boxH - 12);
+  const y = Math.max(8, tip.y - boxH - 14);
   return (
     <g pointerEvents="none">
-      <rect x={x} y={y} width={boxW} height={boxH} rx={6} fill="#ffffff" stroke="#e5e5e5" />
+      <rect
+        x={x}
+        y={y}
+        width={boxW}
+        height={boxH}
+        rx={8}
+        fill="#151515"
+        opacity="0.94"
+        filter="url(#trend-tip-shadow)"
+      />
       {tip.lines.map((line, index) => (
         <text
           key={`${index}-${line}`}
-          x={x + 10}
-          y={y + 18 + index * 16}
+          x={x + 12}
+          y={y + 20 + index * 17}
           fontSize="11"
-          fill={index === 0 ? "#151515" : "#444444"}
+          fill={index === 0 ? "#ffffff" : "rgba(255,255,255,0.82)"}
           fontWeight={index === 0 ? 600 : 400}
         >
           {line}
@@ -47,19 +64,19 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
 }
 
 const DOM_COLOR = "#e8a04a";
-const PDOM_COLOR = "#3d9b8f";
-const PRICE_COLOR = "#2f5f9e";
+const PDOM_COLOR = "#2f9e8f";
+const PRICE_COLOR = "#1b2e4b";
 
 /**
- * Median price line over stacked Days on Market / Property Days on Market bars
- * (HouseSigma-style dual-axis combo).
+ * Median price line over Days on Market bars and Property Days on Market line
+ * (dual-axis combo).
  */
 export function TrendChart({
   series,
   label,
   detailLabel,
   secondaryLabel,
-  height = 300,
+  height = 320,
   dots = "end",
 }: {
   series: ChartPoint[];
@@ -73,6 +90,7 @@ export function TrendChart({
   /** `end` marks only the latest month. `all` marks every month. */
   dots?: "end" | "all" | "none";
 }) {
+  const gradId = useId().replace(/:/g, "");
   const [tip, setTip] = useState<Tip | null>(null);
   const [active, setActive] = useState<number | null>(null);
   const points = series.filter((point): point is ChartPoint & { value: number } => point.value !== null);
@@ -88,9 +106,10 @@ export function TrendChart({
   const values = points.map((p) => p.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const pad = (max - min) * 0.15 || max * 0.05 || 1;
-  const lo = 0;
-  const hi = max + pad;
+  // Tight price band so the line has room to move — avoid a flat strip at the top.
+  const span = max - min || max * 0.08 || 1;
+  const lo = Math.max(0, min - span * 0.35);
+  const hi = max + span * 0.2;
 
   const domOf = (point: ChartPoint) => {
     const raw = point.daysOnMarket ?? point.secondary;
@@ -104,24 +123,22 @@ export function TrendChart({
   const dayTotals = points.map((point) => {
     const dom = domOf(point) ?? 0;
     const pdom = pdomOf(point);
-    // Stack: orange = DOM, teal = extra days to reach PDOM (PDOM ≥ DOM).
-    // When PDOM is missing, only DOM is drawn.
     if (pdom != null && pdom > dom) return pdom;
     return dom;
   });
   const showDays = dayTotals.some((total) => total > 0);
   const dayMax = showDays ? Math.max(...dayTotals, 1) : 1;
-  // Keep DOM/PDOM bars in the lower ~40% of the plot so they don't crowd
-  // the median-price line (axis ceiling ≈ 2.4× the tallest month).
-  const dayHi = dayMax * 2.4;
+  // Bars stay in the lower third so they don't compete with the price line.
+  const dayHi = dayMax * 3.1;
 
   const width = 720;
-  const inset = { top: 20, right: showDays ? 44 : 16, bottom: 36, left: 56 };
+  const inset = { top: 18, right: showDays ? 46 : 16, bottom: 38, left: 58 };
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
+  const baseY = inset.top + plotH;
 
   const group = plotW / points.length;
-  const barW = Math.min(14, Math.max(4, group * 0.45));
+  const barW = Math.min(11, Math.max(3.5, group * 0.38));
   const xCenter = (i: number) => inset.left + group * i + group / 2;
   const yPrice = (value: number) => inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
   const yDays = (value: number) => inset.top + plotH - (value / dayHi) * plotH;
@@ -130,34 +147,47 @@ export function TrendChart({
   const line = points
     .map((point, i) => `${i === 0 ? "M" : "L"}${xCenter(i).toFixed(1)},${yPrice(point.value).toFixed(1)}`)
     .join(" ");
-  const area = `${line} L${xCenter(points.length - 1).toFixed(1)},${(inset.top + plotH).toFixed(1)} L${xCenter(0).toFixed(1)},${(inset.top + plotH).toFixed(1)} Z`;
+  const area = `${line} L${xCenter(points.length - 1).toFixed(1)},${baseY.toFixed(1)} L${xCenter(0).toFixed(1)},${baseY.toFixed(1)} Z`;
 
   const priceTicks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
-  const dayTicks = showDays ? Array.from({ length: 5 }, (_, i) => (dayHi * i) / 4) : [];
+  const dayTicks = showDays ? Array.from({ length: 4 }, (_, i) => (dayHi * i) / 3) : [];
 
   const first = values[0];
   const last = values[values.length - 1];
   const changePct = first > 0 ? ((last - first) / first) * 100 : 0;
   const hasPdom = points.some((point) => pdomOf(point) != null);
+  const labelEvery = Math.max(1, Math.ceil(points.length / 7));
+
+  const pdomLine = hasPdom
+    ? points
+        .map((point, i) => {
+          const pdom = pdomOf(point);
+          if (pdom == null) return null;
+          const cmd = i === 0 || pdomOf(points[i - 1]) == null ? "M" : "L";
+          return `${cmd}${xCenter(i).toFixed(1)},${yDays(pdom).toFixed(1)}`;
+        })
+        .filter(Boolean)
+        .join(" ")
+    : "";
 
   void secondaryLabel;
 
   return (
     <figure className="space-y-3">
-      <div className="flex flex-wrap items-center gap-4 text-[12px] text-ink-muted">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-ink-muted">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: PRICE_COLOR }} />
+          <span className="inline-block h-0.5 w-5 rounded-full" style={{ background: PRICE_COLOR }} />
           {label}
         </span>
         {showDays && (
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: DOM_COLOR }} />
+            <span className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: DOM_COLOR }} />
             Days on Market
           </span>
         )}
         {hasPdom && (
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: PDOM_COLOR }} />
+            <span className="inline-block h-0.5 w-5 rounded-full" style={{ background: PDOM_COLOR }} />
             Property Days on Market
           </span>
         )}
@@ -172,6 +202,24 @@ export function TrendChart({
           setActive(null);
         }}
       >
+        <defs>
+          <linearGradient id={`price-fill-${gradId}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={PRICE_COLOR} stopOpacity="0.22" />
+            <stop offset="55%" stopColor={PRICE_COLOR} stopOpacity="0.06" />
+            <stop offset="100%" stopColor={PRICE_COLOR} stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id={`dom-fill-${gradId}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={DOM_COLOR} stopOpacity="0.95" />
+            <stop offset="100%" stopColor={DOM_COLOR} stopOpacity="0.55" />
+          </linearGradient>
+          <filter id="trend-tip-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.18" />
+          </filter>
+          <clipPath id={`plot-clip-${gradId}`}>
+            <rect x={inset.left} y={inset.top} width={plotW} height={plotH} />
+          </clipPath>
+        </defs>
+
         {priceTicks.map((tick) => (
           <g key={`price-${tick}`}>
             <line
@@ -181,10 +229,11 @@ export function TrendChart({
               y2={yPrice(tick)}
               stroke="var(--color-line)"
               strokeWidth="1"
+              strokeDasharray="4 4"
             />
             <text
-              x={inset.left - 8}
-              y={yPrice(tick) + 4}
+              x={inset.left - 10}
+              y={yPrice(tick) + 3.5}
               textAnchor="end"
               className="fill-[var(--color-ink-subtle)] text-[10px]"
             >
@@ -196,8 +245,8 @@ export function TrendChart({
         {dayTicks.map((tick) => (
           <text
             key={`dom-${tick}`}
-            x={width - inset.right + 8}
-            y={yDays(tick) + 4}
+            x={width - inset.right + 10}
+            y={yDays(tick) + 3.5}
             textAnchor="start"
             className="fill-[var(--color-ink-subtle)] text-[10px]"
           >
@@ -205,75 +254,77 @@ export function TrendChart({
           </text>
         ))}
 
-        {showDays &&
-          points.map((point, i) => {
-            const dom = domOf(point) ?? 0;
-            const pdom = pdomOf(point);
-            // Orange = DOM. Teal stacked on top = PDOM − DOM when PDOM is higher.
-            // When the feed only reports one figure, the full bar is DOM and PDOM
-            // is drawn as a line on the same axis (see below).
-            const teal = pdom != null && pdom > dom + 0.5 ? pdom - dom : 0;
-            const cx = xCenter(i);
-            const baseY = inset.top + plotH;
-            const domH = hDays(dom);
-            const tealH = hDays(teal);
-            return (
-              <g key={`bars-${point.month}`}>
-                {dom > 0 && (
-                  <rect
-                    x={cx - barW / 2}
-                    y={baseY - domH}
-                    width={barW}
-                    height={Math.max(domH, 1)}
-                    fill={DOM_COLOR}
-                    opacity={active === null || active === i ? 0.95 : 0.4}
-                  />
-                )}
-                {teal > 0 && (
-                  <rect
-                    x={cx - barW / 2}
-                    y={baseY - domH - tealH}
-                    width={barW}
-                    height={Math.max(tealH, 1)}
-                    fill={PDOM_COLOR}
-                    opacity={active === null || active === i ? 0.95 : 0.4}
-                  />
-                )}
-              </g>
-            );
-          })}
+        <g clipPath={`url(#plot-clip-${gradId})`}>
+          {showDays &&
+            points.map((point, i) => {
+              const dom = domOf(point) ?? 0;
+              const pdom = pdomOf(point);
+              const teal = pdom != null && pdom > dom + 0.5 ? pdom - dom : 0;
+              const cx = xCenter(i);
+              const domH = hDays(dom);
+              const tealH = hDays(teal);
+              const dimmed = active !== null && active !== i;
+              return (
+                <g key={`bars-${point.month}`} opacity={dimmed ? 0.28 : 1}>
+                  {dom > 0 && (
+                    <rect
+                      x={cx - barW / 2}
+                      y={baseY - domH}
+                      width={barW}
+                      height={Math.max(domH, 1)}
+                      rx={2.5}
+                      fill={`url(#dom-fill-${gradId})`}
+                    />
+                  )}
+                  {teal > 0 && (
+                    <rect
+                      x={cx - barW / 2}
+                      y={baseY - domH - tealH}
+                      width={barW}
+                      height={Math.max(tealH, 1)}
+                      rx={2.5}
+                      fill={PDOM_COLOR}
+                      opacity={0.85}
+                    />
+                  )}
+                </g>
+              );
+            })}
 
-        {hasPdom &&
-          (() => {
-            const pdomLine = points
-              .map((point, i) => {
-                const pdom = pdomOf(point);
-                if (pdom == null) return null;
-                return `${i === 0 || pdomOf(points[i - 1]) == null ? "M" : "L"}${xCenter(i).toFixed(1)},${yDays(pdom).toFixed(1)}`;
-              })
-              .filter(Boolean)
-              .join(" ");
-            return pdomLine ? (
-              <path
-                d={pdomLine}
-                fill="none"
-                stroke={PDOM_COLOR}
-                strokeWidth="2.25"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ) : null;
-          })()}
+          {pdomLine ? (
+            <path
+              d={pdomLine}
+              fill="none"
+              stroke={PDOM_COLOR}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={active === null ? 0.95 : 0.7}
+            />
+          ) : null}
 
-        <path d={area} fill={PRICE_COLOR} opacity="0.08" />
-        <path
-          d={line}
-          fill="none"
-          stroke={PRICE_COLOR}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+          <path d={area} fill={`url(#price-fill-${gradId})`} />
+          <path
+            d={line}
+            fill="none"
+            stroke={PRICE_COLOR}
+            strokeWidth="2.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </g>
+
+        {active !== null && (
+          <line
+            x1={xCenter(active)}
+            x2={xCenter(active)}
+            y1={inset.top}
+            y2={baseY}
+            stroke="var(--color-ink)"
+            strokeOpacity="0.12"
+            strokeWidth="1"
+          />
+        )}
 
         {points.map((point, i) => {
           const cx = xCenter(i);
@@ -297,9 +348,9 @@ export function TrendChart({
                     y: Math.min(cy, yDays(dayTotals[i] || 0)),
                     lines: [
                       formatMonthLabel(point.month),
+                      `${label}  ${formatPrice(point.value)}`,
                       ...(dom != null ? [`Days on Market  ${Math.round(dom)}`] : []),
                       ...(pdom != null ? [`Property Days on Market  ${Math.round(pdom)}`] : []),
-                      `${label}  ${formatPrice(point.value)}`,
                       ...(detailLabel && point.detail != null
                         ? [`${detailLabel}  ${formatNumber(point.detail)}`]
                         : []),
@@ -311,8 +362,18 @@ export function TrendChart({
                 <circle
                   cx={cx}
                   cy={cy}
-                  r={active === i || i === points.length - 1 ? 4.5 : 2.5}
+                  r={active === i ? 5 : 3.5}
                   fill={PRICE_COLOR}
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                />
+              ) : null}
+              {hasPdom && pdom != null && (active === i || i === points.length - 1) ? (
+                <circle
+                  cx={cx}
+                  cy={yDays(pdom)}
+                  r={active === i ? 4 : 3}
+                  fill={PDOM_COLOR}
                   stroke="#ffffff"
                   strokeWidth="1.5"
                 />
@@ -322,15 +383,15 @@ export function TrendChart({
         })}
 
         {points.map((point, i) =>
-          i % Math.ceil(points.length / 6) === 0 || i === points.length - 1 ? (
+          i % labelEvery === 0 || i === points.length - 1 ? (
             <text
               key={`label-${point.month}`}
               x={xCenter(i)}
-              y={height - 10}
+              y={height - 12}
               textAnchor="middle"
-              className="fill-[var(--color-ink-subtle)] text-[10px]"
+              className="fill-[var(--color-ink-subtle)] text-[9px]"
             >
-              {formatMonthLabel(point.month)}
+              {axisMonth(point.month)}
             </text>
           ) : null,
         )}
