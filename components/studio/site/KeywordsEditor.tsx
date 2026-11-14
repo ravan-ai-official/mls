@@ -105,20 +105,32 @@ function KeywordsForm({
   const pages = Array.isArray(document.pages) ? document.pages : [];
   const creating = mode === "create";
   const seeded = useRef(false);
+  /** Stable list keys — never derive from slug or the row remounts on first keystroke. */
+  const rowIds = useRef<string[]>([]);
+  /** Indexes where the admin typed the slug manually; stop auto-syncing from the label. */
+  const slugLocked = useRef<Set<number>>(new Set());
   const [openIndex, setOpenIndex] = useState<number | null>(pages.length ? 0 : null);
+
+  function ensureRowIds(count: number) {
+    while (rowIds.current.length < count) {
+      rowIds.current.push(`kw-${rowIds.current.length}-${Math.random().toString(36).slice(2, 9)}`);
+    }
+  }
+  ensureRowIds(pages.length);
 
   useEffect(() => {
     if (!creating || seeded.current) return;
     seeded.current = true;
     const next = [...pages, emptyPage()];
-    onChange({ pages: next });
+    rowIds.current.push(`kw-new-${Math.random().toString(36).slice(2, 9)}`);
+    onChange({ ...document, pages: next });
     setOpenIndex(next.length - 1);
     // Seed once when the create page mounts with the loaded draft.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot seed
   }, [creating]);
 
   function setPages(next: CuratedPage[]) {
-    onChange({ pages: next });
+    onChange({ ...document, pages: next });
   }
 
   function patch(index: number, pagePatch: Partial<CuratedPage>) {
@@ -137,6 +149,13 @@ function KeywordsForm({
 
   function removePage(index: number) {
     const next = pages.filter((_, i) => i !== index);
+    rowIds.current = rowIds.current.filter((_, i) => i !== index);
+    const locked = new Set<number>();
+    slugLocked.current.forEach((lockedIndex) => {
+      if (lockedIndex < index) locked.add(lockedIndex);
+      else if (lockedIndex > index) locked.add(lockedIndex - 1);
+    });
+    slugLocked.current = locked;
     setPages(next);
     setOpenIndex((current) => {
       if (current === null) return null;
@@ -152,6 +171,19 @@ function KeywordsForm({
     const next = [...pages];
     const [row] = next.splice(index, 1);
     next.splice(target, 0, row);
+    const ids = [...rowIds.current];
+    const [id] = ids.splice(index, 1);
+    ids.splice(target, 0, id);
+    rowIds.current = ids;
+    if (slugLocked.current.has(index) || slugLocked.current.has(target)) {
+      const locked = new Set<number>();
+      slugLocked.current.forEach((lockedIndex) => {
+        if (lockedIndex === index) locked.add(target);
+        else if (lockedIndex === target) locked.add(index);
+        else locked.add(lockedIndex);
+      });
+      slugLocked.current = locked;
+    }
     setPages(next);
     setOpenIndex(target);
   }
@@ -199,7 +231,7 @@ function KeywordsForm({
             const isRent = page.query.transaction === "rent";
             return (
               <li
-                key={`${page.slug || "new"}-${index}`}
+                key={rowIds.current[index] ?? `page-${index}`}
                 className={cn(page.enabled === false && "opacity-70")}
               >
                 {!creating ? (
@@ -254,8 +286,9 @@ function KeywordsForm({
                       error={errors[`pages.${index}.label`]}
                       onChange={(label) => {
                         const next: Partial<CuratedPage> = { label };
-                        if (!page.slug) next.slug = slugify(label);
-                        if (!page.h1) next.h1 = label;
+                        // Keep slug in sync while typing the label, until the admin edits slug.
+                        if (!slugLocked.current.has(index)) next.slug = slugify(label);
+                        if (!page.h1 || page.h1 === page.label) next.h1 = label;
                         patch(index, next);
                       }}
                     />
@@ -265,7 +298,12 @@ function KeywordsForm({
                       max={80}
                       hint="Lowercase letters, numbers, hyphens. Becomes /homes/…"
                       error={errors[`pages.${index}.slug`]}
-                      onChange={(slug) => patch(index, { slug: slugify(slug) })}
+                      onChange={(slug) => {
+                        const cleaned = slugify(slug);
+                        if (cleaned) slugLocked.current.add(index);
+                        else slugLocked.current.delete(index);
+                        patch(index, { slug: cleaned });
+                      }}
                     />
                     <TextControl
                       label="Page title (H1)"
