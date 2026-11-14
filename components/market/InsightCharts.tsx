@@ -61,8 +61,9 @@ export function SalesListingsChart({
   }
 
   const width = 640;
-  const height = 200;
-  const inset = { top: 12, right: 8, bottom: 28, left: 36 };
+  const height = 210;
+  const inset = { top: 12, right: 8, bottom: 36, left: 36 };
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
   const max = Math.max(
@@ -155,9 +156,16 @@ export function SalesListingsChart({
                 rx="2"
                 fill={NEW}
               />
-              <text x={cx} y={height - 8} textAnchor="middle" className="fill-[var(--color-ink-subtle)] text-[10px]">
-                {axisMonth(row.month).split(" ")[0]}
-              </text>
+              {i % labelEvery === 0 || i === points.length - 1 ? (
+                <text
+                  x={cx}
+                  y={height - 10}
+                  textAnchor="middle"
+                  className="fill-[var(--color-ink-subtle)] text-[9px]"
+                >
+                  {axisMonth(row.month)}
+                </text>
+              ) : null}
             </g>
           );
         })}
