@@ -308,22 +308,31 @@ function piePaths(counts: number[]): string[] {
 }
 
 /**
- * Property type distribution pie — Detached / Semi-Detached / Townhome / Condo
- * share of active listings (not MLS catalogue subtypes like "Single Family").
+ * Property type distribution pie — Detached / Semi-Detached / Townhome / Condo /
+ * Other. Legend always lists every type; the pie only draws slices with count > 0.
  */
 export function PropertyTypeDistribution({ rows }: { rows: Array<{ name: string; count: number }> }) {
   const [active, setActive] = useState<number | null>(null);
-  const items = [...rows].filter((row) => row.count > 0).sort((a, b) => b.count - a.count);
-  const total = items.reduce((sum, row) => sum + row.count, 0);
-  if (total === 0) return null;
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  if (total === 0) {
+    return (
+      <p className="rounded-control bg-surface-alt px-4 py-8 text-center text-small text-ink-muted">
+        No active listings match this area yet.
+      </p>
+    );
+  }
 
-  const slices = items.map((item, index) => ({
+  const colorFor = (name: string, index: number) =>
+    name === "Other" ? "var(--color-ink-muted)" : MIX_COLORS[index % MIX_COLORS.length];
+
+  const legend = rows.map((item, index) => ({
     ...item,
     pct: (item.count / total) * 100,
-    color: MIX_COLORS[index % MIX_COLORS.length],
+    color: colorFor(item.name, index),
   }));
-  const paths = piePaths(slices.map((slice) => slice.count));
-  const tip = active !== null ? slices[active] : null;
+  const pieSlices = legend.filter((slice) => slice.count > 0);
+  const paths = piePaths(pieSlices.map((slice) => slice.count));
+  const tip = active !== null ? legend[active] : null;
 
   return (
     <div className="flex flex-col items-center gap-8 sm:flex-row" onMouseLeave={() => setActive(null)}>
@@ -334,22 +343,26 @@ export function PropertyTypeDistribution({ rows }: { rows: Array<{ name: string;
           role="img"
           aria-label="Property type distribution"
         >
-          {paths.map((path, index) => (
-            <path
-              key={slices[index]?.name ?? index}
-              d={path}
-              fill={slices[index]?.color}
-              opacity={active === null || active === index ? 1 : 0.45}
-              className="cursor-pointer transition-opacity"
-              onMouseEnter={() => setActive(index)}
-            >
-              <title>
-                {`${slices[index]?.name}: ${formatNumber(slices[index]?.count ?? 0)} (${Math.round(slices[index]?.pct ?? 0)}%)`}
-              </title>
-            </path>
-          ))}
+          {paths.map((path, index) => {
+            const slice = pieSlices[index];
+            const legendIndex = legend.findIndex((row) => row.name === slice?.name);
+            return (
+              <path
+                key={slice?.name ?? index}
+                d={path}
+                fill={slice?.color}
+                opacity={active === null || active === legendIndex ? 1 : 0.45}
+                className="cursor-pointer transition-opacity"
+                onMouseEnter={() => setActive(legendIndex)}
+              >
+                <title>
+                  {`${slice?.name}: ${formatNumber(slice?.count ?? 0)} (${Math.round(slice?.pct ?? 0)}%)`}
+                </title>
+              </path>
+            );
+          })}
         </svg>
-        {tip ? (
+        {tip && tip.count > 0 ? (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 w-max -translate-x-1/2 -translate-y-1/2 rounded-md bg-ink px-2.5 py-1.5 text-[11px] text-white shadow-pop">
             <p className="font-medium">{tip.name}</p>
             <p className="text-white/80">
@@ -363,7 +376,7 @@ export function PropertyTypeDistribution({ rows }: { rows: Array<{ name: string;
           {formatNumber(total)} active listing{total === 1 ? "" : "s"} by home type
         </p>
         <ul className="space-y-3" aria-label="Property type shares">
-          {slices.map((slice, index) => (
+          {legend.map((slice, index) => (
             <li
               key={slice.name}
               className="flex cursor-pointer items-center justify-between gap-4 text-small transition-opacity"

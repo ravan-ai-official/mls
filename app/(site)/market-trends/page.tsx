@@ -203,7 +203,9 @@ async function MarketBoard({ filters }: { filters: Filters }) {
     filtered ? loadSold(city, range.months, community ?? "", type ?? "") : Promise.resolve(null),
     getBulkCatalogStats({ cities: [...MARKET_CITIES] }).catch(() => [] as CityCatalogStat[]),
     Promise.all(MARKET_CITIES.map((name) => loadSold(name, 12, "", ""))),
-    getHomeTypeDistribution(city).catch(() => [] as Array<{ name: string; count: number }>),
+    getHomeTypeDistribution(city, { community }).catch(
+      () => [] as Array<{ name: string; count: number }>,
+    ),
   ]);
   const sold = viewSold ?? citySold;
   const heatmapCities = buildHeatmapCities(cities, heatmapSold);
@@ -347,7 +349,8 @@ async function MarketBoard({ filters }: { filters: Filters }) {
           <section className="rounded-2xl border border-line bg-surface p-6">
             <h2 className="mb-1 text-[18px] font-semibold text-ink">Property type distribution</h2>
             <p className="mb-5 text-[13px] text-ink-muted">
-              Active listings in {city} by home type — Detached, Semi-Detached, Townhome and Condo.
+              Active listings in {community ? `${community}, ${city}` : city} by home type —
+              Detached, Semi-Detached, Townhome, Condo and Other.
             </p>
             <PropertyTypeDistribution rows={homeTypes} />
           </section>

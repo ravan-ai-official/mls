@@ -329,36 +329,51 @@ export async function getBulkCatalogStats(
 }
 
 /**
- * Active listing counts per residential home type for a city.
- * Uses `home_type` with fallback off so Detached / Semi / Townhome / Condo stay distinct.
+ * Active listing counts per residential home type for a city (and optional
+ * community). Always returns Detached / Semi-Detached / Townhome / Condo plus
+ * an Other bucket for everything else. Community is matched via `search`
+ * (the filter API has no dedicated neighbourhood param).
  */
 export async function getHomeTypeDistribution(
   city: string,
+  scope: { community?: string | null } = {},
   options: RequestOptions = {},
 ): Promise<Array<{ name: string; count: number }>> {
   if (!city.trim()) return [];
-  const rows = await Promise.all(
-    HOME_TYPE_DISTRIBUTION.map(async ({ name, type }) => {
-      try {
-        const data = await apiFetch<{ count?: number }>(`${MLS}/properties/filter/`, {
-          revalidate: 900,
-          ...options,
-          params: {
-            city,
-            status_group: "active",
-            transaction_type: "sale",
-            home_type: HOME_TYPE_PARAM[type],
-            limit: 1,
-            allow_fallback: "false",
-          },
-        });
-        return { name, count: data.count ?? 0 };
-      } catch {
-        return { name, count: 0 };
-      }
-    }),
-  );
-  return rows.filter((row) => row.count > 0);
+  const community = scope.community?.trim() || undefined;
+
+  async function countFor(homeType?: string): Promise<number> {
+    try {
+      const data = await apiFetch<{ count?: number }>(`${MLS}/properties/filter/`, {
+        revalidate: 900,
+        ...options,
+        params: {
+          city,
+          status_group: "active",
+          transaction_type: "sale",
+          home_type: homeType,
+          search: community,
+          limit: 1,
+          allow_fallback: "false",
+        },
+      });
+      return data.count ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  const [total, ...typed] = await Promise.all([
+    countFor(),
+    ...HOME_TYPE_DISTRIBUTION.map(async ({ name, type }) => ({
+      name,
+      count: await countFor(HOME_TYPE_PARAM[type]),
+    })),
+  ]);
+
+  const typedSum = typed.reduce((sum, row) => sum + row.count, 0);
+  const other = Math.max(0, total - typedSum);
+  return [...typed, { name: "Other", count: other }];
 }
 
 /* -------------------------------------------------------------------------- */
