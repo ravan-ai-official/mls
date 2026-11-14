@@ -52,7 +52,13 @@ export function normalizeListingKeys(raw: unknown): string[] {
   const seen = new Set<string>();
   const keys: string[] = [];
   for (const part of parts) {
-    const key = part.trim().toUpperCase();
+    // Admins paste "MLS® W1234567" or "#W1234567" — strip the prefix.
+    const key = part
+      .trim()
+      .toUpperCase()
+      .replace(/^MLS®?\s*/i, "")
+      .replace(/^#/, "")
+      .trim();
     if (!key || seen.has(key)) continue;
     seen.add(key);
     keys.push(key);

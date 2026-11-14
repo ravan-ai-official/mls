@@ -606,13 +606,16 @@ export function validateCurated(document: unknown): FieldErrors {
     const listingKeysRaw = row.listingKeys ?? row.listing_keys;
     if (listingKeysRaw != null && listingKeysRaw !== "") {
       const keys = normalizeListingKeys(listingKeysRaw);
-      if (keys.length > CURATED_LISTING_KEYS_MAX) {
+      if (keys.length === 0) {
+        errors[`${path}.listingKeys`] = "Add at least one MLS® number, or switch to Filter search.";
+      } else if (keys.length > CURATED_LISTING_KEYS_MAX) {
         errors[`${path}.listingKeys`] = `Pin at most ${CURATED_LISTING_KEYS_MAX} MLS® numbers.`;
-      }
-      for (const key of keys) {
-        if (!MLS_KEY_RE.test(key)) {
-          errors[`${path}.listingKeys`] = `"${key}" does not look like an MLS® number.`;
-          break;
+      } else {
+        for (const key of keys) {
+          if (!MLS_KEY_RE.test(key)) {
+            errors[`${path}.listingKeys`] = `"${key}" does not look like an MLS® number.`;
+            break;
+          }
         }
       }
     }

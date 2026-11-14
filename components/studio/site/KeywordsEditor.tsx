@@ -72,8 +72,8 @@ export function KeywordsEditor({ mode = "list" }: { mode?: "list" | "create" }) 
         title={creating ? "New keyword search" : "Keyword searches"}
         lede={
           creating
-            ? "Fill in this search, then Save draft (and Publish when you want it live). Editing existing searches stays on the keyword list."
-            : "Map each public keyword chip to a search definition: the same MLS filters as /listings, and/or pinned MLS® numbers. Publish to update the homepage block, /homes pages, and the site map — no code deploy. City pages (Condos in Toronto, …) stay automatic."
+            ? "Name the search, choose pinned MLS® listings or filters, then Save draft and Publish. The public page is /homes/your-slug."
+            : "Each row is a homepage keyword chip and a /homes/… page. Pick pinned MLS® numbers or a filter search, then publish."
         }
         validate={validateCurated}
         previewOf={(draft) => ({ kind: "curated", document: draft })}
@@ -228,6 +228,8 @@ function KeywordsForm({
             const keywordsText = (page.query.keywords ?? []).join(", ");
             const listingKeysText = (page.listingKeys ?? []).join(", ");
             const pinCount = page.listingKeys?.length ?? 0;
+            // Empty array still means "pin mode" while the admin is typing MLS numbers.
+            const pinMode = page.listingKeys !== undefined;
             const isRent = page.query.transaction === "rent";
             return (
               <li
@@ -340,31 +342,60 @@ function KeywordsForm({
                       />
                     </div>
 
-                    <div className="sm:col-span-2 border-t border-line pt-4">
-                      <p className="text-small font-medium text-ink">Search definition</p>
-                      <p className="mt-1 text-caption text-ink-muted">
-                        Pin specific MLS® numbers, or leave pins empty and use the same filters as the
-                        listings page. When pins are set, the public page shows those listings only.
-                      </p>
+                    <div className="sm:col-span-2 space-y-3 border-t border-line pt-4">
+                      <div>
+                        <p className="text-small font-medium text-ink">How results are chosen</p>
+                        <p className="mt-1 text-caption text-ink-muted">
+                          Pick one mode. Pinned MLS® always wins over filters on the public page.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <ChipToggle
+                          active={pinMode}
+                          onClick={() => {
+                            if (pinMode) return;
+                            patch(index, { listingKeys: [] });
+                          }}
+                        >
+                          Pin specific listings
+                        </ChipToggle>
+                        <ChipToggle
+                          active={!pinMode}
+                          onClick={() => patch(index, { listingKeys: undefined })}
+                        >
+                          Filter search (like /listings)
+                        </ChipToggle>
+                      </div>
                     </div>
 
-                    <div className="sm:col-span-2">
-                      <TextControl
-                        label="Pinned MLS® numbers"
-                        value={listingKeysText}
-                        max={800}
-                        multiline
-                        hint={`Comma or newline separated, up to ${CURATED_LISTING_KEYS_MAX}. Empty = run the filter search.`}
-                        error={errors[`pages.${index}.listingKeys`]}
-                        onChange={(value) => {
-                          const listingKeys = normalizeListingKeys(value);
-                          patch(index, {
-                            listingKeys: listingKeys.length ? listingKeys : undefined,
-                          });
-                        }}
-                      />
-                    </div>
-
+                    {pinMode ? (
+                      <div className="sm:col-span-2 rounded-control border border-navy/20 bg-navy-tint/40 p-4">
+                        <TextControl
+                          label="MLS® numbers to show"
+                          value={listingKeysText}
+                          max={800}
+                          multiline
+                          hint={`One per line or comma-separated, up to ${CURATED_LISTING_KEYS_MAX}. Example: W1234567. The page shows only these homes.`}
+                          error={errors[`pages.${index}.listingKeys`]}
+                          onChange={(value) => {
+                            const listingKeys = normalizeListingKeys(value);
+                            // Keep pin mode active while the field is open even if temporarily empty.
+                            patch(index, { listingKeys });
+                          }}
+                        />
+                        {pinCount > 0 ? (
+                          <p className="mt-2 text-caption text-navy">
+                            {pinCount} listing{pinCount === 1 ? "" : "s"} pinned — these homes appear on the public
+                            page (filters are not used).
+                          </p>
+                        ) : (
+                          <p className="mt-2 text-caption text-ink-muted">
+                            Add at least one MLS® number, or switch to Filter search.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
                     <label className="block text-caption text-ink-muted">
                       Transaction
                       <select
@@ -737,6 +768,8 @@ function KeywordsForm({
                         }}
                       />
                     </div>
+                      </>
+                    )}
 
                     <label className="flex items-center gap-2 text-small text-ink sm:col-span-2">
                       <input

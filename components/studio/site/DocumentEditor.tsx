@@ -47,10 +47,17 @@ export function DocumentEditor({
   const [draft, setDraft] = useState<unknown>(null);
   const [recordAt, setRecordAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [previewExtra, setPreviewExtra] = useState<Record<string, unknown>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  function flash(message: string) {
+    setNotice(message);
+    window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 4500);
+  }
 
   if (record && record.updated_at !== recordAt) {
     setRecordAt(record.updated_at);
@@ -69,13 +76,16 @@ export function DocumentEditor({
   const invalid = Object.keys(errors).length > 0;
   const unsaved = JSON.stringify(draft) !== JSON.stringify(record?.draft);
 
-  async function send(path: string, body: unknown, fallback: string) {
+  async function send(path: string, body: unknown, fallback: string, okMessage?: string) {
     setBusy(true);
+    setBusyLabel(okMessage?.startsWith("Published") ? "Publishing…" : "Working…");
     setError(null);
+    setNotice(null);
     setServerErrors({});
     try {
       const next = await fetchJson<SiteRecordBody>(path, { method: "POST", body, fallback });
       remember(next);
+      if (okMessage) flash(okMessage);
     } catch (caught) {
       if (caught instanceof HttpError && caught.status === 409) {
         setError("Someone else saved a newer draft. Reload the page to see their changes.");
@@ -87,13 +97,16 @@ export function DocumentEditor({
       }
     } finally {
       setBusy(false);
+      setBusyLabel(null);
     }
   }
 
-  async function save(): Promise<SiteRecordBody | null> {
+  async function save(options: { quiet?: boolean } = {}): Promise<SiteRecordBody | null> {
     if (!record) return null;
     setBusy(true);
+    setBusyLabel("Saving draft…");
     setError(null);
+    if (!options.quiet) setNotice(null);
     setServerErrors({});
     try {
       const next = await fetchJson<SiteRecordBody>(`/api/studio/site/${siteKey}`, {
@@ -102,6 +115,7 @@ export function DocumentEditor({
         fallback: "Could not save the draft.",
       });
       queryClient.setQueryData(cacheKeys.siteDocument(siteKey), next);
+      if (!options.quiet) flash("Draft saved.");
       return next;
     } catch (caught) {
       if (caught instanceof HttpError) {
@@ -113,14 +127,20 @@ export function DocumentEditor({
       return null;
     } finally {
       setBusy(false);
+      setBusyLabel(null);
     }
   }
 
   async function publish() {
     if (!record) return;
-    const current = unsaved ? await save() : record;
+    const current = unsaved ? await save({ quiet: true }) : record;
     if (!current) return;
-    await send(`/api/studio/site/${siteKey}/publish`, { expected_updated_at: current.updated_at }, "Could not publish.");
+    await send(
+      `/api/studio/site/${siteKey}/publish`,
+      { expected_updated_at: current.updated_at },
+      "Could not publish.",
+      "Published. Visitors now see this version.",
+    );
   }
 
   if (documentQuery.isPending || (record && draft === null)) {
@@ -147,14 +167,19 @@ export function DocumentEditor({
         description={lede}
         toolbar={
           <>
-            <Button type="button" variant="secondary" size="sm" aria-haspopup="dialog" aria-expanded={previewOpen} onClick={() => setPreviewOpen(true)}>
+            {busyLabel ? (
+              <span className="text-caption text-ink-muted" aria-live="polite">
+                {busyLabel}
+              </span>
+            ) : null}
+            <Button type="button" variant="secondary" size="sm" aria-haspopup="dialog" aria-expanded={previewOpen} disabled={busy} onClick={() => setPreviewOpen(true)}>
               Open preview
             </Button>
             <Button type="button" variant="secondary" size="sm" disabled={busy || !unsaved} onClick={() => void save()}>
-              Save draft
+              {busyLabel === "Saving draft…" ? "Saving…" : "Save draft"}
             </Button>
             <Button type="button" variant="primary" size="sm" disabled={busy || invalid} onClick={() => void publish()}>
-              Publish to the site
+              {busyLabel === "Publishing…" ? "Publishing…" : "Publish to the site"}
             </Button>
           </>
         }
@@ -173,15 +198,31 @@ export function DocumentEditor({
             variant="ghost"
             size="sm"
             disabled={busy || (!unsaved && !record.dirty)}
-            onClick={() => void send(`/api/studio/site/${siteKey}/discard`, { expected_updated_at: record.updated_at }, "Could not discard the draft.")}
+            onClick={() =>
+              void send(
+                `/api/studio/site/${siteKey}/discard`,
+                { expected_updated_at: record.updated_at },
+                "Could not discard the draft.",
+                "Draft discarded.",
+              )
+            }
           >
             Discard draft
           </Button>
         </div>
         }
       />
-      {error && <StudioAlert>{error}</StudioAlert>}
-      <div className="min-w-0">{children(draft, setDraft, errors, setPreviewExtra, () => setPreviewOpen(true))}</div>
+      <div aria-live="polite" className="space-y-3">
+        {notice ? (
+          <p className="rounded-control border border-positive/30 bg-positive-soft px-3.5 py-2.5 text-small text-positive">
+            {notice}
+          </p>
+        ) : null}
+        {error ? <StudioAlert>{error}</StudioAlert> : null}
+      </div>
+      <div className={busy ? "pointer-events-none min-w-0 opacity-60" : "min-w-0"}>
+        {children(draft, setDraft, errors, setPreviewExtra, () => setPreviewOpen(true))}
+      </div>
       <PreviewFrame payload={previewOf(draft, previewExtra)} open={previewOpen} onClose={() => setPreviewOpen(false)} />
       {revisions.length > 0 && (
         <section className="border border-line bg-surface p-5 sm:p-6">

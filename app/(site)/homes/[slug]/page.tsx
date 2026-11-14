@@ -177,14 +177,27 @@ async function Results({ page, pageNumber }: { page: CuratedPage; pageNumber: nu
   );
 }
 
-/** Fetch pinned MLS® keys and keep the admin's order; drop missing keys quietly. */
+/** Fetch pinned MLS® / listing keys and keep the admin's order; drop missing quietly. */
 async function loadPinnedListings(listingKeys: string[]): Promise<PropertySummary[]> {
-  const details = await compareProperties(listingKeys, { revalidate: 600 });
-  const byId = new Map(details.map((item) => [item.id.toUpperCase(), item as PropertySummary]));
+  let details: Awaited<ReturnType<typeof compareProperties>> = [];
+  try {
+    details = await compareProperties(listingKeys, { revalidate: 600 });
+  } catch {
+    return [];
+  }
+  const byKey = new Map<string, PropertySummary>();
+  for (const item of details) {
+    const summary = item as PropertySummary;
+    byKey.set(summary.id.toUpperCase(), summary);
+    if (summary.mls) byKey.set(summary.mls.toUpperCase(), summary);
+  }
   const ordered: PropertySummary[] = [];
+  const seen = new Set<string>();
   for (const key of listingKeys) {
-    const hit = byId.get(key.toUpperCase());
-    if (hit) ordered.push(hit);
+    const hit = byKey.get(key.toUpperCase());
+    if (!hit || seen.has(hit.id)) continue;
+    seen.add(hit.id);
+    ordered.push(hit);
   }
   return ordered;
 }
