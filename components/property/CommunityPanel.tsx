@@ -1,5 +1,5 @@
 import { safeFetch } from "@/lib/api/client";
-import { getCatalogStats, getMarketTrends } from "@/lib/api/market";
+import { getCatalogStats, getHomeTypeDistribution, getMarketTrends } from "@/lib/api/market";
 import {
   getCensusProfile,
   getNearbyAmenities,
@@ -61,7 +61,7 @@ export async function CommunityPanel({
     parks: [],
     transit: [],
   };
-  const [stats, trends, census, wpCommunity, amenities, sold, active] = await Promise.all([
+  const [stats, trends, census, wpCommunity, amenities, sold, active, homeTypes] = await Promise.all([
     city
       ? safeFetch(getCatalogStats({ city }), null, "property:catalog")
       : Promise.resolve(null),
@@ -83,10 +83,18 @@ export async function CommunityPanel({
     city
       ? safeFetch(searchProperties({ city, status: "Active", limit: 24 }), emptySold, "property:ask-dist")
       : Promise.resolve(emptySold),
+    city
+      ? safeFetch(
+          getHomeTypeDistribution(city, { community: neighbourhood }),
+          [] as Array<{ name: string; count: number }>,
+          "property:home-types",
+        )
+      : Promise.resolve([] as Array<{ name: string; count: number }>),
   ]);
 
   const series = (trends?.series ?? []).filter((point) => point.medianListPrice !== null);
-  const subtypes = trends?.bySubtype ?? [];
+  // Detached / Semi / townhouse / condo — not RESO "Single Family" buckets.
+  const typeSlices = homeTypes.filter((row) => row.count > 0);
   const latestNew = trends?.series.at(-1)?.newListings;
   const placeLabel =
     [neighbourhood, city].filter((part): part is string => Boolean(part?.trim())).join(", ") ||
@@ -145,7 +153,9 @@ export async function CommunityPanel({
         city={city}
       />
 
-      {subtypes.length > 0 && <TypeSplit slices={subtypes.slice(0, 6)} city={city} />}
+      {typeSlices.length > 0 && (
+        <TypeSplit slices={typeSlices} city={placeLabel !== "this area" ? placeLabel : city} />
+      )}
 
       {amenities && <AmenitiesSection amenities={amenities} />}
     </div>

@@ -293,9 +293,12 @@ export function TypeSplit({
 
   return (
     <div className="rounded-2xl border border-line p-4 sm:p-5">
-      <h3 className="mb-4 text-[15px] font-semibold text-ink">
+      <h3 className="mb-1 text-[15px] font-semibold text-ink">
         Property Type Distribution{city ? ` — ${city}` : ""}
       </h3>
+      <p className="mb-4 text-[12px] text-ink-muted">
+        Active listings by home type — Detached, Semi-detached, townhouse, condo and Other.
+      </p>
       <div className="flex flex-col items-center gap-6 sm:flex-row">
         <div className="relative shrink-0">
           <svg
@@ -343,7 +346,11 @@ export function TypeSplit({
                 style={{ background: TYPE_COLORS[index % TYPE_COLORS.length] }}
               />
               <span className="min-w-0 flex-1 truncate text-ink">{slice.name}</span>
-              <span className="font-semibold text-ink">{Math.round((slice.count / total) * 100)}%</span>
+              <span className="tabular-nums text-ink-muted">
+                <span className="font-semibold text-ink">{Math.round((slice.count / total) * 100)}%</span>
+                <span className="mx-1 text-ink-subtle">·</span>
+                {slice.count}
+              </span>
             </li>
           ))}
         </ul>
