@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { formatMonthLabel, formatNumber } from "@/lib/utils/format";
 
 /** "Sep 2024" → "Sep '24", for crowded chart axes. */
@@ -16,6 +19,26 @@ const MIX_COLORS = [
   "var(--color-navy-soft)",
 ];
 
+type Tip = { x: number; y: number; lines: string[] };
+
+function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
+  if (!tip) return null;
+  const boxW = Math.max(...tip.lines.map((line) => line.length)) * 7.2 + 20;
+  const boxH = tip.lines.length * 16 + 14;
+  const x = Math.min(Math.max(8, tip.x - boxW / 2), width - boxW - 8);
+  const y = Math.max(8, tip.y - boxH - 12);
+  return (
+    <g pointerEvents="none">
+      <rect x={x} y={y} width={boxW} height={boxH} rx={6} fill="#151515" opacity="0.92" />
+      {tip.lines.map((line, index) => (
+        <text key={`${index}-${line}`} x={x + 10} y={y + 18 + index * 16} fontSize="11" fill="#ffffff">
+          {line}
+        </text>
+      ))}
+    </g>
+  );
+}
+
 /**
  * Sales vs new listings, the paired bars on the HomeAtlas market page.
  * Sales are closed transactions; listings are new active catalogue rows.
@@ -25,6 +48,7 @@ export function SalesListingsChart({
 }: {
   rows: Array<{ month: string; sales: number; listings: number }>;
 }) {
+  const [tip, setTip] = useState<Tip | null>(null);
   const points = rows.filter((row) => row.sales > 0 || row.listings > 0);
   if (points.length < 2) {
     return (
@@ -48,7 +72,13 @@ export function SalesListingsChart({
 
   return (
     <figure>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="Sales compared with new listings">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-auto w-full"
+        role="img"
+        aria-label="Sales compared with new listings"
+        onMouseLeave={() => setTip(null)}
+      >
         {[0, 0.5, 1].map((tick) => (
           <line
             key={tick}
@@ -62,16 +92,50 @@ export function SalesListingsChart({
         ))}
         {points.map((row, i) => {
           const cx = inset.left + group * i + group / 2;
+          const tipY = Math.min(y(row.sales), y(row.listings));
+          const month = formatMonthLabel(row.month);
+          const active = tip?.lines[0] === month;
           return (
-            <g key={row.month}>
-              <rect x={cx - bar - 1} y={y(row.sales)} width={bar} height={h(row.sales)} rx="3" fill="var(--color-navy)" />
-              <rect x={cx + 1} y={y(row.listings)} width={bar} height={h(row.listings)} rx="3" fill="#e8e8e8" />
+            <g
+              key={row.month}
+              className="cursor-pointer"
+              opacity={tip && !active ? 0.55 : 1}
+              onMouseEnter={() =>
+                setTip({
+                  x: cx,
+                  y: tipY,
+                  lines: [
+                    month,
+                    `Sales ${formatNumber(row.sales)}`,
+                    `New listings ${formatNumber(row.listings)}`,
+                  ],
+                })
+              }
+            >
+              <rect x={cx - group / 2} y={inset.top} width={group} height={plotH} fill="transparent" />
+              <rect
+                x={cx - bar - 1}
+                y={y(row.sales)}
+                width={bar}
+                height={Math.max(h(row.sales), 2)}
+                rx="3"
+                fill="var(--color-navy)"
+              />
+              <rect
+                x={cx + 1}
+                y={y(row.listings)}
+                width={bar}
+                height={Math.max(h(row.listings), 2)}
+                rx="3"
+                fill="#e8e8e8"
+              />
               <text x={cx} y={height - 8} textAnchor="middle" className="fill-[var(--color-ink-subtle)] text-[10px]">
                 {axisMonth(row.month).split(" ")[0]}
               </text>
             </g>
           );
         })}
+        <ChartTooltip tip={tip} width={width} />
       </svg>
       <figcaption className="mt-3 flex gap-4 text-[12px] text-ink-muted">
         <span className="inline-flex items-center gap-1.5">
@@ -110,6 +174,9 @@ export function DaysOnMarketChart({
 }: {
   rows: Array<{ month: string; days: number }>;
 }) {
+  const [tip, setTip] = useState<Tip | null>(null);
+  const [active, setActive] = useState<number | null>(null);
+
   if (rows.length < 2) {
     return (
       <p className="rounded-control bg-surface-alt px-4 py-8 text-center text-small text-ink-muted">
@@ -135,7 +202,16 @@ export function DaysOnMarketChart({
 
   return (
     <figure>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="Average days on market">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-auto w-full"
+        role="img"
+        aria-label="Average days on market"
+        onMouseLeave={() => {
+          setTip(null);
+          setActive(null);
+        }}
+      >
         {[0, 0.5, 1].map((tick) => {
           const value = lo + (hi - lo) * tick;
           return (
@@ -155,9 +231,30 @@ export function DaysOnMarketChart({
           );
         })}
         <path d={line} fill="none" stroke="var(--color-gold)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {rows.map((row, i) => (
-          <circle key={row.month} cx={x(i)} cy={y(row.days)} r="4" fill="var(--color-gold)" />
-        ))}
+        {rows.map((row, i) => {
+          const cx = x(i);
+          const cy = y(row.days);
+          return (
+            <g key={row.month}>
+              <circle
+                cx={cx}
+                cy={cy}
+                r={14}
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => {
+                  setActive(i);
+                  setTip({
+                    x: cx,
+                    y: cy,
+                    lines: [formatMonthLabel(row.month), `${Math.round(row.days)} days on market`],
+                  });
+                }}
+              />
+              <circle cx={cx} cy={cy} r={active === i ? 5 : 4} fill="var(--color-gold)" />
+            </g>
+          );
+        })}
         {rows.map((row, i) =>
           i % Math.ceil(rows.length / 6) === 0 || i === rows.length - 1 ? (
             <text key={`l-${row.month}`} x={x(i)} y={height - 8} textAnchor="middle" className="fill-[var(--color-ink-subtle)] text-[10px]">
@@ -165,6 +262,7 @@ export function DaysOnMarketChart({
             </text>
           ) : null,
         )}
+        <ChartTooltip tip={tip} width={width} />
       </svg>
       <table className="sr-only">
         <caption>Average days on market by month</caption>
@@ -189,6 +287,7 @@ export function DaysOnMarketChart({
 
 /** Donut plus share bars, the property-type block on the HomeAtlas market page. */
 export function TypeMix({ rows }: { rows: Array<{ name: string; count: number }> }) {
+  const [active, setActive] = useState<number | null>(null);
   const items = rows.filter((row) => row.count > 0).slice(0, 5);
   const total = items.reduce((sum, row) => sum + row.count, 0);
   if (total === 0) return null;
@@ -202,34 +301,52 @@ export function TypeMix({ rows }: { rows: Array<{ name: string; count: number }>
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
+  const tip = active !== null ? slices[active] : null;
 
   return (
-    <div className="flex flex-col items-center gap-8 sm:flex-row">
-      <svg viewBox="0 0 220 220" className="h-[220px] w-[220px] shrink-0" role="img" aria-label="Property type mix">
-        <g transform="rotate(-90 110 110)">
-          {slices.map((slice) => {
-            const length = (slice.pct / 100) * circumference;
-            const node = (
-              <circle
-                key={slice.name}
-                cx="110"
-                cy="110"
-                r={radius}
-                fill="none"
-                stroke={slice.color}
-                strokeWidth="28"
-                strokeDasharray={`${length} ${circumference - length}`}
-                strokeDashoffset={-offset}
-              />
-            );
-            offset += length;
-            return node;
-          })}
-        </g>
-      </svg>
+    <div className="flex flex-col items-center gap-8 sm:flex-row" onMouseLeave={() => setActive(null)}>
+      <div className="relative shrink-0">
+        <svg viewBox="0 0 220 220" className="h-[220px] w-[220px]" role="img" aria-label="Property type mix">
+          <g transform="rotate(-90 110 110)">
+            {slices.map((slice, index) => {
+              const length = (slice.pct / 100) * circumference;
+              const node = (
+                <circle
+                  key={slice.name}
+                  cx="110"
+                  cy="110"
+                  r={radius}
+                  fill="none"
+                  stroke={slice.color}
+                  strokeWidth="28"
+                  strokeDasharray={`${length} ${circumference - length}`}
+                  strokeDashoffset={-offset}
+                  className="cursor-pointer transition-opacity"
+                  opacity={active === null || active === index ? 1 : 0.45}
+                  onMouseEnter={() => setActive(index)}
+                />
+              );
+              offset += length;
+              return node;
+            })}
+          </g>
+        </svg>
+        {tip ? (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 w-max -translate-x-1/2 -translate-y-1/2 rounded-md bg-ink px-2.5 py-1.5 text-[11px] text-white shadow-pop">
+            <p className="font-medium">{tip.name}</p>
+            <p className="text-white/80">
+              {formatNumber(tip.count)} · {Math.round(tip.pct)}%
+            </p>
+          </div>
+        ) : null}
+      </div>
       <dl className="w-full flex-1 space-y-3">
-        {slices.map((slice) => (
-          <div key={slice.name} className="flex items-center justify-between gap-4">
+        {slices.map((slice, index) => (
+          <div
+            key={slice.name}
+            className="flex cursor-pointer items-center justify-between gap-4"
+            onMouseEnter={() => setActive(index)}
+          >
             <dt className="flex min-w-0 items-center gap-2 text-small text-ink">
               <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: slice.color }} />
               <span className="truncate">{slice.name}</span>

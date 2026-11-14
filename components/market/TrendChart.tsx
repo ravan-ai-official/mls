@@ -1,4 +1,7 @@
-import { formatMonthLabel, formatPriceCompact } from "@/lib/utils/format";
+"use client";
+
+import { useState } from "react";
+import { formatMonthLabel, formatNumber, formatPrice, formatPriceCompact } from "@/lib/utils/format";
 
 /** One month on the chart. `detail` is an extra column for the screen-reader table. */
 export interface ChartPoint {
@@ -7,13 +10,29 @@ export interface ChartPoint {
   detail?: number | null;
 }
 
+type Tip = { x: number; y: number; lines: string[] };
+
+function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
+  if (!tip) return null;
+  const boxW = Math.max(...tip.lines.map((line) => line.length)) * 7.2 + 20;
+  const boxH = tip.lines.length * 16 + 14;
+  const x = Math.min(Math.max(8, tip.x - boxW / 2), width - boxW - 8);
+  const y = Math.max(8, tip.y - boxH - 12);
+  return (
+    <g pointerEvents="none">
+      <rect x={x} y={y} width={boxW} height={boxH} rx={6} fill="#151515" opacity="0.92" />
+      {tip.lines.map((line, index) => (
+        <text key={`${index}-${line}`} x={x + 10} y={y + 18 + index * 16} fontSize="11" fill="#ffffff">
+          {line}
+        </text>
+      ))}
+    </g>
+  );
+}
+
 /**
  * Monthly price line chart (median list price, median sold price).
- *
- * Hand-drawn SVG rather than a charting library: the reference used Recharts,
- * but these charts are simple, and a server-rendered SVG keeps the page a
- * Server Component with zero client JS and no added dependency. The data table
- * below the chart carries the same values for screen readers.
+ * Hover a point to see the exact month value.
  */
 export function TrendChart({
   series,
@@ -31,6 +50,8 @@ export function TrendChart({
   /** `end` marks only the latest month. `all` marks every month. */
   dots?: "end" | "all" | "none";
 }) {
+  const [tip, setTip] = useState<Tip | null>(null);
+  const [active, setActive] = useState<number | null>(null);
   const points = series.filter((point): point is ChartPoint & { value: number } => point.value !== null);
 
   if (points.length < 2) {
@@ -55,8 +76,7 @@ export function TrendChart({
   const plotH = height - inset.top - inset.bottom;
 
   const x = (i: number) => inset.left + (i / (points.length - 1)) * plotW;
-  const y = (value: number) =>
-    inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
+  const y = (value: number) => inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
 
   const line = points
     .map((point, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(point.value).toFixed(1)}`)
@@ -78,6 +98,10 @@ export function TrendChart({
         className="h-auto w-full"
         role="img"
         aria-label={`${label} from ${formatMonthLabel(points[0].month)} to ${formatMonthLabel(points[points.length - 1].month)}, changing ${changePct >= 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} percent.`}
+        onMouseLeave={() => {
+          setTip(null);
+          setActive(null);
+        }}
       >
         {ticks.map((tick) => (
           <g key={tick}>
@@ -110,18 +134,46 @@ export function TrendChart({
           strokeLinejoin="round"
         />
 
-        {dots !== "none" &&
-          points.map((point, i) =>
-            dots === "all" || i === points.length - 1 ? (
+        {points.map((point, i) => {
+          const cx = x(i);
+          const cy = y(point.value);
+          const showDot = dots === "all" || (dots === "end" && i === points.length - 1) || active === i;
+          return (
+            <g key={point.month}>
               <circle
-                key={point.month}
-                cx={x(i)}
-                cy={y(point.value)}
-                r={i === points.length - 1 ? 4.5 : 2.5}
-                fill={i === points.length - 1 ? "var(--color-gold)" : "var(--color-navy)"}
+                cx={cx}
+                cy={cy}
+                r={14}
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => {
+                  setActive(i);
+                  setTip({
+                    x: cx,
+                    y: cy,
+                    lines: [
+                      formatMonthLabel(point.month),
+                      `${label} ${formatPrice(point.value)}`,
+                      ...(detailLabel && point.detail != null
+                        ? [`${detailLabel} ${formatNumber(point.detail)}`]
+                        : []),
+                    ],
+                  });
+                }}
               />
-            ) : null,
-          )}
+              {showDot ? (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={active === i || i === points.length - 1 ? 4.5 : 2.5}
+                  fill={
+                    active === i || i === points.length - 1 ? "var(--color-gold)" : "var(--color-navy)"
+                  }
+                />
+              ) : null}
+            </g>
+          );
+        })}
 
         {points.map((point, i) =>
           // Label roughly six ticks to avoid crowding on narrow screens.
@@ -137,6 +189,8 @@ export function TrendChart({
             </text>
           ) : null,
         )}
+
+        <ChartTooltip tip={tip} width={width} />
       </svg>
 
       <figcaption className="sr-only">
