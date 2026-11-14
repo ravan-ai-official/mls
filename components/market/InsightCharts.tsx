@@ -14,9 +14,10 @@ function axisMonth(value: string): string {
 const MIX_COLORS = [
   "var(--color-navy)",
   "var(--color-gold)",
-  "var(--color-ink-muted)",
+  "#5b7c99",
   "var(--color-ink)",
   "var(--color-navy-soft)",
+  "var(--color-ink-muted)",
 ];
 
 type Tip = { x: number; y: number; lines: string[] };
@@ -40,20 +41,21 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
 }
 
 /**
- * Sales vs new listings, the paired bars on the HomeAtlas market page.
- * Sales are closed transactions; listings are new active catalogue rows.
+ * Sold / Active / New Listing grouped bars for the Market Insights page.
+ * Sold = closed transactions; New Listing = new catalogue rows that month;
+ * Active = open inventory when provided for that month.
  */
 export function SalesListingsChart({
   rows,
 }: {
-  rows: Array<{ month: string; sales: number; listings: number }>;
+  rows: Array<{ month: string; sold: number; active: number; newListings: number }>;
 }) {
   const [tip, setTip] = useState<Tip | null>(null);
-  const points = rows.filter((row) => row.sales > 0 || row.listings > 0);
+  const points = rows.filter((row) => row.sold > 0 || row.active > 0 || row.newListings > 0);
   if (points.length < 2) {
     return (
       <p className="rounded-control bg-surface-alt px-4 py-8 text-center text-small text-ink-muted">
-        Not enough months to compare sales and new listings.
+        Not enough months to compare sold, active and new listings.
       </p>
     );
   }
@@ -63,12 +65,20 @@ export function SalesListingsChart({
   const inset = { top: 12, right: 8, bottom: 28, left: 36 };
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
-  const max = Math.max(...points.flatMap((row) => [row.sales, row.listings]), 1);
+  const max = Math.max(
+    ...points.flatMap((row) => [row.sold, row.active, row.newListings]),
+    1,
+  );
   const group = plotW / points.length;
-  const bar = Math.min(14, group * 0.28);
+  const bar = Math.min(10, group * 0.22);
+  const gap = 1.5;
 
   const y = (value: number) => inset.top + plotH - (value / max) * plotH;
   const h = (value: number) => (value / max) * plotH;
+
+  const SOLD = "var(--color-navy)";
+  const ACTIVE = "var(--color-gold)";
+  const NEW = "#d4d4d4";
 
   return (
     <figure>
@@ -76,7 +86,7 @@ export function SalesListingsChart({
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full"
         role="img"
-        aria-label="Sales compared with new listings"
+        aria-label="Sold, active and new listings by month"
         onMouseLeave={() => setTip(null)}
       >
         {[0, 0.5, 1].map((tick) => (
@@ -92,42 +102,57 @@ export function SalesListingsChart({
         ))}
         {points.map((row, i) => {
           const cx = inset.left + group * i + group / 2;
-          const tipY = Math.min(y(row.sales), y(row.listings));
+          const tipY = Math.min(
+            y(Math.max(row.sold, 1)),
+            y(Math.max(row.active, 1)),
+            y(Math.max(row.newListings, 1)),
+          );
           const month = formatMonthLabel(row.month);
-          const active = tip?.lines[0] === month;
+          const isActive = tip?.lines[0] === month;
+          const cluster = bar * 3 + gap * 2;
+          const x0 = cx - cluster / 2;
           return (
             <g
               key={row.month}
               className="cursor-pointer"
-              opacity={tip && !active ? 0.55 : 1}
+              opacity={tip && !isActive ? 0.55 : 1}
               onMouseEnter={() =>
                 setTip({
                   x: cx,
                   y: tipY,
                   lines: [
                     month,
-                    `Sales ${formatNumber(row.sales)}`,
-                    `New listings ${formatNumber(row.listings)}`,
+                    `Sold ${formatNumber(row.sold)}`,
+                    `Active ${formatNumber(row.active)}`,
+                    `New listing ${formatNumber(row.newListings)}`,
                   ],
                 })
               }
             >
               <rect x={cx - group / 2} y={inset.top} width={group} height={plotH} fill="transparent" />
               <rect
-                x={cx - bar - 1}
-                y={y(row.sales)}
+                x={x0}
+                y={y(row.sold)}
                 width={bar}
-                height={Math.max(h(row.sales), 2)}
-                rx="3"
-                fill="var(--color-navy)"
+                height={Math.max(h(row.sold), row.sold > 0 ? 2 : 0)}
+                rx="2"
+                fill={SOLD}
               />
               <rect
-                x={cx + 1}
-                y={y(row.listings)}
+                x={x0 + bar + gap}
+                y={y(row.active)}
                 width={bar}
-                height={Math.max(h(row.listings), 2)}
-                rx="3"
-                fill="#e8e8e8"
+                height={Math.max(h(row.active), row.active > 0 ? 2 : 0)}
+                rx="2"
+                fill={ACTIVE}
+              />
+              <rect
+                x={x0 + (bar + gap) * 2}
+                y={y(row.newListings)}
+                width={bar}
+                height={Math.max(h(row.newListings), row.newListings > 0 ? 2 : 0)}
+                rx="2"
+                fill={NEW}
               />
               <text x={cx} y={height - 8} textAnchor="middle" className="fill-[var(--color-ink-subtle)] text-[10px]">
                 {axisMonth(row.month).split(" ")[0]}
@@ -137,28 +162,33 @@ export function SalesListingsChart({
         })}
         <ChartTooltip tip={tip} width={width} />
       </svg>
-      <figcaption className="mt-3 flex gap-4 text-[12px] text-ink-muted">
+      <figcaption className="mt-3 flex flex-wrap gap-4 text-[12px] text-ink-muted">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-navy" /> Sales
+          <span className="h-2.5 w-2.5 rounded-sm bg-navy" /> Sold
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[#e8e8e8]" /> New listings
+          <span className="h-2.5 w-2.5 rounded-sm bg-gold" /> Active
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#d4d4d4]" /> New listing
         </span>
         <table className="sr-only">
-          <caption>Sales and new listings by month</caption>
+          <caption>Sold, active and new listings by month</caption>
           <thead>
             <tr>
               <th>Month</th>
-              <th>Sales</th>
-              <th>New listings</th>
+              <th>Sold</th>
+              <th>Active</th>
+              <th>New listing</th>
             </tr>
           </thead>
           <tbody>
             {points.map((row) => (
               <tr key={row.month}>
                 <th>{formatMonthLabel(row.month)}</th>
-                <td>{formatNumber(row.sales)}</td>
-                <td>{formatNumber(row.listings)}</td>
+                <td>{formatNumber(row.sold)}</td>
+                <td>{formatNumber(row.active)}</td>
+                <td>{formatNumber(row.newListings)}</td>
               </tr>
             ))}
           </tbody>
@@ -308,8 +338,9 @@ function piePaths(counts: number[]): string[] {
 }
 
 /**
- * Property type distribution pie — Detached / Semi-Detached / Townhome / Condo /
- * Other. Legend always lists every type; the pie only draws slices with count > 0.
+ * Property type distribution pie — Detached / Semi-detached / Freehold townhouse /
+ * Condo townhouse / Condo apartment / Other. Legend always lists every type; the
+ * pie only draws slices with count > 0.
  */
 export function PropertyTypeDistribution({ rows }: { rows: Array<{ name: string; count: number }> }) {
   const [active, setActive] = useState<number | null>(null);

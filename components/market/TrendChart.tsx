@@ -3,13 +3,20 @@
 import { useState } from "react";
 import { formatMonthLabel, formatNumber, formatPrice, formatPriceCompact } from "@/lib/utils/format";
 
-/** One month on the chart. `detail` / `secondary` are optional extras. */
+/**
+ * One month on the median-price combo chart.
+ * `value` = median price (line, left axis).
+ * `daysOnMarket` / `propertyDaysOnMarket` = stacked bars (right axis).
+ * `detail` = optional tooltip extra (e.g. units sold).
+ */
 export interface ChartPoint {
   month: string;
   value: number | null;
   detail?: number | null;
-  /** Second series (e.g. days on market), plotted on the right axis. */
+  /** @deprecated Prefer `daysOnMarket`. Kept so older call sites still type-check. */
   secondary?: number | null;
+  daysOnMarket?: number | null;
+  propertyDaysOnMarket?: number | null;
 }
 
 type Tip = { x: number; y: number; lines: string[] };
@@ -22,9 +29,16 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
   const y = Math.max(8, tip.y - boxH - 12);
   return (
     <g pointerEvents="none">
-      <rect x={x} y={y} width={boxW} height={boxH} rx={6} fill="#151515" opacity="0.92" />
+      <rect x={x} y={y} width={boxW} height={boxH} rx={6} fill="#ffffff" stroke="#e5e5e5" />
       {tip.lines.map((line, index) => (
-        <text key={`${index}-${line}`} x={x + 10} y={y + 18 + index * 16} fontSize="11" fill="#ffffff">
+        <text
+          key={`${index}-${line}`}
+          x={x + 10}
+          y={y + 18 + index * 16}
+          fontSize="11"
+          fill={index === 0 ? "#151515" : "#444444"}
+          fontWeight={index === 0 ? 600 : 400}
+        >
           {line}
         </text>
       ))}
@@ -32,16 +46,20 @@ function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
   );
 }
 
+const DOM_COLOR = "#e8a04a";
+const PDOM_COLOR = "#3d9b8f";
+const PRICE_COLOR = "#2f5f9e";
+
 /**
- * Monthly price line chart. Optional secondary series (days on market) uses a
- * right-hand axis so price and DOM share one figure.
+ * Median price line over stacked Days on Market / Property Days on Market bars
+ * (HouseSigma-style dual-axis combo).
  */
 export function TrendChart({
   series,
   label,
   detailLabel,
   secondaryLabel,
-  height = 280,
+  height = 300,
   dots = "end",
 }: {
   series: ChartPoint[];
@@ -49,7 +67,7 @@ export function TrendChart({
   label: string;
   /** Heading for `detail` in the accessible table / tooltip. */
   detailLabel?: string;
-  /** Heading for `secondary` (right axis), e.g. "Days on market". */
+  /** @deprecated Unused — legend uses fixed DOM / PDOM labels. */
   secondaryLabel?: string;
   height?: number;
   /** `end` marks only the latest month. `all` marks every month. */
@@ -71,95 +89,100 @@ export function TrendChart({
   const min = Math.min(...values);
   const max = Math.max(...values);
   const pad = (max - min) * 0.15 || max * 0.05 || 1;
-  const lo = Math.max(0, min - pad);
+  const lo = 0;
   const hi = max + pad;
 
-  const secondaryPoints = points
-    .map((point, index) =>
-      point.secondary != null && Number.isFinite(point.secondary)
-        ? { index, value: point.secondary }
-        : null,
-    )
-    .filter((point): point is { index: number; value: number } => point !== null);
-  const showSecondary = Boolean(secondaryLabel) && secondaryPoints.length >= 2;
-  const secondaryValues = secondaryPoints.map((point) => point.value);
-  const secondaryMin = showSecondary ? Math.min(...secondaryValues) : 0;
-  const secondaryMax = showSecondary ? Math.max(...secondaryValues) : 1;
-  const secondaryPad = (secondaryMax - secondaryMin) * 0.15 || secondaryMax * 0.05 || 1;
-  const secondaryLo = Math.max(0, secondaryMin - secondaryPad);
-  const secondaryHi = secondaryMax + secondaryPad;
+  const domOf = (point: ChartPoint) => {
+    const raw = point.daysOnMarket ?? point.secondary;
+    return raw != null && Number.isFinite(raw) ? raw : null;
+  };
+  const pdomOf = (point: ChartPoint) => {
+    const raw = point.propertyDaysOnMarket;
+    return raw != null && Number.isFinite(raw) ? raw : null;
+  };
+
+  const dayTotals = points.map((point) => {
+    const dom = domOf(point) ?? 0;
+    const pdom = pdomOf(point);
+    // Stack: orange = DOM, teal = extra days to reach PDOM (PDOM ≥ DOM).
+    // When PDOM is missing, only DOM is drawn.
+    if (pdom != null && pdom > dom) return pdom;
+    return dom;
+  });
+  const showDays = dayTotals.some((total) => total > 0);
+  const dayMax = showDays ? Math.max(...dayTotals, 1) : 1;
+  const dayHi = dayMax * 1.15;
 
   const width = 720;
-  const inset = { top: 16, right: showSecondary ? 48 : 16, bottom: 28, left: 56 };
+  const inset = { top: 20, right: showDays ? 44 : 16, bottom: 36, left: 56 };
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
 
-  const x = (i: number) => inset.left + (i / (points.length - 1)) * plotW;
-  const y = (value: number) => inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
-  const ySecondary = (value: number) =>
-    inset.top + plotH - ((value - secondaryLo) / (secondaryHi - secondaryLo)) * plotH;
+  const group = plotW / points.length;
+  const barW = Math.min(14, Math.max(4, group * 0.45));
+  const xCenter = (i: number) => inset.left + group * i + group / 2;
+  const yPrice = (value: number) => inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
+  const yDays = (value: number) => inset.top + plotH - (value / dayHi) * plotH;
+  const hDays = (value: number) => (value / dayHi) * plotH;
 
   const line = points
-    .map((point, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(point.value).toFixed(1)}`)
+    .map((point, i) => `${i === 0 ? "M" : "L"}${xCenter(i).toFixed(1)},${yPrice(point.value).toFixed(1)}`)
     .join(" ");
+  const area = `${line} L${xCenter(points.length - 1).toFixed(1)},${(inset.top + plotH).toFixed(1)} L${xCenter(0).toFixed(1)},${(inset.top + plotH).toFixed(1)} Z`;
 
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${(inset.top + plotH).toFixed(1)} L${x(0).toFixed(1)},${(inset.top + plotH).toFixed(1)} Z`;
-
-  const secondaryLine = showSecondary
-    ? secondaryPoints
-        .map(
-          (point, i) =>
-            `${i === 0 ? "M" : "L"}${x(point.index).toFixed(1)},${ySecondary(point.value).toFixed(1)}`,
-        )
-        .join(" ")
-    : "";
-
-  const ticks = Array.from({ length: 4 }, (_, i) => lo + ((hi - lo) * i) / 3);
-  const secondaryTicks = showSecondary
-    ? Array.from({ length: 4 }, (_, i) => secondaryLo + ((secondaryHi - secondaryLo) * i) / 3)
-    : [];
+  const priceTicks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
+  const dayTicks = showDays ? Array.from({ length: 5 }, (_, i) => (dayHi * i) / 4) : [];
 
   const first = values[0];
   const last = values[values.length - 1];
   const changePct = first > 0 ? ((last - first) / first) * 100 : 0;
+  const hasPdom = points.some((point) => pdomOf(point) != null);
+
+  void secondaryLabel;
 
   return (
     <figure className="space-y-3">
-      {showSecondary && (
-        <div className="flex flex-wrap items-center gap-4 text-[12px] text-ink-muted">
+      <div className="flex flex-wrap items-center gap-4 text-[12px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: PRICE_COLOR }} />
+          {label}
+        </span>
+        {showDays && (
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-0.5 w-4 rounded-full bg-navy" />
-            {label}
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: DOM_COLOR }} />
+            Days on Market
           </span>
+        )}
+        {hasPdom && (
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-0.5 w-4 rounded-full bg-gold" />
-            {secondaryLabel}
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: PDOM_COLOR }} />
+            Property Days on Market
           </span>
-        </div>
-      )}
+        )}
+      </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full"
         role="img"
-        aria-label={`${label} from ${formatMonthLabel(points[0].month)} to ${formatMonthLabel(points[points.length - 1].month)}, changing ${changePct >= 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} percent.${showSecondary ? ` Also shows ${secondaryLabel}.` : ""}`}
+        aria-label={`${label} from ${formatMonthLabel(points[0].month)} to ${formatMonthLabel(points[points.length - 1].month)}, changing ${changePct >= 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} percent.${showDays ? " Also shows days on market." : ""}`}
         onMouseLeave={() => {
           setTip(null);
           setActive(null);
         }}
       >
-        {ticks.map((tick) => (
+        {priceTicks.map((tick) => (
           <g key={`price-${tick}`}>
             <line
               x1={inset.left}
               x2={width - inset.right}
-              y1={y(tick)}
-              y2={y(tick)}
+              y1={yPrice(tick)}
+              y2={yPrice(tick)}
               stroke="var(--color-line)"
               strokeWidth="1"
             />
             <text
               x={inset.left - 8}
-              y={y(tick) + 4}
+              y={yPrice(tick) + 4}
               textAnchor="end"
               className="fill-[var(--color-ink-subtle)] text-[10px]"
             >
@@ -168,11 +191,11 @@ export function TrendChart({
           </g>
         ))}
 
-        {secondaryTicks.map((tick) => (
+        {dayTicks.map((tick) => (
           <text
             key={`dom-${tick}`}
             x={width - inset.right + 8}
-            y={ySecondary(tick) + 4}
+            y={yDays(tick) + 4}
             textAnchor="start"
             className="fill-[var(--color-ink-subtle)] text-[10px]"
           >
@@ -180,53 +203,103 @@ export function TrendChart({
           </text>
         ))}
 
-        <path d={area} fill="var(--color-navy)" opacity="0.07" />
+        {showDays &&
+          points.map((point, i) => {
+            const dom = domOf(point) ?? 0;
+            const pdom = pdomOf(point);
+            // Orange = DOM. Teal stacked on top = PDOM − DOM when PDOM is higher.
+            // When the feed only reports one figure, the full bar is DOM and PDOM
+            // is drawn as a line on the same axis (see below).
+            const teal = pdom != null && pdom > dom + 0.5 ? pdom - dom : 0;
+            const cx = xCenter(i);
+            const baseY = inset.top + plotH;
+            const domH = hDays(dom);
+            const tealH = hDays(teal);
+            return (
+              <g key={`bars-${point.month}`}>
+                {dom > 0 && (
+                  <rect
+                    x={cx - barW / 2}
+                    y={baseY - domH}
+                    width={barW}
+                    height={Math.max(domH, 1)}
+                    fill={DOM_COLOR}
+                    opacity={active === null || active === i ? 0.95 : 0.4}
+                  />
+                )}
+                {teal > 0 && (
+                  <rect
+                    x={cx - barW / 2}
+                    y={baseY - domH - tealH}
+                    width={barW}
+                    height={Math.max(tealH, 1)}
+                    fill={PDOM_COLOR}
+                    opacity={active === null || active === i ? 0.95 : 0.4}
+                  />
+                )}
+              </g>
+            );
+          })}
+
+        {hasPdom &&
+          (() => {
+            const pdomLine = points
+              .map((point, i) => {
+                const pdom = pdomOf(point);
+                if (pdom == null) return null;
+                return `${i === 0 || pdomOf(points[i - 1]) == null ? "M" : "L"}${xCenter(i).toFixed(1)},${yDays(pdom).toFixed(1)}`;
+              })
+              .filter(Boolean)
+              .join(" ");
+            return pdomLine ? (
+              <path
+                d={pdomLine}
+                fill="none"
+                stroke={PDOM_COLOR}
+                strokeWidth="2.25"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ) : null;
+          })()}
+
+        <path d={area} fill={PRICE_COLOR} opacity="0.08" />
         <path
           d={line}
           fill="none"
-          stroke="var(--color-navy)"
+          stroke={PRICE_COLOR}
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
-        {showSecondary && (
-          <path
-            d={secondaryLine}
-            fill="none"
-            stroke="var(--color-gold)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray="6 4"
-          />
-        )}
-
         {points.map((point, i) => {
-          const cx = x(i);
-          const cy = y(point.value);
+          const cx = xCenter(i);
+          const cy = yPrice(point.value);
           const showDot = dots === "all" || (dots === "end" && i === points.length - 1) || active === i;
+          const dom = domOf(point);
+          const pdom = pdomOf(point);
           return (
             <g key={point.month}>
-              <circle
-                cx={cx}
-                cy={cy}
-                r={14}
+              <rect
+                x={cx - group / 2}
+                y={inset.top}
+                width={group}
+                height={plotH}
                 fill="transparent"
                 className="cursor-pointer"
                 onMouseEnter={() => {
                   setActive(i);
                   setTip({
                     x: cx,
-                    y: cy,
+                    y: Math.min(cy, yDays(dayTotals[i] || 0)),
                     lines: [
                       formatMonthLabel(point.month),
-                      `${label} ${formatPrice(point.value)}`,
-                      ...(secondaryLabel && point.secondary != null
-                        ? [`${secondaryLabel} ${Math.round(point.secondary)}`]
-                        : []),
+                      ...(dom != null ? [`Days on Market  ${Math.round(dom)}`] : []),
+                      ...(pdom != null ? [`Property Days on Market  ${Math.round(pdom)}`] : []),
+                      `${label}  ${formatPrice(point.value)}`,
                       ...(detailLabel && point.detail != null
-                        ? [`${detailLabel} ${formatNumber(point.detail)}`]
+                        ? [`${detailLabel}  ${formatNumber(point.detail)}`]
                         : []),
                     ],
                   });
@@ -237,17 +310,9 @@ export function TrendChart({
                   cx={cx}
                   cy={cy}
                   r={active === i || i === points.length - 1 ? 4.5 : 2.5}
-                  fill={
-                    active === i || i === points.length - 1 ? "var(--color-gold)" : "var(--color-navy)"
-                  }
-                />
-              ) : null}
-              {showSecondary && point.secondary != null && (active === i || i === points.length - 1) ? (
-                <circle
-                  cx={cx}
-                  cy={ySecondary(point.secondary)}
-                  r={active === i ? 4 : 3}
-                  fill="var(--color-gold)"
+                  fill={PRICE_COLOR}
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
                 />
               ) : null}
             </g>
@@ -258,8 +323,8 @@ export function TrendChart({
           i % Math.ceil(points.length / 6) === 0 || i === points.length - 1 ? (
             <text
               key={`label-${point.month}`}
-              x={x(i)}
-              y={height - 8}
+              x={xCenter(i)}
+              y={height - 10}
               textAnchor="middle"
               className="fill-[var(--color-ink-subtle)] text-[10px]"
             >
@@ -275,13 +340,15 @@ export function TrendChart({
         <table>
           <caption>
             {label}
-            {secondaryLabel ? ` and ${secondaryLabel}` : ""} by month
+            {showDays ? ", Days on Market" : ""}
+            {hasPdom ? ", and Property Days on Market" : ""} by month
           </caption>
           <thead>
             <tr>
               <th scope="col">Month</th>
               <th scope="col">{label}</th>
-              {secondaryLabel && <th scope="col">{secondaryLabel}</th>}
+              {showDays && <th scope="col">Days on Market</th>}
+              {hasPdom && <th scope="col">Property Days on Market</th>}
               {detailLabel && <th scope="col">{detailLabel}</th>}
             </tr>
           </thead>
@@ -290,9 +357,8 @@ export function TrendChart({
               <tr key={point.month}>
                 <th scope="row">{formatMonthLabel(point.month)}</th>
                 <td>{formatPriceCompact(point.value)}</td>
-                {secondaryLabel && (
-                  <td>{point.secondary != null ? Math.round(point.secondary) : ""}</td>
-                )}
+                {showDays && <td>{domOf(point) != null ? Math.round(domOf(point)!) : ""}</td>}
+                {hasPdom && <td>{pdomOf(point) != null ? Math.round(pdomOf(point)!) : ""}</td>}
                 {detailLabel && <td>{point.detail ?? ""}</td>}
               </tr>
             ))}

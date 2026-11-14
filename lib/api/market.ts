@@ -16,18 +16,22 @@
  */
 
 import { apiFetch, type RequestOptions } from "@/lib/api/client";
-import { HOME_TYPE_PARAM } from "@/lib/api/properties";
 import type { BackendCatalogStats } from "@/lib/types/backend";
 import type { CityCatalogStat, PlatformStats } from "@/lib/types/domain";
 
 const MLS = "/api/mls";
 
-/** Residential home types for the Market Insights pie (Detached / Semi / Townhome / Condo). */
+/**
+ * Residential slices for the Market Insights pie — mirrors the property-type
+ * filter (freehold vs condo townhouse split, condo apartment separate).
+ * `homeType` / `commonInterest` map to `/properties/filter/` query params.
+ */
 export const HOME_TYPE_DISTRIBUTION = [
-  { name: "Detached", type: "Detached" },
-  { name: "Semi-Detached", type: "Semi-Detached" },
-  { name: "Townhome", type: "Townhome" },
-  { name: "Condo", type: "Condo" },
+  { name: "Detached", homeType: "detached" },
+  { name: "Semi-detached", homeType: "semi" },
+  { name: "Freehold townhouse", homeType: "townhouse", commonInterest: "Freehold" },
+  { name: "Condo townhouse", homeType: "townhouse", commonInterest: "Condo/Strata" },
+  { name: "Condo apartment", homeType: "condo" },
 ] as const;
 
 /** Cities the trends page offers. The backend matches `city` case-insensitively. */
@@ -171,6 +175,8 @@ export interface SoldTrendPoint {
   month: string;
   medianSoldPrice: number | null;
   avgDaysOnMarket: number | null;
+  /** Cumulative / property DOM; null until the sold feed exposes it. */
+  avgPropertyDaysOnMarket: number | null;
   /** Ratio, e.g. 1.024 = sold 2.4% over asking. Not a percentage. */
   saleToListRatio: number | null;
   unitsSold: number;
@@ -274,6 +280,8 @@ export async function getSoldTrends(
         month: String(row.month ?? ""),
         medianSoldPrice: num(row.median_sold_price),
         avgDaysOnMarket: num(row.avg_days_on_market),
+        avgPropertyDaysOnMarket:
+          num(row.avg_property_days_on_market) ?? num(row.avg_pdom),
         saleToListRatio: num(row.sale_to_list_ratio),
         unitsSold: num(row.units_sold) ?? 0,
       })),
@@ -330,9 +338,9 @@ export async function getBulkCatalogStats(
 
 /**
  * Active listing counts per residential home type for a city (and optional
- * community). Always returns Detached / Semi-Detached / Townhome / Condo plus
- * an Other bucket for everything else. Community is matched via `search`
- * (the filter API has no dedicated neighbourhood param).
+ * community). Always returns Detached / Semi-detached / Freehold townhouse /
+ * Condo townhouse / Condo apartment plus an Other bucket. Community is matched
+ * via `search` (the filter API has no dedicated neighbourhood param).
  */
 export async function getHomeTypeDistribution(
   city: string,
@@ -342,7 +350,10 @@ export async function getHomeTypeDistribution(
   if (!city.trim()) return [];
   const community = scope.community?.trim() || undefined;
 
-  async function countFor(homeType?: string): Promise<number> {
+  async function countFor(filters: {
+    homeType?: string;
+    commonInterest?: string;
+  } = {}): Promise<number> {
     try {
       const data = await apiFetch<{ count?: number }>(`${MLS}/properties/filter/`, {
         revalidate: 900,
@@ -351,7 +362,8 @@ export async function getHomeTypeDistribution(
           city,
           status_group: "active",
           transaction_type: "sale",
-          home_type: homeType,
+          home_type: filters.homeType,
+          common_interest: filters.commonInterest,
           search: community,
           limit: 1,
           allow_fallback: "false",
@@ -365,9 +377,12 @@ export async function getHomeTypeDistribution(
 
   const [total, ...typed] = await Promise.all([
     countFor(),
-    ...HOME_TYPE_DISTRIBUTION.map(async ({ name, type }) => ({
-      name,
-      count: await countFor(HOME_TYPE_PARAM[type]),
+    ...HOME_TYPE_DISTRIBUTION.map(async (slice) => ({
+      name: slice.name,
+      count: await countFor({
+        homeType: slice.homeType,
+        commonInterest: "commonInterest" in slice ? slice.commonInterest : undefined,
+      }),
     })),
   ]);
 

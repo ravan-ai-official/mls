@@ -236,6 +236,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
   const compareRows = comparisonRows(
     trends?.series ?? [],
     sold.unavailable ? [] : monthsForPeriod(sold.months, range.months, false),
+    trends?.activeCurrent ?? null,
   );
   const domRows = soldMonths
     .filter((month): month is typeof month & { avgDaysOnMarket: number } => month.avgDaysOnMarket !== null)
@@ -274,10 +275,18 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             <div className="mb-6">
               <h3 className="text-[20px] font-semibold text-ink">Median price</h3>
               <p className="mt-1 text-[13px] text-ink-muted">
-                Closed transactions with days on market · {range.label}
+                Median sold price with Days on Market
+                {soldMonths.some((m) => m.avgPropertyDaysOnMarket != null)
+                  ? " and Property Days on Market"
+                  : ""}{" "}
+                · {range.label}
                 {periodSpan ? ` (${periodSpan})` : ` · last ${range.months} months`}
                 {sold.generatedAt ? ` · as of ${formatDate(sold.generatedAt)}` : ""}
                 {sold.stale ? " · these may be a few hours old" : ""}
+              </p>
+              <p className="mt-1 text-[12px] text-ink-muted">
+                Property Days on Market does not reset when the property is delisted and quickly
+                re-listed.
               </p>
             </div>
 
@@ -295,13 +304,16 @@ async function MarketBoard({ filters }: { filters: Filters }) {
                 <TrendChart
                   key={`median-${range.key}-${soldMonths.length}-${soldMonths[0]?.month}-${soldMonths.at(-1)?.month}`}
                   label="Median price"
-                  secondaryLabel="Days on market"
                   detailLabel="Units sold"
                   dots="none"
                   series={soldMonths.map((month) => ({
                     month: month.month,
                     value: month.medianSoldPrice,
-                    secondary: month.avgDaysOnMarket,
+                    // Feed exposes one DOM figure today; use it for both series so
+                    // the combo chart matches the reference until avg_pdom lands.
+                    daysOnMarket: month.avgDaysOnMarket,
+                    propertyDaysOnMarket:
+                      month.avgPropertyDaysOnMarket ?? month.avgDaysOnMarket,
                     detail: month.unitsSold,
                   }))}
                 />
@@ -327,10 +339,10 @@ async function MarketBoard({ filters }: { filters: Filters }) {
 
           <div className="grid gap-6 sm:grid-cols-2">
             <section className="rounded-2xl border border-line bg-surface p-6">
-              <h3 className="text-[16px] font-semibold text-ink">Sales vs. new listings</h3>
+              <h3 className="text-[16px] font-semibold text-ink">Sold, Active and New Listing</h3>
               <p className="mb-4 mt-1 text-[13px] text-ink-muted">
-                Closed sales beside new listings in {city} · {range.label}
-                {periodSpan ? ` (${periodSpan})` : ""}.
+                Closed sales, current open inventory and new listings in {city} · {range.label}
+                {periodSpan ? ` (${periodSpan})` : ""}. Active is shown on the latest month.
               </p>
               <SalesListingsChart key={`sales-${range.key}-${compareRows.length}`} rows={compareRows} />
             </section>
@@ -350,7 +362,8 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             <h2 className="mb-1 text-[18px] font-semibold text-ink">Property type distribution</h2>
             <p className="mb-5 text-[13px] text-ink-muted">
               Active listings in {community ? `${community}, ${city}` : city} by home type —
-              Detached, Semi-Detached, Townhome, Condo and Other.
+              Detached, Semi-detached, Freehold townhouse, Condo townhouse, Condo apartment and
+              Other.
             </p>
             <PropertyTypeDistribution rows={homeTypes} />
           </section>
@@ -581,18 +594,41 @@ function Heatmap({
 function comparisonRows(
   series: Array<{ month: string; newListings: number }>,
   sold: SoldTrends["months"],
+  activeCurrent: number | null,
 ) {
-  const rows = new Map<string, { month: string; sales: number; listings: number }>();
+  const rows = new Map<
+    string,
+    { month: string; sold: number; active: number; newListings: number }
+  >();
   for (const point of series) {
-    rows.set(point.month.slice(0, 7), { month: point.month, sales: 0, listings: point.newListings });
+    rows.set(point.month.slice(0, 7), {
+      month: point.month,
+      sold: 0,
+      active: 0,
+      newListings: point.newListings,
+    });
   }
   for (const month of sold) {
     const key = month.month.slice(0, 7);
-    const current = rows.get(key) ?? { month: month.month, sales: 0, listings: 0 };
-    current.sales = month.unitsSold;
+    const current = rows.get(key) ?? {
+      month: month.month,
+      sold: 0,
+      active: 0,
+      newListings: 0,
+    };
+    current.sold = month.unitsSold;
     rows.set(key, current);
   }
-  return [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, row]) => row);
+  const ordered = [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, row]) => row);
+  // Catalogue velocity only exposes current open inventory — attach it to the
+  // latest month so the chart can show Sold / Active / New Listing together.
+  if (ordered.length > 0 && activeCurrent != null && activeCurrent > 0) {
+    ordered[ordered.length - 1] = {
+      ...ordered[ordered.length - 1],
+      active: activeCurrent,
+    };
+  }
+  return ordered;
 }
 
 function MonthlyTable({
@@ -611,22 +647,27 @@ function MonthlyTable({
             <th scope="col" className="py-2 pr-4 font-medium">Month</th>
             <th scope="col" className="py-2 pr-4 font-medium">Median price</th>
             <th scope="col" className="py-2 pr-4 font-medium">Days on market</th>
+            <th scope="col" className="py-2 pr-4 font-medium">PDOM</th>
             <th scope="col" className="py-2 pr-4 font-medium">Sale-to-list</th>
             <th scope="col" className="py-2 font-medium">Units sold</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const pdom = row.avgPropertyDaysOnMarket ?? row.avgDaysOnMarket;
+            return (
             <tr key={row.month} className="border-b border-line/60 last:border-0">
               <th scope="row" className="py-2 pr-4 font-normal text-ink">{formatMonthLabel(row.month)}</th>
               <td className="py-2 pr-4 text-ink">{row.medianSoldPrice ? formatPrice(row.medianSoldPrice) : EMPTY}</td>
               <td className="py-2 pr-4 text-ink-soft">{row.avgDaysOnMarket === null ? EMPTY : Math.round(row.avgDaysOnMarket)}</td>
+              <td className="py-2 pr-4 text-ink-soft">{pdom === null ? EMPTY : Math.round(pdom)}</td>
               <td className="py-2 pr-4 text-ink-soft">
                 {row.saleToListRatio === null ? EMPTY : `${(row.saleToListRatio * 100).toFixed(1)}%`}
               </td>
               <td className="py-2 text-ink-soft">{formatNumber(row.unitsSold)}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
