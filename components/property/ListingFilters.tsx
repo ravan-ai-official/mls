@@ -29,9 +29,11 @@ import {
   DOM_OPTIONS,
   FLOOR_OPTIONS,
   GARAGE_OPTIONS,
+  KEYWORD_OPTIONS,
   KITCHEN_OPTIONS,
   OWNERSHIP_OPTIONS,
   YEAR_BUILT_MIN_OPTIONS,
+  matchKeywordOption,
 } from "@/lib/search/listingFilterOptions";
 import { SEARCH_PROPERTY_TYPES, LISTING_SORTS, RELEVANCE_SORT } from "@/lib/types/domain";
 import type { ListingQuery } from "@/lib/types/domain";
@@ -205,7 +207,13 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
     const term = search.trim();
     if (term && looksLikePostal(term)) {
       const codes = parsePostalList(`${params.get("postal") ?? ""},${term}`).codes;
-      update({ postal: codes.join(","), q: null });
+      update({ postal: codes.join(","), q: null, keywords: null });
+      return;
+    }
+    // Amenity / deal phrases belong on description `keywords`, not address `q`.
+    const keyword = matchKeywordOption(term);
+    if (keyword) {
+      update({ keywords: keyword.value, q: null });
       return;
     }
     update({ q: term || null });
@@ -309,10 +317,10 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
           className="flex min-w-0 flex-[1_1_100%] items-center gap-2 sm:min-w-[280px] sm:flex-[1_1_auto]"
         >
           <SearchInput
-            label="Search by address, city, postal code or MLS number"
+            label="Search by address, city, postal code, MLS number or keyword"
             value={search}
             onValueChange={setSearch}
-            placeholder="Address, city, postal code or MLS…"
+            placeholder="Address, city, postal, MLS or keyword…"
             className="min-w-0 flex-1"
           />
           <Button type="submit" variant="primary" size="md" className="shrink-0">
@@ -762,14 +770,33 @@ function FilterFields({
       <Field
         label="Keywords"
         htmlFor="sheet-keywords"
-        hint="Matches any of these in the listing description. Separate with commas."
+        hint="Matches the listing description. Pick a preset, or clear for any."
       >
-        <Input
+        <Select
           id="sheet-keywords"
-          placeholder="Waterfront, Garage, Pool…"
-          value={draft.keywords}
-          onChange={(event) => setDraft((d) => ({ ...d, keywords: event.target.value }))}
-        />
+          value={
+            KEYWORD_OPTIONS.some((option) => option.value === draft.keywords)
+              ? draft.keywords
+              : draft.keywords
+                ? "__custom__"
+                : ""
+          }
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === "__custom__") return;
+            setDraft((d) => ({ ...d, keywords: next }));
+          }}
+        >
+          <option value="">Any</option>
+          {KEYWORD_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+          {draft.keywords && !KEYWORD_OPTIONS.some((option) => option.value === draft.keywords) ? (
+            <option value="__custom__">{keywordPillLabel(draft.keywords)}</option>
+          ) : null}
+        </Select>
       </Field>
 
       <div className="space-y-1.5">
@@ -854,6 +881,14 @@ function ChipField({
   );
 }
 
+function keywordPillLabel(value: string): string {
+  const preset = KEYWORD_OPTIONS.find((option) => option.value === value);
+  if (preset) return preset.label;
+  const parts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 2) return parts.join(", ");
+  return `Keywords: ${parts[0]} +${parts.length - 1}`;
+}
+
 function pillLabel(key: FilterKey, params: URLSearchParams): string {
   const value = params.get(key) ?? "";
   switch (key) {
@@ -902,7 +937,7 @@ function pillLabel(key: FilterKey, params: URLSearchParams): string {
     case "ownership":
       return `Ownership: ${value}`;
     case "keywords":
-      return `Keywords: ${value.split(",").join(", ")}`;
+      return keywordPillLabel(value);
     case "sqftMin":
       return `${formatNumber(Number(value))}+ sq ft`;
     case "sqftMax":
