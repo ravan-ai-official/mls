@@ -78,7 +78,8 @@ export function SalesListingsChart({
 
   const SOLD = "var(--color-navy)";
   const ACTIVE = "var(--color-gold)";
-  const NEW = "#d4d4d4";
+  /** Slate — light gray washed out on white; keep distinct from navy/gold. */
+  const NEW = "#5b7c99";
 
   return (
     <figure>
@@ -170,7 +171,7 @@ export function SalesListingsChart({
           <span className="h-2.5 w-2.5 rounded-sm bg-gold" /> Active
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[#d4d4d4]" /> New listing
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#5b7c99]" /> New listing
         </span>
         <table className="sr-only">
           <caption>Sold, active and new listings by month</caption>
