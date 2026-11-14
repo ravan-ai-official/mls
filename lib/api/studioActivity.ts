@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, apiFetch } from "@/lib/api/client";
 
 export interface ActivityRow {
   listingKey?: string;
@@ -52,15 +52,30 @@ interface Raw {
 /** Staff activity report. Calls mls-v2 directly with the Studio token. */
 export async function getStudioActivity(
   token: string,
-  query: { days?: number; userId?: string } = {},
+  query: { days?: number; user?: string } = {},
 ): Promise<StudioActivity> {
-  const data = await apiFetch<Raw>("/api/mls/studio/activity/", {
-    token,
-    params: {
-      days: query.days ?? 30,
-      user_id: query.userId || undefined,
-    },
-  });
+  const user = query.user?.trim() || undefined;
+  let data: Raw;
+  try {
+    data = await apiFetch<Raw>("/api/mls/studio/activity/", {
+      token,
+      params: {
+        days: query.days ?? 30,
+        // Backend resolves numeric id, email, or username.
+        user_id: user,
+      },
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) {
+      const payload = error.payload as { error?: string } | undefined;
+      throw new ApiError(
+        payload?.error || "User not found. Try their email, username, or numeric id.",
+        404,
+        error.payload,
+      );
+    }
+    throw error;
+  }
   return {
     windowDays: data.window_days ?? 30,
     userId: data.user_id ?? null,

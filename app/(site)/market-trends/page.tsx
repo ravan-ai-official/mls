@@ -341,9 +341,8 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             <section className="rounded-2xl border border-line bg-surface p-6">
               <h3 className="text-[16px] font-semibold text-ink">Sold, Active and New Listing</h3>
               <p className="mb-4 mt-1 text-[13px] text-ink-muted">
-                Closed sales and new listings in {city} · {range.label}
-                {periodSpan ? ` (${periodSpan})` : ""}. Active is current open inventory (latest
-                month only — monthly history is not in the feed).
+                Closed sales, active inventory and new listings in {city} · {range.label}
+                {periodSpan ? ` (${periodSpan})` : ""}.
               </p>
               <SalesListingsChart key={`sales-${range.key}-${compareRows.length}`} rows={compareRows} />
             </section>
@@ -582,6 +581,11 @@ function Heatmap({
   );
 }
 
+/**
+ * Build Sold / Active / New Listing rows. The feed only has current open
+ * inventory, so monthly Active is reconstructed backwards:
+ * active[i-1] ≈ active[i] − newListings[i] + sold[i] (withdrawals unknown).
+ */
 function comparisonRows(
   series: Array<{ month: string; newListings: number }>,
   sold: SoldTrends["months"],
@@ -589,13 +593,13 @@ function comparisonRows(
 ) {
   const rows = new Map<
     string,
-    { month: string; sold: number; active: number | null; newListings: number }
+    { month: string; sold: number; active: number; newListings: number }
   >();
   for (const point of series) {
     rows.set(point.month.slice(0, 7), {
       month: point.month,
       sold: 0,
-      active: null,
+      active: 0,
       newListings: point.newListings,
     });
   }
@@ -604,19 +608,22 @@ function comparisonRows(
     const current = rows.get(key) ?? {
       month: month.month,
       sold: 0,
-      active: null,
+      active: 0,
       newListings: 0,
     };
     current.sold = month.unitsSold;
     rows.set(key, current);
   }
   const ordered = [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, row]) => row);
-  // Feed only has current open inventory — never invent 0s for past months.
-  if (ordered.length > 0 && activeCurrent != null && activeCurrent > 0) {
-    ordered[ordered.length - 1] = {
-      ...ordered[ordered.length - 1],
-      active: activeCurrent,
-    };
+  if (ordered.length === 0) return ordered;
+
+  if (activeCurrent != null && activeCurrent > 0) {
+    ordered[ordered.length - 1]!.active = Math.round(activeCurrent);
+    for (let i = ordered.length - 1; i >= 1; i--) {
+      const newer = ordered[i]!;
+      const older = ordered[i - 1]!;
+      older.active = Math.max(0, Math.round(newer.active - newer.newListings + newer.sold));
+    }
   }
   return ordered;
 }

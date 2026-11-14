@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   StudioAlert,
@@ -10,6 +11,7 @@ import {
   studioTd,
   studioTh,
 } from "@/components/studio/chrome";
+import { ApiError } from "@/lib/api/client";
 import { getStudioActivity, type StudioActivity } from "@/lib/api/studioActivity";
 import { requireStudioAccess } from "@/lib/auth/session";
 import { cn } from "@/lib/utils/cn";
@@ -37,25 +39,42 @@ export default async function StudioActivityPage({
   if (!session || !session.user.isStaff) notFound();
 
   const params = await searchParams;
-  const userId = (params.user || "").replace(/\D/g, "").slice(0, 12);
+  // Keep email / username / id as typed — stripping non-digits made email
+  // filters look like a no-op reload.
+  const userQuery = (params.user || "").trim().slice(0, 120);
   const days = params.days === "7" || params.days === "90" ? Number(params.days) : 30;
 
   let report: StudioActivity | null = null;
   let error: string | null = null;
   try {
-    report = await getStudioActivity(session.token, { days, userId: userId || undefined });
-  } catch {
-    error = "We couldn't load activity. Refresh to try again.";
+    report = await getStudioActivity(session.token, {
+      days,
+      user: userQuery || undefined,
+    });
+  } catch (err) {
+    error =
+      err instanceof ApiError
+        ? err.message
+        : "We couldn't load activity. Refresh to try again.";
   }
 
   const windowLabel = `${days} days`;
+  const filterLabel = report?.userId
+    ? `user #${report.userId}${userQuery && !/^\d+$/.test(userQuery) ? ` (${userQuery})` : ""}`
+    : userQuery
+      ? userQuery
+      : null;
 
   return (
     <StudioPage
       title="Activity"
-      description={`Views, searches, and leads from the last ${windowLabel}.`}
+      description={
+        filterLabel
+          ? `Views, searches, and leads from the last ${windowLabel} for ${filterLabel}.`
+          : `Views, searches, and leads from the last ${windowLabel}.`
+      }
       toolbar={
-        <form className="flex flex-wrap items-center gap-2" action="/studio/activity">
+        <form method="get" className="flex flex-wrap items-center gap-2" action="/studio/activity">
           <select name="days" defaultValue={String(days)} aria-label="Window" className={studioFilter}>
             <option value="7">7 days</option>
             <option value="30">30 days</option>
@@ -63,11 +82,11 @@ export default async function StudioActivityPage({
           </select>
           <input
             name="user"
-            defaultValue={userId}
-            inputMode="numeric"
-            placeholder="Everyone"
-            aria-label="User id"
-            className={cn(studioFilter, "w-28")}
+            defaultValue={userQuery}
+            placeholder="Email, username, or id"
+            aria-label="User email, username, or id"
+            className={cn(studioFilter, "w-56")}
+            autoComplete="off"
           />
           <button
             type="submit"
@@ -75,11 +94,19 @@ export default async function StudioActivityPage({
           >
             Update
           </button>
+          {userQuery ? (
+            <Link
+              href={`/studio/activity?days=${days}`}
+              className="h-9 rounded-control border border-line px-3.5 text-caption font-medium text-ink-muted hover:border-navy hover:text-ink"
+            >
+              Clear user
+            </Link>
+          ) : null}
         </form>
       }
     >
       {error || !report ? (
-        <StudioAlert>{error}</StudioAlert>
+        <StudioAlert>{error || "We couldn't load activity. Refresh to try again."}</StudioAlert>
       ) : (
         <>
           <section className="grid gap-px overflow-hidden border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
@@ -188,7 +215,13 @@ export default async function StudioActivityPage({
             )}
           </StudioPanel>
 
-          <StudioPanel title={report.userId ? `Timeline for user ${report.userId}` : "Recent timeline"}>
+          <StudioPanel
+            title={
+              report.userId
+                ? `Timeline for user #${report.userId}`
+                : "Recent timeline"
+            }
+          >
             {report.timeline.length === 0 ? (
               <Empty />
             ) : (
@@ -214,7 +247,18 @@ export default async function StudioActivityPage({
                           <span className="studio-cell-title">{KIND_LABELS[row.kind] ?? row.kind}</span>
                           <span className="studio-cell-meta">{row.label}</span>
                         </td>
-                        <td className={cn(studioTd, "text-ink-muted")}>{row.userEmail || "Guest"}</td>
+                        <td className={cn(studioTd, "text-ink-muted")}>
+                          {row.userEmail ? (
+                            <Link
+                              href={`/studio/activity?days=${days}&user=${encodeURIComponent(row.userEmail)}`}
+                              className="text-navy underline-offset-2 hover:underline"
+                            >
+                              {row.userEmail}
+                            </Link>
+                          ) : (
+                            "Guest"
+                          )}
+                        </td>
                         <td className={cn(studioTd, "whitespace-nowrap text-ink-muted")}>
                           {row.at.slice(0, 16).replace("T", " ")}
                         </td>
