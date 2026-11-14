@@ -9,6 +9,7 @@ export function TextControl({
   max,
   error,
   onChange,
+  onBlur,
   hint,
   multiline,
 }: {
@@ -17,6 +18,7 @@ export function TextControl({
   max: number;
   error?: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   hint?: string;
   multiline?: boolean;
 }) {
@@ -25,9 +27,22 @@ export function TextControl({
   return (
     <Field label={label} htmlFor={id} hint={hint || `${value.length}/${max}`} error={error || (over ? `Keep this to ${max} characters.` : null)}>
       {multiline ? (
-        <Textarea id={id} value={value} rows={3} onChange={(event) => onChange(event.target.value)} aria-invalid={over || !!error} />
+        <Textarea
+          id={id}
+          value={value}
+          rows={3}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+          aria-invalid={over || !!error}
+        />
       ) : (
-        <Input id={id} value={value} onChange={(event) => onChange(event.target.value)} aria-invalid={over || !!error} />
+        <Input
+          id={id}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+          aria-invalid={over || !!error}
+        />
       )}
     </Field>
   );

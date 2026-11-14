@@ -109,6 +109,8 @@ function KeywordsForm({
   const rowIds = useRef<string[]>([]);
   /** Indexes where the admin typed the slug manually; stop auto-syncing from the label. */
   const slugLocked = useRef<Set<number>>(new Set());
+  /** Raw MLS textarea text while typing — do not rewrite from normalize on each key. */
+  const [pinDrafts, setPinDrafts] = useState<Record<string, string>>({});
   const [openIndex, setOpenIndex] = useState<number | null>(pages.length ? 0 : null);
 
   function ensureRowIds(count: number) {
@@ -226,14 +228,16 @@ function KeywordsForm({
             if (!page) return null;
             const open = creating || openIndex === index;
             const keywordsText = (page.query.keywords ?? []).join(", ");
-            const listingKeysText = (page.listingKeys ?? []).join(", ");
-            const pinCount = page.listingKeys?.length ?? 0;
+            const rowId = rowIds.current[index] ?? `page-${index}`;
+            const listingKeysText =
+              pinDrafts[rowId] ?? (page.listingKeys ?? []).join("\n");
+            const pinCount = normalizeListingKeys(listingKeysText).length;
             // Empty array still means "pin mode" while the admin is typing MLS numbers.
             const pinMode = page.listingKeys !== undefined;
             const isRent = page.query.transaction === "rent";
             return (
               <li
-                key={rowIds.current[index] ?? `page-${index}`}
+                key={rowId}
                 className={cn(page.enabled === false && "opacity-70")}
               >
                 {!creating ? (
@@ -354,6 +358,7 @@ function KeywordsForm({
                           active={pinMode}
                           onClick={() => {
                             if (pinMode) return;
+                            setPinDrafts((current) => ({ ...current, [rowId]: "" }));
                             patch(index, { listingKeys: [] });
                           }}
                         >
@@ -361,7 +366,14 @@ function KeywordsForm({
                         </ChipToggle>
                         <ChipToggle
                           active={!pinMode}
-                          onClick={() => patch(index, { listingKeys: undefined })}
+                          onClick={() => {
+                            setPinDrafts((current) => {
+                              const next = { ...current };
+                              delete next[rowId];
+                              return next;
+                            });
+                            patch(index, { listingKeys: undefined });
+                          }}
                         >
                           Filter search (like /listings)
                         </ChipToggle>
@@ -378,9 +390,14 @@ function KeywordsForm({
                           hint={`One per line or comma-separated, up to ${CURATED_LISTING_KEYS_MAX}. Example: W1234567. The page shows only these homes.`}
                           error={errors[`pages.${index}.listingKeys`]}
                           onChange={(value) => {
-                            const listingKeys = normalizeListingKeys(value);
-                            // Keep pin mode active while the field is open even if temporarily empty.
-                            patch(index, { listingKeys });
+                            setPinDrafts((current) => ({ ...current, [rowId]: value }));
+                            // Update parsed pins for save/validation without rewriting the textarea.
+                            patch(index, { listingKeys: normalizeListingKeys(value) });
+                          }}
+                          onBlur={() => {
+                            const keys = normalizeListingKeys(pinDrafts[rowId] ?? listingKeysText);
+                            setPinDrafts((current) => ({ ...current, [rowId]: keys.join("\n") }));
+                            patch(index, { listingKeys: keys });
                           }}
                         />
                         {pinCount > 0 ? (
