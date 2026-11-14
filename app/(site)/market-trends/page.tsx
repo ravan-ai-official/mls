@@ -96,6 +96,14 @@ export default async function MarketTrendsPage({ searchParams }: PageProps<"/mar
     community: first(params.community)?.trim().slice(0, 120) || null,
   };
   const scope = selectionLabel(filters);
+  // Soft navigations that only change searchParams reuse Suspense slots unless
+  // the key changes — without this, Period (and other filters) kept old charts.
+  const filterKey = [
+    filters.city,
+    filters.range.key,
+    filters.type ?? "",
+    filters.community ?? "",
+  ].join("|");
 
   return (
     <PendingNavigationProvider>
@@ -113,7 +121,7 @@ export default async function MarketTrendsPage({ searchParams }: PageProps<"/mar
               <p className="mt-3 text-[13px] font-medium text-white/80">{scope}</p>
             </div>
             <PendingContent fallback={<KpiSkeleton />}>
-              <Suspense fallback={<KpiSkeleton />}>
+              <Suspense key={`kpi-${filterKey}`} fallback={<KpiSkeleton />}>
                 <HeaderKpis filters={filters} />
               </Suspense>
             </PendingContent>
@@ -122,7 +130,7 @@ export default async function MarketTrendsPage({ searchParams }: PageProps<"/mar
       </header>
 
       <div className="container-page space-y-8 py-12">
-        <Suspense fallback={<BoardSkeleton />}>
+        <Suspense key={`board-${filterKey}`} fallback={<BoardSkeleton />}>
           <MarketBoard filters={filters} />
         </Suspense>
       </div>
@@ -215,10 +223,10 @@ async function MarketBoard({ filters }: { filters: Filters }) {
   for (const option of MARKET_RANGES) hrefFor[`range:${option.key}`] = trendsHref(filters, { range: option.key });
 
   const soldMonths = sold.unavailable ? [] : sold.months.filter((month) => month.unitsSold > 0);
-  const compareRows = comparisonRows(trends?.series ?? [], sold.unavailable ? [] : sold.months).slice(-8);
+  // Full selected window — a hard 8-month slice made 1y/2y/3y look identical.
+  const compareRows = comparisonRows(trends?.series ?? [], sold.unavailable ? [] : sold.months);
   const domRows = soldMonths
     .filter((month): month is typeof month & { avgDaysOnMarket: number } => month.avgDaysOnMarket !== null)
-    .slice(-8)
     .map((month) => ({ month: month.month, days: month.avgDaysOnMarket }));
   const reports = [...citySold.communities].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 6);
 
