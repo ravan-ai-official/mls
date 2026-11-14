@@ -192,13 +192,16 @@ async function HeaderKpis({ filters }: { filters: Filters }) {
 async function MarketBoard({ filters }: { filters: Filters }) {
   const { city, range, type, community } = filters;
   const filtered = Boolean(type || community);
-  const [trends, citySold, viewSold, cities] = await Promise.all([
+  // 12m covers Jan→now for the YTD heatmap; selected-city charts still use `range`.
+  const [trends, citySold, viewSold, cities, heatmapSold] = await Promise.all([
     loadTrends(city, range.months),
     loadSold(city, range.months, "", ""),
     filtered ? loadSold(city, range.months, community ?? "", type ?? "") : Promise.resolve(null),
     getBulkCatalogStats({ cities: [...MARKET_CITIES] }).catch(() => [] as CityCatalogStat[]),
+    Promise.all(MARKET_CITIES.map((name) => loadSold(name, 12, "", ""))),
   ]);
   const sold = viewSold ?? citySold;
+  const heatmapCities = buildHeatmapCities(cities, heatmapSold);
 
   if (!trends && sold.unavailable && cities.length === 0) {
     return <ErrorState description={`We couldn't load market data for ${city}.`} />;
@@ -243,7 +246,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
 
       <PendingContent fallback={<BoardBodySkeleton />}>
         <div className="space-y-8">
-        <Heatmap cities={cities} selected={city} filters={filters} />
+        <Heatmap cities={heatmapCities} selected={city} filters={filters} />
 
         <div className="space-y-6">
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
@@ -373,31 +376,85 @@ function selectionLabel(filters: Filters) {
     .join(" · ");
 }
 
+/** One heatmap tile: YTD sold figures + current active listings for heat colour. */
+type HeatmapCity = {
+  city: (typeof MARKET_CITIES)[number];
+  activeCount: number;
+  medianPrice: number | null;
+  /** Null when the sold feed was unavailable for this city. */
+  soldCountYtd: number | null;
+};
+
+function monthKey(value: string) {
+  return value.slice(0, 7);
+}
+
+function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+/** Calendar year-to-date rows from a sold-trends series (updates as months land). */
+function ytdSoldMonths(months: SoldTrends["months"], now = new Date()) {
+  const start = `${now.getFullYear()}-01`;
+  return months.filter((month) => monthKey(month.month) >= start && month.unitsSold > 0);
+}
+
+function buildHeatmapCities(catalog: CityCatalogStat[], soldByCity: SoldTrends[]): HeatmapCity[] {
+  const activeByCity = new Map(
+    catalog.map((row) => [row.city.toLowerCase(), row] as const),
+  );
+  const listFallback = (city: string) =>
+    activeByCity.get(city.toLowerCase())?.medianListPrice ?? null;
+
+  return MARKET_CITIES.map((name, index) => {
+    const sold = soldByCity[index];
+    const catalogRow = activeByCity.get(name.toLowerCase());
+    const activeCount = catalogRow?.activeCount ?? 0;
+    if (!sold || sold.unavailable) {
+      return {
+        city: name,
+        activeCount,
+        medianPrice: listFallback(name),
+        soldCountYtd: null,
+      };
+    }
+    const ytd = ytdSoldMonths(sold.months);
+    const prices = ytd
+      .map((month) => month.medianSoldPrice)
+      .filter((price): price is number => price !== null);
+    return {
+      city: name,
+      activeCount,
+      medianPrice: medianOf(prices) ?? listFallback(name),
+      soldCountYtd: ytd.reduce((sum, month) => sum + month.unitsSold, 0),
+    };
+  });
+}
+
 function Heatmap({
   cities,
   selected,
   filters,
 }: {
-  cities: CityCatalogStat[];
+  cities: HeatmapCity[];
   selected: string;
   filters: Filters;
 }) {
-  const known = cities
-    .map((row) => ({
-      row,
-      city: MARKET_CITIES.find((name) => name.toLowerCase() === row.city.toLowerCase()),
-    }))
-    .filter((entry): entry is { row: CityCatalogStat; city: (typeof MARKET_CITIES)[number] } => Boolean(entry.city));
-  if (known.length === 0) return null;
+  if (cities.length === 0) return null;
 
-  const scored = known.map((entry) => ({
-    ...entry,
+  const ytdLabel = `YTD ${new Date().getFullYear()}`;
+  const scored = cities.map((row) => ({
+    row,
     absorption:
-      entry.row.soldCount90d !== null && entry.row.activeCount > 0
-        ? entry.row.soldCount90d / entry.row.activeCount
-        : null,
+      row.soldCountYtd !== null && row.activeCount > 0 ? row.soldCountYtd / row.activeCount : null,
   }));
-  const values = scored.map((entry) => entry.absorption).filter((value): value is number => value !== null).sort((a, b) => a - b);
+  const values = scored
+    .map((entry) => entry.absorption)
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => a - b);
   const showHeat = values.length >= 2;
 
   function band(absorption: number | null): Heat {
@@ -424,32 +481,32 @@ function Heatmap({
       </div>
       <p className="mb-5 text-[13px] text-ink-muted">
         {showHeat
-          ? "Median price over the last 90 days. Colour is how many homes sold compared with what is listed."
-          : "Median price by city. Sold totals are unavailable, so there is no heat reading."}
+          ? `Median price year to date (${ytdLabel}). Colour is how many homes sold this year compared with what is listed. Updates as each month's sold data lands.`
+          : `Median price year to date (${ytdLabel}). Sold totals are unavailable, so there is no heat reading.`}
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {scored.map(({ row, city, absorption }) => {
+        {scored.map(({ row, absorption }) => {
           const heat = band(absorption);
-          const price = row.medianSoldPrice90d ?? row.medianListPrice;
-          const priceIsSold = row.medianSoldPrice90d !== null;
           return (
             <PendingLink
-              key={city}
-              href={trendsHref(filters, { city })}
+              key={row.city}
+              href={trendsHref(filters, { city: row.city })}
               scroll={false}
               className={cn(
                 "flex flex-col gap-1 rounded-xl p-4 transition-transform hover:scale-105",
                 HEAT_CLASS[heat],
-                city === selected && "ring-2 ring-ink ring-offset-2",
+                row.city === selected && "ring-2 ring-ink ring-offset-2",
               )}
             >
-              <span className="text-[13px] font-bold">{city}</span>
+              <span className="text-[13px] font-bold">{row.city}</span>
               <span className="text-[12px] font-medium opacity-90">
-                {price ? formatPriceCompact(price) : EMPTY}
-                <span className="font-normal"> {priceIsSold ? "sold" : "list"}</span>
+                {row.medianPrice ? formatPriceCompact(row.medianPrice) : EMPTY}
+                <span className="font-normal"> median price</span>
               </span>
               <span className="text-[11px] opacity-80">
-                {row.soldCount90d === null ? `${formatNumber(row.activeCount)} listed` : `${formatNumber(row.soldCount90d)} sales · 90d`}
+                {row.soldCountYtd === null
+                  ? `${formatNumber(row.activeCount)} listed`
+                  : `${formatNumber(row.soldCountYtd)} sales · ${ytdLabel}`}
               </span>
               {showHeat && (
                 <span className={cn("mt-1 rounded-full px-2 py-0.5 text-center text-[10px] font-semibold", heat === "cool" || heat === "very" ? "bg-ink/10" : "bg-white/30")}>
