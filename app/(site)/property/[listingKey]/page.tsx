@@ -382,8 +382,8 @@ export default async function PropertyPage({
                                 {property.rooms.map((room, index) => (
                                   <tr key={`${room.name}-${index}`} className="border-b border-line-soft">
                                     <td className="px-4 py-3 font-medium text-ink sm:px-6">{room.name}</td>
-                                    <td className="px-4 py-3 text-ink-muted sm:px-6">{room.level ?? EMPTY}</td>
-                                    <td className="px-4 py-3 text-ink-muted sm:px-6">{room.dimensions ?? EMPTY}</td>
+                                    <td className="px-4 py-3 text-ink-muted sm:px-6">{room.level ?? ""}</td>
+                                    <td className="px-4 py-3 text-ink-muted sm:px-6">{room.dimensions ?? ""}</td>
                                   </tr>
                                 ))}
                               </tbody>

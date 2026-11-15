@@ -468,20 +468,37 @@ export function deriveRentalItems(
 function fact(label: string, value: string | number | null | undefined): PropertyFact | null {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
-  if (!text) return null;
+  if (!text || text === EMPTY) return null;
   return { label, value: text };
 }
 
-/** Always keep the row — client-requested fields should still appear when unknown. */
-function factOrDash(label: string, value: string | number | null | undefined): PropertyFact {
-  if (value === null || value === undefined) return { label, value: EMPTY };
-  const text = String(value).trim();
-  return { label, value: text || EMPTY };
+function group(title: string, facts: Array<PropertyFact | null>) {
+  // Omit unknown MLS fields entirely — never render a dash placeholder row.
+  const kept = facts.filter((f): f is PropertyFact => {
+    if (f === null) return false;
+    const value = f.value.trim();
+    return value.length > 0 && value !== EMPTY;
+  });
+  return kept.length > 0 ? { title, facts: kept } : null;
 }
 
-function group(title: string, facts: Array<PropertyFact | null>) {
-  const kept = facts.filter((f): f is PropertyFact => f !== null);
-  return kept.length > 0 ? { title, facts: kept } : null;
+/** "4-year-new" / "built in 2022" in remarks when YearBuilt is blank. */
+export function deriveYearBuiltFromRemarks(
+  remarks: string | null | undefined,
+  now = new Date(),
+): number | null {
+  if (!remarks) return null;
+  const builtIn = remarks.match(/\bbuilt\s+in\s+(\d{4})\b/i);
+  if (builtIn?.[1]) {
+    const year = Number(builtIn[1]);
+    if (year >= 1800 && year <= now.getFullYear() + 1) return year;
+  }
+  const ageNew = remarks.match(/(\d+)\s*[- ]?\s*year(?:s)?[ -]?new\b/i);
+  if (ageNew?.[1]) {
+    const age = Number(ageNew[1]);
+    if (age >= 0 && age < 300) return now.getFullYear() - age;
+  }
+  return null;
 }
 
 /**
@@ -556,7 +573,10 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     (/(garage|carport)/.test(parkingFeatures) ? raw.parking_total ?? null : null);
   const stories = raw.stories ?? null;
   const ownership = titleCase(raw.common_interest);
-  const yearBuilt = raw.year_built ?? summary.yearBuilt;
+  const yearBuilt =
+    raw.year_built ??
+    summary.yearBuilt ??
+    deriveYearBuiltFromRemarks(raw.public_remarks ?? summary.description);
   const propertyAge =
     yearBuilt != null && yearBuilt > 1800
       ? Math.max(0, new Date().getFullYear() - yearBuilt)
@@ -587,71 +607,71 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       ? null
       : `${daysOnMarket} day${daysOnMarket === 1 ? "" : "s"}`;
 
-  // Client-required Key Facts — always render (dash when the feed has no value).
+  // Only MLS-backed values — omit a row entirely when the feed has nothing.
   const factGroups = [
     group("Overview", [
-      factOrDash("Municipality", summary.community),
-      factOrDash("Community", summary.neighbourhood),
-      factOrDash("Address", summary.address),
-      factOrDash("Level", level),
-      factOrDash("Unit #", unitNumber),
-      factOrDash("Locker", locker === null ? null : locker ? "Yes" : "No"),
-      factOrDash(
+      fact("Municipality", summary.community),
+      fact("Community", summary.neighbourhood),
+      fact("Address", summary.address),
+      fact("Level", level),
+      fact("Unit #", unitNumber),
+      fact("Locker", locker === null ? null : locker ? "Yes" : "No"),
+      fact(
         "POTL monthly fees",
         potlMonthlyFees === null ? null : formatPrice(potlMonthlyFees),
       ),
-      factOrDash("Maintenance", maintenanceLabel),
-      factOrDash("Included in maintenance costs", associationFeeIncludes),
-      factOrDash("Property type", summary.type),
-      factOrDash("Style", style),
-      factOrDash(
+      fact("Maintenance", maintenanceLabel),
+      fact("Included in maintenance costs", associationFeeIncludes),
+      fact("Property type", summary.type),
+      fact("Style", style),
+      fact(
         "Lot frontage",
         lotFrontage ? `${formatNumber(lotFrontage)} ft` : null,
       ),
-      factOrDash("Lot depth", lotDepth),
-      factOrDash("List price", listPriceLabel),
-      factOrDash("Last sold price", lastSoldLabel),
-      factOrDash("Property taxes", taxAnnual ? formatPrice(taxAnnual) : null),
-      factOrDash("Days on market", daysOnMarketLabel),
-      factOrDash(
+      fact("Lot depth", lotDepth),
+      fact("List price", listPriceLabel),
+      fact("Last sold price", lastSoldLabel),
+      fact("Property taxes", taxAnnual ? formatPrice(taxAnnual) : null),
+      fact("Days on market", daysOnMarketLabel),
+      fact(
         "Square feet above ground",
         sqftAboveGrade && sqftAboveGrade > 0
           ? `${formatNumber(sqftAboveGrade)} sq ft`
           : sqftLabel,
       ),
-      factOrDash(
+      fact(
         "Garage parking spaces",
         garageSpaces === null ? null : formatNumber(garageSpaces),
       ),
-      factOrDash(
+      fact(
         "Total parking spaces",
         raw.parking_total === null || raw.parking_total === undefined
           ? null
           : formatNumber(raw.parking_total),
       ),
-      factOrDash("Year built", yearBuilt),
-      factOrDash("Number of bedrooms", bedsLabel ?? summary.beds),
-      factOrDash("Number of washrooms", summary.baths),
-      factOrDash("Family room", familyRoom === null ? null : familyRoom ? "Yes" : "No"),
-      factOrDash("Basement (finished/unfinished)", basement),
-      factOrDash("Number of kitchens", kitchens),
-      factOrDash("Rental items under contract", rentalItems),
+      fact("Year built", yearBuilt),
+      fact("Number of bedrooms", bedsLabel ?? summary.beds),
+      fact("Number of washrooms", summary.baths),
+      fact("Family room", familyRoom === null ? null : familyRoom ? "Yes" : "No"),
+      fact("Basement (finished/unfinished)", basement),
+      fact("Number of kitchens", kitchens),
+      fact("Rental items under contract", rentalItems),
     ]),
     group("More details", [
       fact("Listing #", summary.mls),
       fact("Status", statusLabel(summary.status)),
-      factOrDash("Ownership / Title", ownership),
+      fact("Ownership / Title", ownership),
       fact("Directions", titleCase(raw.directions)),
       fact("Partial baths", raw.bathrooms_partial),
       fact("Rooms", roomCount || null),
-      factOrDash("Square footage", sqftLabel),
-      factOrDash(
+      fact("Square footage", sqftLabel),
+      fact(
         "Property age",
         propertyAge === null
           ? null
           : `${propertyAge} year${propertyAge === 1 ? "" : "s"}`,
       ),
-      factOrDash("Number of floors", stories),
+      fact("Number of floors", stories),
       fact("Construction", titleCase(raw.construction_materials)),
       fact("Flooring", titleCase(raw.flooring)),
       fact("Garage type", titleCase(raw.garage_size)),

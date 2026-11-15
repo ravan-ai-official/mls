@@ -7,6 +7,7 @@ import {
   deriveRentalItems,
   deriveRoomSignals,
   deriveUnitNumber,
+  deriveYearBuiltFromRemarks,
   mapPropertyDetail,
   mapPropertySummary,
   normalizeStatus,
@@ -278,38 +279,39 @@ describe("mapPropertyDetail listing fields", () => {
     expect(facts["Rental items under contract"]).toBe("Hot Water Tank");
     expect(detail.features).toEqual(expect.arrayContaining(["Locker", "Party Room", "Fridge", "Stove"]));
     expect(detail.propertySubType).toBe("Condo Apartment");
+    // Unknown MLS fields are omitted — never shown as "—".
+    expect(facts).not.toHaveProperty("POTL monthly fees");
+    expect(facts).not.toHaveProperty("Lot depth");
+    expect(facts).not.toHaveProperty("Last sold price");
+    expect(Object.values(facts).some((value) => value === "—")).toBe(false);
+    vi.useRealTimers();
+  });
 
-    for (const label of [
-      "Municipality",
-      "Community",
-      "Address",
-      "Level",
-      "Unit #",
-      "Locker",
-      "POTL monthly fees",
-      "Maintenance",
-      "Included in maintenance costs",
-      "Property type",
-      "Style",
-      "Lot frontage",
-      "Lot depth",
-      "List price",
-      "Last sold price",
-      "Property taxes",
-      "Days on market",
-      "Square feet above ground",
-      "Garage parking spaces",
-      "Total parking spaces",
-      "Year built",
-      "Number of bedrooms",
-      "Number of washrooms",
-      "Family room",
-      "Basement (finished/unfinished)",
-      "Number of kitchens",
-      "Rental items under contract",
-    ]) {
-      expect(facts).toHaveProperty(label);
-    }
+  it("derives year built from '4-year-new' remarks when YearBuilt is blank", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T12:00:00Z"));
+    expect(deriveYearBuiltFromRemarks("stunning 4-year-new executive home")).toBe(2022);
+    const detail = mapPropertyDetail({
+      listing_key: "R1",
+      listing_id: "40872102",
+      list_price: null,
+      total_actual_rent: "3099",
+      standard_status: "Active",
+      property_sub_type: "Single Family",
+      structure_type: "House",
+      city: "Caledonia",
+      unparsed_address: "35 SANTOS Drive",
+      public_remarks: "stunning 4-year-new executive detached home",
+      media: [],
+      rooms: [],
+    } as unknown as BackendPropertyDetail);
+    const facts = Object.fromEntries(
+      detail.factGroups.flatMap((g) => g.facts.map((f) => [f.label, f.value])),
+    );
+    expect(facts["Year built"]).toBe("2022");
+    expect(facts["Property age"]).toBe("4 years");
+    expect(facts).not.toHaveProperty("Unit #");
+    expect(facts).not.toHaveProperty("Maintenance");
     vi.useRealTimers();
   });
 });
