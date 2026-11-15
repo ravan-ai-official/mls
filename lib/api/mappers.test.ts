@@ -9,8 +9,10 @@ import {
   deriveUnitNumber,
   mapPropertyDetail,
   mapPropertySummary,
+  normalizeStatus,
   parseCityAndCommunity,
   resolvePropertyType,
+  resolveSqft,
 } from "./mappers";
 import type { BackendPropertyDetail, BackendPropertySummary } from "@/lib/types/backend";
 
@@ -115,6 +117,28 @@ describe("resolvePropertyType", () => {
 
   it("falls back to the sub-type when structure is missing", () => {
     expect(resolvePropertyType("Condo Apartment", null, null).uiType).toBe("Condo");
+  });
+});
+
+describe("resolveSqft", () => {
+  it("uses the DDF living-area band when exact sqft is missing", () => {
+    expect(
+      resolveSqft({ living_area_minimum: "800", living_area_maximum: "899" }),
+    ).toEqual({ sqft: 800, sqftLabel: "800–899 sq ft" });
+  });
+
+  it("reads sqft from public remarks as a last resort", () => {
+    expect(
+      resolveSqft({ public_remarks: "One Bedroom + 1 Locker, 560 Sqft Condo With Balcony" }),
+    ).toEqual({ sqft: 560, sqftLabel: "560 sq ft" });
+  });
+});
+
+describe("normalizeStatus", () => {
+  it("treats terminated and expired as off-market", () => {
+    expect(normalizeStatus("Terminated")).toBe("other");
+    expect(normalizeStatus("Expired")).toBe("other");
+    expect(normalizeStatus("Active")).toBe("active");
   });
 });
 

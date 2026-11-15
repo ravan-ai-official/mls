@@ -183,19 +183,32 @@ export default async function PropertyPage({
           </div>
           <div className="text-left sm:text-right">
             <p className="text-[12px] text-ink-muted">
-              {property.status === "sold" ? "Asking price" : "MLS®"}
+              {property.status === "sold"
+                ? "Asking price"
+                : property.status === "active"
+                  ? "MLS®"
+                  : "Status"}
             </p>
             <p
               className={
                 property.status === "sold"
                   ? "text-[18px] font-medium text-ink-muted line-through"
-                  : "text-[18px] font-semibold text-navy"
+                  : property.status === "active"
+                    ? "text-[18px] font-semibold text-navy"
+                    : "text-[18px] font-semibold text-ink-muted"
               }
             >
-              {property.status === "sold" ? priceLabel : property.mls}
+              {property.status === "sold"
+                ? priceLabel
+                : property.status === "active"
+                  ? property.mls
+                  : statusLabel(property.status)}
             </p>
-            {property.status !== "sold" && (
+            {property.status === "active" && (
               <p className="text-[12px] text-ink-muted">Listed</p>
+            )}
+            {property.status !== "active" && property.status !== "sold" && (
+              <p className="text-[12px] text-ink-muted">MLS® {property.mls}</p>
             )}
           </div>
         </div>

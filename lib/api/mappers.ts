@@ -103,6 +103,7 @@ export function normalizeStatus(raw: string | null | undefined): PropertyStatus 
   if (value === "active" || value.startsWith("active")) return "active";
   if (value === "sold" || value === "closed") return "sold";
   if (value === "leased" || value === "rented") return "leased";
+  // Terminated / Expired / Withdrawn / Cancelled — never show as For Sale.
   return "other";
 }
 
@@ -117,6 +118,54 @@ export function statusLabel(status: PropertyStatus): string {
     default:
       return "Off Market";
   }
+}
+
+/**
+ * Exact sqft, else DDF min/max band floor, else a number mentioned in remarks
+ * ("560 Sqft"). Returns null rather than inventing a value.
+ */
+export function resolveSqft(raw: {
+  building_area_total?: string | null;
+  living_area?: string | null;
+  living_area_minimum?: string | null;
+  living_area_maximum?: string | null;
+  above_grade_finished_area?: string | null;
+  public_remarks?: string | null;
+}): { sqft: number | null; sqftLabel: string | null } {
+  const exact =
+    toNumber(raw.building_area_total) ??
+    toNumber(raw.living_area) ??
+    toNumber(raw.above_grade_finished_area);
+  if (exact && exact > 0) {
+    return { sqft: exact, sqftLabel: `${formatNumber(exact)} sq ft` };
+  }
+
+  const min = toNumber(raw.living_area_minimum);
+  const max = toNumber(raw.living_area_maximum);
+  if (min && max && min > 0 && max > 0 && min !== max) {
+    return {
+      sqft: min,
+      sqftLabel: `${formatNumber(min)}–${formatNumber(max)} sq ft`,
+    };
+  }
+  if (min && min > 0) {
+    return { sqft: min, sqftLabel: `${formatNumber(min)} sq ft` };
+  }
+  if (max && max > 0) {
+    return { sqft: max, sqftLabel: `${formatNumber(max)} sq ft` };
+  }
+
+  const fromRemarks = raw.public_remarks?.match(
+    /(\d[\d,]*)\s*(?:sq\.?\s*ft|sqft|square\s*feet)/i,
+  );
+  if (fromRemarks?.[1]) {
+    const n = toNumber(fromRemarks[1].replace(/,/g, ""));
+    if (n && n > 0 && n < 100_000) {
+      return { sqft: n, sqftLabel: `${formatNumber(n)} sq ft` };
+    }
+  }
+
+  return { sqft: null, sqftLabel: null };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -296,12 +345,9 @@ export function mapPropertySummary(raw: BackendPropertySummary): PropertySummary
     raw.subdivision_name,
   );
 
-  // building_area_total is the RESO primary; some feeds only populate the
-  // finished-area variants, so fall through rather than showing nothing.
-  const sqft =
-    toNumber(raw.building_area_total) ??
-    toNumber(raw.living_area) ??
-    toNumber(raw.above_grade_finished_area);
+  // building_area_total is the RESO primary; fall through LivingArea, the
+  // DDF min/max band, above-grade, then a sqft mention in public remarks.
+  const { sqft } = resolveSqft(raw);
 
   return {
     id: raw.listing_key,
@@ -316,7 +362,7 @@ export function mapPropertySummary(raw: BackendPropertySummary): PropertySummary
     type: isLease && !uiType ? "Rental" : label,
     propertySubType: raw.property_sub_type?.trim() || null,
     uiType: isLease ? "Rental" : uiType,
-    sqft: sqft && sqft > 0 ? sqft : null,
+    sqft,
     status,
     badge: deriveBadge(raw, status),
     mls: raw.listing_id?.trim() || raw.listing_key,
@@ -494,11 +540,9 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
   const associationFeeIncludes = titleCase(raw.association_fee_includes);
   const lotDepth = lotDepthLabel(raw.lot_size_dimensions);
   const sqftAboveGrade = toNumber(raw.above_grade_finished_area);
-  const sqft =
-    summary.sqft ??
-    toNumber(raw.building_area_total) ??
-    toNumber(raw.living_area) ??
-    sqftAboveGrade;
+  const resolvedArea = resolveSqft(raw);
+  const sqft = summary.sqft ?? resolvedArea.sqft;
+  const sqftLabel = resolvedArea.sqftLabel;
   const kitchens = raw.kitchens ?? roomSignals.kitchens;
   const familyRoom =
     typeof raw.family_room === "boolean"
@@ -571,7 +615,9 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       factOrDash("Days on market", daysOnMarketLabel),
       factOrDash(
         "Square feet above ground",
-        sqftAboveGrade && sqftAboveGrade > 0 ? `${formatNumber(sqftAboveGrade)} sq ft` : null,
+        sqftAboveGrade && sqftAboveGrade > 0
+          ? `${formatNumber(sqftAboveGrade)} sq ft`
+          : sqftLabel,
       ),
       factOrDash(
         "Garage parking spaces",
@@ -598,10 +644,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       fact("Directions", titleCase(raw.directions)),
       fact("Partial baths", raw.bathrooms_partial),
       fact("Rooms", roomCount || null),
-      factOrDash(
-        "Square footage",
-        sqft && sqft > 0 ? `${formatNumber(sqft)} sq ft` : null,
-      ),
+      factOrDash("Square footage", sqftLabel),
       factOrDash(
         "Property age",
         propertyAge === null

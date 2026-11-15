@@ -89,6 +89,9 @@ export interface BackendPropertySummary {
   is_featured?: boolean | null;
   subdivision_name?: string | null;
   living_area?: string | null;
+  /** DDF band when exact LivingArea is null (e.g. 800–899). */
+  living_area_minimum?: string | null;
+  living_area_maximum?: string | null;
   above_grade_finished_area?: string | null;
   original_entry_timestamp?: string | null;
   modification_timestamp?: string | null;
@@ -108,6 +111,8 @@ export interface BackendPropertyDetail extends Omit<BackendPropertySummary, "med
   unit_number: string | null;
   country: string | null;
   living_area: string | null;
+  living_area_minimum?: string | null;
+  living_area_maximum?: string | null;
   above_grade_finished_area: string | null;
   below_grade_finished_area: string | null;
   lot_size_area: string | null;
