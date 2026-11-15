@@ -295,7 +295,11 @@ export default async function PropertyPage({
         }
         aside={
           <div className="space-y-4">
-            <InquiryForm listingKey={property.id} address={property.address} />
+            <InquiryForm
+              listingKey={property.id}
+              mls={property.mls}
+              address={property.address}
+            />
             <ListingWhatsAppCard
               address={property.address}
               listingKey={property.mls}

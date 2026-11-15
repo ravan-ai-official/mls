@@ -64,16 +64,20 @@ export function assignmentLeadKey(id: number): string {
 export function InquiryForm({
   listingKey,
   address,
+  mls,
   variant = "showing",
   framed = true,
 }: {
   listingKey: string;
   address: string;
+  /** Board MLS® number for the message text. Defaults to listingKey. */
+  mls?: string;
   variant?: keyof typeof COPY;
   /** False inside a Modal, which already supplies the card chrome. */
   framed?: boolean;
 }) {
   const copy = COPY[variant];
+  const mlsLabel = (mls ?? listingKey).trim() || listingKey;
   const { user } = useAuth();
   const submit = useSubmitInquiry();
   const [sent, setSent] = useState(false);
@@ -185,7 +189,7 @@ export function InquiryForm({
           name="message"
           required
           minLength={10}
-          defaultValue={copy.message(address, listingKey)}
+          defaultValue={copy.message(address, mlsLabel)}
         />
       </Field>
 
