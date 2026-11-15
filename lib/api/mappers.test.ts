@@ -6,8 +6,10 @@ import {
   deriveLocker,
   deriveRentalItems,
   deriveRoomSignals,
+  deriveUnitNumber,
   mapPropertyDetail,
   mapPropertySummary,
+  parseCityAndCommunity,
   resolvePropertyType,
 } from "./mappers";
 import type { BackendPropertyDetail, BackendPropertySummary } from "@/lib/types/backend";
@@ -125,6 +127,11 @@ describe("listing key-fact helpers", () => {
         { room_type: "Kitchen", room_level: "Basement", room_length: null, room_width: null, room_dimensions: null },
       ]),
     ).toEqual({ kitchens: 2, familyRoom: true });
+    expect(
+      deriveRoomSignals([
+        { room_type: "Kitchen", room_level: "Main", room_length: null, room_width: null, room_dimensions: null },
+      ]),
+    ).toEqual({ kitchens: 1, familyRoom: false });
     expect(deriveRoomSignals([])).toEqual({ kitchens: null, familyRoom: null });
   });
 
@@ -144,8 +151,37 @@ describe("listing key-fact helpers", () => {
 
   it("detects locker from building/parking text", () => {
     expect(deriveLocker("Balcony, Locker", null)).toBe(true);
+    expect(deriveLocker("Storage - Locker, Party Room", null)).toBe(true);
     expect(deriveLocker("Balcony", "Underground")).toBe(false);
+    expect(deriveLocker("No locker", null)).toBe(false);
+    expect(deriveLocker("Without locker", "Underground")).toBe(false);
     expect(deriveLocker(null, null)).toBeNull();
+  });
+
+  it("splits City (Community) for municipality / community Key Facts", () => {
+    expect(parseCityAndCommunity("Toronto (Casa Loma)", null, null)).toEqual({
+      municipality: "Toronto",
+      community: "Casa Loma",
+    });
+    expect(parseCityAndCommunity("Toronto (Lambton Baby Point)", "Lambton Baby Point", null)).toEqual({
+      municipality: "Toronto",
+      community: "Lambton Baby Point",
+    });
+    expect(parseCityAndCommunity("Ingersoll", null, "Ingersoll - South")).toEqual({
+      municipality: "Ingersoll",
+      community: "Ingersoll - South",
+    });
+    expect(parseCityAndCommunity("Burlington", null, null)).toEqual({
+      municipality: "Burlington",
+      community: null,
+    });
+  });
+
+  it("derives unit number from address when the column is empty", () => {
+    expect(deriveUnitNumber("1217", "700 Dynes")).toBe("1217");
+    expect(deriveUnitNumber(null, "507 - 2450 BLOOR STREET W")).toBe("507");
+    expect(deriveUnitNumber("", "700 DYNES Road Unit# 1217")).toBe("1217");
+    expect(deriveUnitNumber(null, "11 ELLINGTON DRIVE")).toBeNull();
   });
 
   it("counts days on market from list entry to close or now", () => {
@@ -176,12 +212,13 @@ describe("mapPropertyDetail listing fields", () => {
       standard_status: "Active",
       property_sub_type: "Condo Apartment",
       structure_type: "Apartment",
-      city: "Toronto",
-      city_region: "CityPlace",
+      city: "Toronto (CityPlace)",
+      city_region: "",
       unparsed_address: "100 Harbour St",
       unit_number: "1712",
-      building_features: "Locker",
+      building_features: "Locker, Party Room",
       parking_features: null,
+      appliances: "Fridge, Stove",
       tax_annual_amount: "3200.00",
       association_fee: "650.00",
       association_fee_frequency: "Monthly",
@@ -203,6 +240,10 @@ describe("mapPropertyDetail listing fields", () => {
     const facts = Object.fromEntries(
       detail.factGroups.flatMap((g) => g.facts.map((f) => [f.label, f.value])),
     );
+    expect(detail.community).toBe("Toronto");
+    expect(detail.neighbourhood).toBe("CityPlace");
+    expect(facts["Municipality"]).toBe("Toronto");
+    expect(facts["Community"]).toBe("CityPlace");
     expect(facts["Level"]).toBe("17");
     expect(facts["Unit #"]).toBe("1712");
     expect(facts["Locker"]).toBe("Yes");
@@ -211,6 +252,8 @@ describe("mapPropertyDetail listing fields", () => {
     expect(facts["Included in maintenance costs"]).toMatch(/Heat/i);
     expect(facts["Days on market"]).toBe("14 days");
     expect(facts["Rental items under contract"]).toBe("Hot Water Tank");
+    expect(detail.features).toEqual(expect.arrayContaining(["Locker", "Party Room", "Fridge", "Stove"]));
+    expect(detail.propertySubType).toBe("Condo Apartment");
 
     for (const label of [
       "Municipality",

@@ -6,7 +6,6 @@ import { SafeImage } from "@/components/ui/SafeImage";
 import { Gallery } from "@/components/property/Gallery";
 import { InquiryForm } from "@/components/property/InquiryForm";
 import { ListingShareActions, ListingWhatsAppCard } from "@/components/property/ListingShareActions";
-import { ClimateRisk } from "@/components/property/ClimateRisk";
 import { KeyFacts, MarketDemand } from "@/components/property/KeyFacts";
 import { EstimatesPanel } from "@/components/property/EstimatesPanel";
 import { CommunityPanel } from "@/components/property/CommunityPanel";
@@ -333,7 +332,21 @@ export default async function PropertyPage({
                           </p>
                         </section>
                       )}
-                      <ClimateRisk />
+                      {property.features.length > 0 && (
+                        <section>
+                          <h2 className="mb-3 text-[18px] font-semibold text-ink">Features</h2>
+                          <ul className="flex flex-wrap gap-2">
+                            {property.features.map((feature) => (
+                              <li
+                                key={feature}
+                                className="rounded-xl bg-surface-alt px-3 py-1.5 text-[13px] text-ink"
+                              >
+                                {feature}
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      )}
                       {property.rooms.length > 0 && (
                         <section className="overflow-hidden rounded-2xl border border-line">
                           <div className="border-b border-line bg-surface-alt px-4 py-4 sm:px-6">

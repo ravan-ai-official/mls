@@ -288,7 +288,12 @@ export function TypeSplit({
   const tipId = useId();
   const [active, setActive] = useState<number | null>(null);
   const total = slices.reduce((sum, slice) => sum + slice.count, 0) || 1;
-  const pie = piePaths(slices.map((slice) => slice.count));
+  // Draw wedges only for types with listings; keep zeros in the legend so
+  // Semi-detached and Condo apartment stay visible even when the sample is thin.
+  const pieSlices = slices
+    .map((slice, index) => ({ ...slice, colorIndex: index }))
+    .filter((slice) => slice.count > 0);
+  const pie = piePaths(pieSlices.map((slice) => slice.count));
   const tip = active !== null ? slices[active] : null;
 
   return (
@@ -297,7 +302,8 @@ export function TypeSplit({
         Property Type Distribution{city ? ` — ${city}` : ""}
       </h3>
       <p className="mb-4 text-[12px] text-ink-muted">
-        Active listings by home type — Detached, Semi-detached, townhouse, condo and Other.
+        Active listings by home type — Detached, Semi-detached, Freehold townhouse, Condo
+        townhouse, Condo apartment, and Other.
       </p>
       <div className="flex flex-col items-center gap-6 sm:flex-row">
         <div className="relative shrink-0">
@@ -308,18 +314,22 @@ export function TypeSplit({
             aria-label="Property type split"
             onMouseLeave={() => setActive(null)}
           >
-            {pie.map((slice, index) => (
-              <path
-                key={slices[index]?.name ?? index}
-                d={slice}
-                fill={TYPE_COLORS[index % TYPE_COLORS.length]}
-                opacity={active === null || active === index ? 1 : 0.55}
-                className="cursor-pointer transition-opacity"
-                onMouseEnter={() => setActive(index)}
-              >
-                <title>{`${slices[index]?.name}: ${slices[index]?.count} (${Math.round(((slices[index]?.count ?? 0) / total) * 100)}%)`}</title>
-              </path>
-            ))}
+            {pie.map((slice, index) => {
+              const item = pieSlices[index];
+              if (!item) return null;
+              return (
+                <path
+                  key={item.name}
+                  d={slice}
+                  fill={TYPE_COLORS[item.colorIndex % TYPE_COLORS.length]}
+                  opacity={active === null || active === item.colorIndex ? 1 : 0.55}
+                  className="cursor-pointer transition-opacity"
+                  onMouseEnter={() => setActive(item.colorIndex)}
+                >
+                  <title>{`${item.name}: ${item.count} (${Math.round((item.count / total) * 100)}%)`}</title>
+                </path>
+              );
+            })}
           </svg>
           {tip ? (
             <div

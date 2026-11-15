@@ -54,6 +54,8 @@ export interface PropertySummary {
   baths: number | null;
   /** Normalized display label, e.g. "Detached". Falls back to the raw RESO value. */
   type: string | null;
+  /** Raw RESO `property_sub_type` for valuation / filters that need the feed value. */
+  propertySubType: string | null;
   /** Matched UI type when the RESO value maps cleanly, else null. */
   uiType: UiPropertyType | null;
   sqft: number | null;
@@ -131,6 +133,8 @@ export interface PropertyDetail extends PropertySummary {
   propertyAge: number | null;
   potlMonthlyFees: number | null;
   rentalItems: string | null;
+  /** Amenity / feature chips from MLS interior, exterior, building, etc. */
+  features: string[];
   /** Grouped facts for the detail spec sections; empty groups are dropped. */
   factGroups: Array<{ title: string; facts: PropertyFact[] }>;
   /** http(s) virtual-tour link from the feed. Absent when the listing has none. */

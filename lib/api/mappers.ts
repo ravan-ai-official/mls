@@ -212,7 +212,7 @@ function summaryImage(raw: BackendPropertySummary): string | null {
 function mapImages(media: BackendMedia[] | undefined): PropertyImage[] {
   if (!Array.isArray(media)) return [];
   return media
-    .map((m) => {
+    .map((m, index) => {
       // Prefer the feed CDN URL. media_file is only for rare Cloudinary
       // uploads; when both exist, media_url is what DDF/AMPRE keep fresh.
       const rawUrl = m.media_url || m.url || m.media_file;
@@ -220,11 +220,62 @@ function mapImages(media: BackendMedia[] | undefined): PropertyImage[] {
         url: resolveMediaUrl(rawUrl),
         category: m.media_category ?? null,
         isPreferred: Boolean(m.is_preferred),
+        order: typeof m.order === "number" ? m.order : index,
       };
     })
     .filter((m) => m.url.length > 0)
-    // Preferred photo leads the gallery, then feed order.
-    .sort((a, b) => Number(b.isPreferred) - Number(a.isPreferred));
+    // Preferred photo leads the gallery, then the feed's own order.
+    .sort((a, b) => {
+      const preferred = Number(b.isPreferred) - Number(a.isPreferred);
+      if (preferred !== 0) return preferred;
+      return a.order - b.order;
+    })
+    .map(({ url, category, isPreferred }) => ({ url, category, isPreferred }));
+}
+
+/**
+ * DDF often packs the community into City as "Toronto (Casa Loma)" while
+ * leaving `city_region` empty. Split that so Municipality / Community Key
+ * Facts (and city search) match the feed intent.
+ */
+export function parseCityAndCommunity(
+  city: string | null | undefined,
+  cityRegion: string | null | undefined,
+  subdivision: string | null | undefined,
+): { municipality: string | null; community: string | null } {
+  const rawCity = city?.trim() || "";
+  const region = cityRegion?.trim() || "";
+  const sub = subdivision?.trim() || "";
+
+  let municipality: string | null = rawCity || null;
+  let fromParen: string | null = null;
+
+  const match = rawCity.match(/^(.+?)\s*\((.+)\)\s*$/);
+  if (match) {
+    municipality = match[1].trim() || null;
+    fromParen = match[2].trim() || null;
+  }
+
+  return {
+    municipality,
+    community: region || sub || fromParen || null,
+  };
+}
+
+/** Unit # from the dedicated column, or from common address patterns when empty. */
+export function deriveUnitNumber(
+  unit: string | null | undefined,
+  address: string | null | undefined,
+): string | null {
+  const explicit = unit?.trim();
+  if (explicit) return explicit;
+  const addr = address?.trim() || "";
+  if (!addr) return null;
+  const unitToken = addr.match(/\bunit\s*#?\s*([A-Za-z0-9-]+)\b/i);
+  if (unitToken?.[1]) return unitToken[1];
+  // "507 - 2450 BLOOR STREET W" — unit before the street number.
+  const leading = addr.match(/^(\d+[A-Za-z]?)\s*[-–]\s*\d+/);
+  return leading?.[1] ?? null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -239,6 +290,11 @@ export function mapPropertySummary(raw: BackendPropertySummary): PropertySummary
   const leaseAmount = toNumber(raw.lease_amount) ?? toNumber(raw.total_actual_rent);
   const isLease = (!listPrice || listPrice <= 0) && Boolean(leaseAmount && leaseAmount > 0);
   const { label, uiType } = resolvePropertyType(raw.property_sub_type, raw.structure_type, raw.property_attached_yn);
+  const { municipality, community } = parseCityAndCommunity(
+    raw.city,
+    raw.city_region,
+    raw.subdivision_name,
+  );
 
   // building_area_total is the RESO primary; some feeds only populate the
   // finished-area variants, so fall through rather than showing nothing.
@@ -250,13 +306,15 @@ export function mapPropertySummary(raw: BackendPropertySummary): PropertySummary
   return {
     id: raw.listing_key,
     address: raw.unparsed_address?.trim() || "Address not disclosed",
-    neighbourhood: raw.city_region?.trim() || raw.subdivision_name?.trim() || null,
-    community: raw.city?.trim() || null,
+    // Domain: neighbourhood = Community, community = Municipality.
+    neighbourhood: community,
+    community: municipality,
     price: isLease ? leaseAmount : listPrice,
     isLease,
     beds: raw.bedrooms_total ?? null,
     baths: raw.bathrooms_total_integer ?? null,
     type: isLease && !uiType ? "Rental" : label,
+    propertySubType: raw.property_sub_type?.trim() || null,
     uiType: isLease ? "Rental" : uiType,
     sqft: sqft && sqft > 0 ? sqft : null,
     status,
@@ -322,7 +380,10 @@ export function deriveLocker(
 ): boolean | null {
   const joined = blobs.filter(Boolean).join(" ").toLowerCase();
   if (!joined.trim()) return null;
-  return joined.includes("locker");
+  if (/\b(?:no|without|not)\s+locker\b/.test(joined) || /\blocker\s*[:=]\s*no\b/.test(joined)) {
+    return false;
+  }
+  return /\blocker\b/.test(joined);
 }
 
 /**
@@ -395,7 +456,8 @@ export function deriveRoomSignals(rooms: BackendRoom[] | null | undefined): {
   }
   return {
     kitchens: kitchens > 0 ? kitchens : null,
-    familyRoom: familyRoom || null,
+    // Rooms were listed — absence of a family room is a real "No", not unknown.
+    familyRoom,
   };
 }
 
@@ -415,12 +477,18 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
   const roomCount = (raw.rooms ?? []).filter((room) => titleCase(room.room_type)).length;
 
   const level = deriveCondoLevel(raw.rooms);
-  const locker = deriveLocker(raw.building_features, raw.parking_features);
+  const locker = deriveLocker(
+    raw.building_features,
+    raw.parking_features,
+    raw.interior_features,
+    raw.lot_features,
+  );
   const daysOnMarket = deriveDaysOnMarket(
     raw.original_entry_timestamp ?? summary.listedAt,
     raw.close_date ?? summary.closeDate,
   );
   const rentalItems = deriveRentalItems(raw.other_equipment, raw.inclusions);
+  const unitNumber = deriveUnitNumber(raw.unit_number, raw.unparsed_address);
   const style = titleCase(raw.architectural_style);
   const basement = titleCase(raw.basement);
   const associationFeeIncludes = titleCase(raw.association_fee_includes);
@@ -433,7 +501,9 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     sqftAboveGrade;
   const kitchens = raw.kitchens ?? roomSignals.kitchens;
   const familyRoom =
-    typeof raw.family_room === "boolean" ? raw.family_room : roomSignals.familyRoom;
+    typeof raw.family_room === "boolean"
+      ? raw.family_room
+      : roomSignals.familyRoom;
   // Prefer dedicated garage column; fall back to parking total when the feed
   // describes garage parking (same rule the listing filters use).
   const parkingFeatures = (raw.parking_features || "").toLowerCase();
@@ -480,7 +550,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       factOrDash("Community", summary.neighbourhood),
       factOrDash("Address", summary.address),
       factOrDash("Level", level),
-      factOrDash("Unit #", raw.unit_number?.trim()),
+      factOrDash("Unit #", unitNumber),
       factOrDash("Locker", locker === null ? null : locker ? "Yes" : "No"),
       factOrDash(
         "POTL monthly fees",
@@ -552,6 +622,8 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     ]),
   ].filter((g): g is { title: string; facts: PropertyFact[] } => g !== null);
 
+  const features = collectFeatures(raw);
+
   return {
     ...summary,
     sqft: sqft && sqft > 0 ? sqft : null,
@@ -568,7 +640,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
           (r.room_length && r.room_width ? `${r.room_length} × ${r.room_width}` : null),
       }))
       .filter((r) => r.name !== null),
-    unitNumber: raw.unit_number?.trim() || null,
+    unitNumber,
     stateOrProvince: raw.state_or_province?.trim() || null,
     lotFrontage,
     lotDepth,
@@ -593,6 +665,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     propertyAge,
     potlMonthlyFees,
     rentalItems,
+    features,
     factGroups,
     virtualTourUrl: httpUrl(raw.virtual_tour_url),
   };
@@ -610,14 +683,27 @@ function httpUrl(value: string | null | undefined): string | null {
   }
 }
 
-/** Amenity/feature chips shown on the detail page. */
+/** Amenity/feature chips shown on the detail page — all MLS feature columns. */
 export function collectFeatures(raw: BackendPropertyDetail): string[] {
-  return [
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of [
     ...splitFeatures(raw.interior_features),
     ...splitFeatures(raw.exterior_features),
     ...splitFeatures(raw.community_features),
+    ...splitFeatures(raw.building_features),
+    ...splitFeatures(raw.lot_features),
+    ...splitFeatures(raw.pool_features),
     ...splitFeatures(raw.appliances),
-  ].slice(0, 24);
+    ...splitFeatures(raw.view),
+  ]) {
+    const key = part.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(part);
+    if (out.length >= 24) break;
+  }
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */

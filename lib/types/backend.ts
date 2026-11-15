@@ -147,6 +147,8 @@ export interface BackendPropertyDetail extends Omit<BackendPropertySummary, "med
   exterior_features: string | null;
   interior_features: string | null;
   community_features: string | null;
+  /** Lot / site amenities (elevator, balcony, …) when the feed fills them. */
+  lot_features?: string | null;
   architectural_style: string | null;
   construction_materials: string | null;
   property_condition: string | null;

@@ -20,7 +20,7 @@ export async function EstimatesPanel({ property }: { property: PropertyDetail })
         longitude: property.longitude,
         postalCode: property.postalCode ?? undefined,
         city: property.community ?? undefined,
-        propertySubType: property.type ?? undefined,
+        propertySubType: property.propertySubType ?? property.type ?? undefined,
         bedroomsTotal: property.beds,
         bathroomsTotal: property.baths,
         livingArea: property.sqft,
@@ -48,7 +48,7 @@ export async function EstimatesPanel({ property }: { property: PropertyDetail })
   const rent = property.isLease ? property.price : medianPrice(rents.items);
   const value = usable?.market ?? (property.isLease ? null : property.price);
   const yieldPct = rent && value && value > 0 ? (rent * 12) / value * 100 : null;
-  const listedDays = daysOnMarket(property.listedAt);
+  const listedDays = property.daysOnMarket;
 
   return (
     <div className="rounded-2xl bg-surface-alt p-4 sm:p-6">
@@ -149,13 +149,6 @@ function medianPrice(items: PropertySummary[]): number | null {
   if (prices.length === 0) return null;
   const mid = Math.floor(prices.length / 2);
   return prices.length % 2 === 0 ? Math.round((prices[mid - 1] + prices[mid]) / 2) : prices[mid];
-}
-
-function daysOnMarket(listedAt: string | null): number | null {
-  if (!listedAt) return null;
-  const listed = Date.parse(listedAt);
-  if (Number.isNaN(listed)) return null;
-  return Math.max(0, Math.round((Date.now() - listed) / 86_400_000));
 }
 
 function trendStars(pct: number): number {

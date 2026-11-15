@@ -1,5 +1,10 @@
 import { safeFetch } from "@/lib/api/client";
-import { getCatalogStats, getHomeTypeDistribution, getMarketTrends } from "@/lib/api/market";
+import {
+  getCatalogStats,
+  getHomeTypeDistribution,
+  getMarketTrends,
+  HOME_TYPE_DISTRIBUTION,
+} from "@/lib/api/market";
 import {
   getCensusProfile,
   getNearbyAmenities,
@@ -93,8 +98,16 @@ export async function CommunityPanel({
   ]);
 
   const series = (trends?.series ?? []).filter((point) => point.medianListPrice !== null);
-  // Detached / Semi / townhouse / condo — not RESO "Single Family" buckets.
-  const typeSlices = homeTypes.filter((row) => row.count > 0);
+  // Always keep Detached / Semi-detached / townhouse / Condo apartment in the
+  // pie — including zero counts — so the Community tab never hides those types.
+  const countsByName = new Map(homeTypes.map((row) => [row.name, row.count]));
+  const typeSlices = [
+    ...HOME_TYPE_DISTRIBUTION.map((slice) => ({
+      name: slice.name,
+      count: countsByName.get(slice.name) ?? 0,
+    })),
+    ...(countsByName.get("Other") ? [{ name: "Other", count: countsByName.get("Other")! }] : []),
+  ];
   const latestNew = trends?.series.at(-1)?.newListings;
   const placeLabel =
     [neighbourhood, city].filter((part): part is string => Boolean(part?.trim())).join(", ") ||
@@ -153,9 +166,9 @@ export async function CommunityPanel({
         city={city}
       />
 
-      {typeSlices.length > 0 && (
+      {city ? (
         <TypeSplit slices={typeSlices} city={placeLabel !== "this area" ? placeLabel : city} />
-      )}
+      ) : null}
 
       {amenities && <AmenitiesSection amenities={amenities} />}
     </div>
