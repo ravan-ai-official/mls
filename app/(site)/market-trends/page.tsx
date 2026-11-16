@@ -271,22 +271,19 @@ async function MarketBoard({ filters }: { filters: Filters }) {
             </p>
           </div>
 
-          <section className="rounded-2xl border border-line bg-surface p-6">
-            <div className="mb-6">
-              <h3 className="text-[20px] font-semibold text-ink">Median price</h3>
-              <p className="mt-1 text-[13px] text-ink-muted">
-                Median sold price with Days on Market
-                {soldMonths.some((m) => m.avgPropertyDaysOnMarket != null)
-                  ? " and Property Days on Market"
-                  : ""}{" "}
-                · {range.label}
-                {periodSpan ? ` (${periodSpan})` : ` · last ${range.months} months`}
+          <section className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
+            <div className="mb-3 sm:mb-4">
+              <h3 className="text-[16px] font-semibold text-ink sm:text-[18px]">Median price</h3>
+              <p className="mt-0.5 text-[12px] text-ink-muted sm:text-[13px]">
+                Sold price with DOM
+                {soldMonths.some((m) => m.avgPropertyDaysOnMarket != null) ? " & PDOM" : ""} ·{" "}
+                {range.label}
+                {periodSpan ? ` · ${periodSpan}` : ""}
                 {sold.generatedAt ? ` · as of ${formatDate(sold.generatedAt)}` : ""}
-                {sold.stale ? " · these may be a few hours old" : ""}
+                {sold.stale ? " · may be a few hours old" : ""}
               </p>
-              <p className="mt-1 text-[12px] text-ink-muted">
-                Property Days on Market does not reset when the property is delisted and quickly
-                re-listed.
+              <p className="mt-1 hidden text-[11px] text-ink-subtle sm:block">
+                Property Days on Market does not reset when a home is delisted and quickly re-listed.
               </p>
             </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { smoothAreaPath, smoothLinePath } from "@/lib/utils/chartPath";
 import { formatMonthLabel, formatNumber, formatPrice, formatPriceCompact } from "@/lib/utils/format";
 
@@ -77,7 +77,7 @@ export function TrendChart({
   label,
   detailLabel,
   secondaryLabel,
-  height = 320,
+  height = 232,
   dots = "end",
 }: {
   series: ChartPoint[];
@@ -109,8 +109,8 @@ export function TrendChart({
   const max = Math.max(...values);
   // Tight price band so the line has room to move — avoid a flat strip at the top.
   const span = max - min || max * 0.08 || 1;
-  const lo = Math.max(0, min - span * 0.35);
-  const hi = max + span * 0.2;
+  const lo = Math.max(0, min - span * 0.28);
+  const hi = max + span * 0.16;
 
   const domOf = (point: ChartPoint) => {
     const raw = point.daysOnMarket ?? point.secondary;
@@ -129,17 +129,17 @@ export function TrendChart({
   });
   const showDays = dayTotals.some((total) => total > 0);
   const dayMax = showDays ? Math.max(...dayTotals, 1) : 1;
-  // Bars stay in the lower third so they don't compete with the price line.
-  const dayHi = dayMax * 3.1;
+  // Keep bars in the lower band so they support the price line without crowding it.
+  const dayHi = dayMax * 2.55;
 
   const width = 720;
-  const inset = { top: 18, right: showDays ? 46 : 16, bottom: 38, left: 58 };
+  const inset = { top: 10, right: showDays ? 34 : 10, bottom: 26, left: 44 };
   const plotW = width - inset.left - inset.right;
   const plotH = height - inset.top - inset.bottom;
   const baseY = inset.top + plotH;
 
   const group = plotW / points.length;
-  const barW = Math.min(11, Math.max(3.5, group * 0.38));
+  const barW = Math.min(9, Math.max(3, group * 0.32));
   const xCenter = (i: number) => inset.left + group * i + group / 2;
   const yPrice = (value: number) => inset.top + plotH - ((value - lo) / (hi - lo)) * plotH;
   const yDays = (value: number) => inset.top + plotH - (value / dayHi) * plotH;
@@ -152,14 +152,15 @@ export function TrendChart({
   const line = smoothLinePath(priceCoords);
   const area = smoothAreaPath(priceCoords, baseY);
 
-  const priceTicks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
-  const dayTicks = showDays ? Array.from({ length: 4 }, (_, i) => (dayHi * i) / 3) : [];
+  const priceTicks = Array.from({ length: 4 }, (_, i) => lo + ((hi - lo) * i) / 3);
+  // Label the real DOM scale (not the inflated plot scale) so the right axis stays readable.
+  const dayTicks = showDays ? Array.from({ length: 3 }, (_, i) => (dayMax * i) / 2) : [];
 
   const first = values[0];
   const last = values[values.length - 1];
   const changePct = first > 0 ? ((last - first) / first) * 100 : 0;
   const hasPdom = points.some((point) => pdomOf(point) != null);
-  const labelEvery = Math.max(1, Math.ceil(points.length / 7));
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
 
   // Smooth each continuous PDOM run so gaps stay as breaks, not invented spans.
   let pdomLine = "";
@@ -184,28 +185,35 @@ export function TrendChart({
   void secondaryLabel;
 
   return (
-    <figure className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-ink-muted">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-5 rounded-full" style={{ background: PRICE_COLOR }} />
-          {label}
-        </span>
+    <figure className="space-y-2.5">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <LegendChip
+          swatch={<span className="h-0.5 w-3.5 rounded-full sm:w-4" style={{ background: PRICE_COLOR }} />}
+          label={label}
+        />
         {showDays && (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: DOM_COLOR }} />
-            Days on Market
-          </span>
+          <LegendChip
+            swatch={
+              <span
+                className="h-2 w-2 rounded-[2px] sm:h-2.5 sm:w-2.5 sm:rounded-[3px]"
+                style={{ background: DOM_COLOR }}
+              />
+            }
+            label="Days on Market"
+            shortLabel="DOM"
+          />
         )}
         {hasPdom && (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-0.5 w-5 rounded-full" style={{ background: PDOM_COLOR }} />
-            Property Days on Market
-          </span>
+          <LegendChip
+            swatch={<span className="h-0.5 w-3.5 rounded-full sm:w-4" style={{ background: PDOM_COLOR }} />}
+            label="Property Days on Market"
+            shortLabel="PDOM"
+          />
         )}
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-auto w-full"
+        className="h-[168px] w-full sm:h-[210px] lg:h-[232px]"
         role="img"
         aria-label={`${label} from ${formatMonthLabel(points[0].month)} to ${formatMonthLabel(points[points.length - 1].month)}, changing ${changePct >= 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} percent.${showDays ? " Also shows days on market." : ""}`}
         onMouseLeave={() => {
@@ -215,19 +223,19 @@ export function TrendChart({
       >
         <defs>
           <linearGradient id={`price-fill-${gradId}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={PRICE_COLOR} stopOpacity="0.22" />
-            <stop offset="55%" stopColor={PRICE_COLOR} stopOpacity="0.06" />
+            <stop offset="0%" stopColor={PRICE_COLOR} stopOpacity="0.18" />
+            <stop offset="50%" stopColor={PRICE_COLOR} stopOpacity="0.05" />
             <stop offset="100%" stopColor={PRICE_COLOR} stopOpacity="0" />
           </linearGradient>
           <linearGradient id={`dom-fill-${gradId}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={DOM_COLOR} stopOpacity="0.95" />
-            <stop offset="100%" stopColor={DOM_COLOR} stopOpacity="0.55" />
+            <stop offset="0%" stopColor={DOM_COLOR} stopOpacity="0.92" />
+            <stop offset="100%" stopColor={DOM_COLOR} stopOpacity="0.48" />
           </linearGradient>
           <filter id="trend-tip-shadow" x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.18" />
           </filter>
           <clipPath id={`plot-clip-${gradId}`}>
-            <rect x={inset.left} y={inset.top} width={plotW} height={plotH} />
+            <rect x={inset.left} y={inset.top} width={plotW} height={plotH} rx="2" />
           </clipPath>
         </defs>
 
@@ -238,15 +246,16 @@ export function TrendChart({
               x2={width - inset.right}
               y1={yPrice(tick)}
               y2={yPrice(tick)}
-              stroke="var(--color-line)"
+              stroke="#ececec"
               strokeWidth="1"
-              strokeDasharray="4 4"
+              strokeDasharray="3 4"
             />
             <text
-              x={inset.left - 10}
-              y={yPrice(tick) + 3.5}
+              x={inset.left - 8}
+              y={yPrice(tick) + 3}
               textAnchor="end"
-              className="fill-[var(--color-ink-subtle)] text-[10px]"
+              fontSize="9"
+              fill="#9fa3aa"
             >
               {formatPriceCompact(tick)}
             </text>
@@ -256,10 +265,11 @@ export function TrendChart({
         {dayTicks.map((tick) => (
           <text
             key={`dom-${tick}`}
-            x={width - inset.right + 10}
-            y={yDays(tick) + 3.5}
+            x={width - inset.right + 8}
+            y={yDays(tick) + 3}
             textAnchor="start"
-            className="fill-[var(--color-ink-subtle)] text-[10px]"
+            fontSize="9"
+            fill="#9fa3aa"
           >
             {Math.round(tick)}
           </text>
@@ -283,7 +293,7 @@ export function TrendChart({
                       y={baseY - domH}
                       width={barW}
                       height={Math.max(domH, 1)}
-                      rx={2.5}
+                      rx={2}
                       fill={`url(#dom-fill-${gradId})`}
                     />
                   )}
@@ -293,9 +303,9 @@ export function TrendChart({
                       y={baseY - domH - tealH}
                       width={barW}
                       height={Math.max(tealH, 1)}
-                      rx={2.5}
+                      rx={2}
                       fill={PDOM_COLOR}
-                      opacity={0.85}
+                      opacity={0.8}
                     />
                   )}
                 </g>
@@ -307,7 +317,7 @@ export function TrendChart({
               d={pdomLine}
               fill="none"
               stroke={PDOM_COLOR}
-              strokeWidth="2"
+              strokeWidth="1.75"
               strokeLinecap="round"
               strokeLinejoin="round"
               opacity={active === null ? 0.95 : 0.7}
@@ -319,7 +329,7 @@ export function TrendChart({
             d={line}
             fill="none"
             stroke={PRICE_COLOR}
-            strokeWidth="2.75"
+            strokeWidth="2.4"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -331,8 +341,8 @@ export function TrendChart({
             x2={xCenter(active)}
             y1={inset.top}
             y2={baseY}
-            stroke="var(--color-ink)"
-            strokeOpacity="0.12"
+            stroke="#151515"
+            strokeOpacity="0.1"
             strokeWidth="1"
           />
         )}
@@ -373,17 +383,17 @@ export function TrendChart({
                 <circle
                   cx={cx}
                   cy={cy}
-                  r={active === i ? 5 : 3.5}
+                  r={active === i ? 4.5 : 3}
                   fill={PRICE_COLOR}
                   stroke="#ffffff"
-                  strokeWidth="2"
+                  strokeWidth="1.75"
                 />
               ) : null}
               {hasPdom && pdom != null && (active === i || i === points.length - 1) ? (
                 <circle
                   cx={cx}
                   cy={yDays(pdom)}
-                  r={active === i ? 4 : 3}
+                  r={active === i ? 3.5 : 2.5}
                   fill={PDOM_COLOR}
                   stroke="#ffffff"
                   strokeWidth="1.5"
@@ -398,9 +408,10 @@ export function TrendChart({
             <text
               key={`label-${point.month}`}
               x={xCenter(i)}
-              y={height - 12}
+              y={height - 8}
               textAnchor="middle"
-              className="fill-[var(--color-ink-subtle)] text-[9px]"
+              fontSize="9"
+              fill="#9fa3aa"
             >
               {axisMonth(point.month)}
             </text>
@@ -440,6 +451,30 @@ export function TrendChart({
         </table>
       </figcaption>
     </figure>
+  );
+}
+
+function LegendChip({
+  swatch,
+  label,
+  shortLabel,
+}: {
+  swatch: ReactNode;
+  label: string;
+  shortLabel?: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-alt px-2 py-1 text-[10px] font-medium text-ink-muted sm:gap-1.5 sm:px-2.5 sm:text-[11px]">
+      {swatch}
+      {shortLabel ? (
+        <>
+          <span className="sm:hidden">{shortLabel}</span>
+          <span className="hidden sm:inline">{label}</span>
+        </>
+      ) : (
+        label
+      )}
+    </span>
   );
 }
 
