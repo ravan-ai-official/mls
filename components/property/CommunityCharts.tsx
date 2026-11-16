@@ -1,24 +1,34 @@
 "use client";
 
 import { useId, useState } from "react";
+import { smoothAreaPath, smoothLinePath } from "@/lib/utils/chartPath";
 import { formatPrice } from "@/lib/utils/format";
 
 const TYPE_COLORS = ["#1e3a5f", "#c7a45a", "#6f7682", "#151515", "#d6d3cd", "#8aa0b8"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MEDIAN_COLOR = "#1b2e4b";
+const AVERAGE_COLOR = "#c7a45a";
 
 type Tip = { x: number; y: number; lines: string[] };
 
 function ChartTooltip({ tip, width }: { tip: Tip | null; width: number }) {
   if (!tip) return null;
-  const boxW = Math.max(...tip.lines.map((line) => line.length)) * 7.2 + 20;
-  const boxH = tip.lines.length * 16 + 14;
+  const boxW = Math.max(...tip.lines.map((line) => line.length)) * 7.2 + 24;
+  const boxH = tip.lines.length * 17 + 16;
   const x = Math.min(Math.max(8, tip.x - boxW / 2), width - boxW - 8);
-  const y = Math.max(8, tip.y - boxH - 12);
+  const y = Math.max(8, tip.y - boxH - 14);
   return (
     <g pointerEvents="none">
-      <rect x={x} y={y} width={boxW} height={boxH} rx={6} fill="#151515" opacity="0.92" />
+      <rect x={x} y={y} width={boxW} height={boxH} rx={8} fill="#151515" opacity="0.94" />
       {tip.lines.map((line, index) => (
-        <text key={line} x={x + 10} y={y + 18 + index * 16} fontSize="11" fill="#ffffff">
+        <text
+          key={`${index}-${line}`}
+          x={x + 12}
+          y={y + 20 + index * 17}
+          fontSize="11"
+          fill={index === 0 ? "#ffffff" : "rgba(255,255,255,0.82)"}
+          fontWeight={index === 0 ? 600 : 400}
+        >
           {line}
         </text>
       ))}
@@ -45,6 +55,7 @@ export function TrendChart({
   points: Array<{ month: string; median: number; mean: number | null }>;
   city: string | null;
 }) {
+  const gradId = useId().replace(/:/g, "");
   const [tip, setTip] = useState<Tip | null>(null);
   const [active, setActive] = useState<number | null>(null);
   const width = 560;
@@ -55,22 +66,33 @@ export function TrendChart({
   const bottom = 32;
   const innerW = width - left - right;
   const innerH = height - top - bottom;
+  const baseY = top + innerH;
   const values = points.flatMap((point) =>
     point.mean !== null ? [point.median, point.mean] : [point.median],
   );
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const span = max - min || 1;
-  const yOf = (value: number) => top + innerH - ((value - min) / span) * innerH;
+  const span = max - min || max * 0.08 || 1;
+  const lo = Math.max(0, min - span * 0.2);
+  const hi = max + span * 0.15;
+  const yOf = (value: number) => top + innerH - ((value - lo) / (hi - lo)) * innerH;
   const xOf = (index: number) =>
     left + (points.length <= 1 ? innerW / 2 : (index / (points.length - 1)) * innerW);
-  const median = points.map((point, index) => `${xOf(index)},${yOf(point.median)}`).join(" ");
-  const area = `${left},${top + innerH} ${median} ${xOf(points.length - 1)},${top + innerH}`;
-  const mean = points
-    .map((point, index) => (point.mean === null ? null : `${xOf(index)},${yOf(point.mean)}`))
-    .filter((point): point is string => point !== null)
-    .join(" ");
-  const ticks = [0, 1, 2, 3].map((step) => min + (span * step) / 3);
+
+  const medianCoords = points.map((point, index) => ({
+    x: xOf(index),
+    y: yOf(point.median),
+  }));
+  const meanCoords = points
+    .map((point, index) =>
+      point.mean === null ? null : { x: xOf(index), y: yOf(point.mean) },
+    )
+    .filter((point): point is { x: number; y: number } => point !== null);
+  const medianLine = smoothLinePath(medianCoords);
+  const medianArea = smoothAreaPath(medianCoords, baseY);
+  const meanLine = smoothLinePath(meanCoords);
+  const ticks = [0, 1, 2, 3, 4].map((step) => lo + ((hi - lo) * step) / 4);
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
 
   return (
     <div className="rounded-2xl border border-line p-4 sm:p-5">
@@ -79,10 +101,18 @@ export function TrendChart({
       </h3>
       <div className="mb-3 flex flex-wrap gap-4 text-[12px] text-ink-muted">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 bg-navy" /> Median
+          <span
+            className="inline-block h-0.5 w-5 rounded-full"
+            style={{ background: MEDIAN_COLOR }}
+          />{" "}
+          Median
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-gold" /> Average
+          <span
+            className="inline-block h-0.5 w-5 rounded-full border-t-2 border-dashed"
+            style={{ borderColor: AVERAGE_COLOR }}
+          />{" "}
+          Average
         </span>
       </div>
       <svg
@@ -95,22 +125,69 @@ export function TrendChart({
           setActive(null);
         }}
       >
+        <defs>
+          <linearGradient id={`community-price-fill-${gradId}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={MEDIAN_COLOR} stopOpacity="0.22" />
+            <stop offset="55%" stopColor={MEDIAN_COLOR} stopOpacity="0.06" />
+            <stop offset="100%" stopColor={MEDIAN_COLOR} stopOpacity="0" />
+          </linearGradient>
+        </defs>
         {ticks.map((tick) => (
           <g key={tick}>
-            <line x1={left} x2={width - right} y1={yOf(tick)} y2={yOf(tick)} stroke="#f0f0f0" />
+            <line
+              x1={left}
+              x2={width - right}
+              y1={yOf(tick)}
+              y2={yOf(tick)}
+              stroke="#ececec"
+              strokeDasharray="4 4"
+            />
             <text x={left - 8} y={yOf(tick) + 3} textAnchor="end" fontSize="11" fill="#9fa3aa">
               {compactMoney(tick)}
             </text>
           </g>
         ))}
-        <polygon points={area} fill="#1e3a5f" opacity="0.15" />
-        <polyline fill="none" stroke="#1e3a5f" strokeWidth="2" points={median} />
-        {mean ? (
-          <polyline fill="none" stroke="#c7a45a" strokeWidth="2" strokeDasharray="4 4" points={mean} />
+        <path d={medianArea} fill={`url(#community-price-fill-${gradId})`} />
+        <path
+          d={medianLine}
+          fill="none"
+          stroke={MEDIAN_COLOR}
+          strokeWidth="2.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {meanLine ? (
+          <path
+            d={meanLine}
+            fill="none"
+            stroke={AVERAGE_COLOR}
+            strokeWidth="2"
+            strokeDasharray="5 4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+        {active !== null ? (
+          <line
+            x1={xOf(active)}
+            x2={xOf(active)}
+            y1={top}
+            y2={baseY}
+            stroke="#151515"
+            strokeOpacity="0.12"
+            strokeWidth="1"
+          />
         ) : null}
         {points.map((point, index) =>
-          index % Math.ceil(points.length / 6) === 0 || index === points.length - 1 ? (
-            <text key={point.month} x={xOf(index)} y={height - 8} textAnchor="middle" fontSize="11" fill="#9fa3aa">
+          index % labelEvery === 0 || index === points.length - 1 ? (
+            <text
+              key={point.month}
+              x={xOf(index)}
+              y={height - 8}
+              textAnchor="middle"
+              fontSize="11"
+              fill="#9fa3aa"
+            >
               {monthLabel(point.month)}
             </text>
           ) : null,
@@ -118,12 +195,14 @@ export function TrendChart({
         {points.map((point, index) => {
           const x = xOf(index);
           const y = yOf(point.median);
+          const showDot = active === index || index === points.length - 1;
           return (
             <g key={`point-${point.month}`}>
-              <circle
-                cx={x}
-                cy={y}
-                r={12}
+              <rect
+                x={x - (points.length <= 1 ? 20 : innerW / (points.length - 1) / 2)}
+                y={top}
+                width={points.length <= 1 ? 40 : innerW / (points.length - 1)}
+                height={innerH}
                 fill="transparent"
                 className="cursor-pointer"
                 onMouseEnter={() => {
@@ -133,13 +212,24 @@ export function TrendChart({
                     y,
                     lines: [
                       monthLabel(point.month),
-                      `Median ${formatPrice(point.median)}`,
-                      point.mean !== null ? `Average ${formatPrice(point.mean)}` : "Average —",
+                      `Median  ${formatPrice(point.median)}`,
+                      point.mean !== null
+                        ? `Average  ${formatPrice(point.mean)}`
+                        : "Average  —",
                     ],
                   });
                 }}
               />
-              <circle cx={x} cy={y} r={active === index ? 4.5 : 3} fill="#1e3a5f" />
+              {showDot ? (
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={active === index ? 5 : 3.5}
+                  fill={MEDIAN_COLOR}
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                />
+              ) : null}
             </g>
           );
         })}
