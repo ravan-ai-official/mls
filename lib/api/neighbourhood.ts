@@ -200,6 +200,8 @@ export interface CensusProfile {
   educationDistribution: CensusDistributionRow[];
   ethnicityDistribution: CensusDistributionRow[];
   languageDistribution: CensusDistributionRow[];
+  constructionDistribution: CensusDistributionRow[];
+  occupationDistribution: CensusDistributionRow[];
   disclaimer: string | null;
 }
 
@@ -275,6 +277,10 @@ function parseCensus(profile: Record<string, unknown> | null | undefined): Censu
     educationDistribution: distributionRows(profile.educationDistribution),
     ethnicityDistribution: distributionRows(profile.ethnicityDistribution),
     languageDistribution: distributionRows(profile.languageDistribution),
+    constructionDistribution: distributionRows(
+      profile.constructionDistribution ?? profile.periodOfConstructionDistribution,
+    ),
+    occupationDistribution: distributionRows(profile.occupationDistribution),
     disclaimer,
   };
 }

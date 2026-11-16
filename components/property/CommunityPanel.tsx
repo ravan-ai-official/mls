@@ -229,6 +229,14 @@ function insightsFromCensus(census: CensusProfile | null): {
       census.languageDistribution.length > 0
         ? census.languageDistribution
         : REFERENCE_DISTRIBUTIONS.Language,
+    Construction:
+      census.constructionDistribution.length > 0
+        ? census.constructionDistribution
+        : REFERENCE_DISTRIBUTIONS.Construction,
+    Occupation:
+      census.occupationDistribution.length > 0
+        ? census.occupationDistribution
+        : REFERENCE_DISTRIBUTIONS.Occupation,
   };
 
   return {

@@ -59,4 +59,21 @@ export const REFERENCE_DISTRIBUTIONS: Record<InsightCategory, InsightDistributio
     { range: "Cantonese", value: 7 },
     { range: "Other", value: 14 },
   ],
+  Construction: [
+    { range: "Pre-1960", value: 8 },
+    { range: "1960-79", value: 14 },
+    { range: "1980-99", value: 22 },
+    { range: "2000-10", value: 28 },
+    { range: "2011+", value: 28 },
+  ],
+  Occupation: [
+    { range: "Management", value: 12 },
+    { range: "Business", value: 18 },
+    { range: "Sciences", value: 14 },
+    { range: "Health", value: 9 },
+    { range: "Education", value: 11 },
+    { range: "Sales/Service", value: 22 },
+    { range: "Trades", value: 8 },
+    { range: "Other", value: 6 },
+  ],
 };

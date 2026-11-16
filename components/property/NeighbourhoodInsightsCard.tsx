@@ -15,7 +15,9 @@ export type InsightCategory =
   | "Age"
   | "Education"
   | "Ethnicity"
-  | "Language";
+  | "Language"
+  | "Construction"
+  | "Occupation";
 
 const CATEGORIES: InsightCategory[] = [
   "Household Income",
@@ -23,6 +25,8 @@ const CATEGORIES: InsightCategory[] = [
   "Education",
   "Ethnicity",
   "Language",
+  "Construction",
+  "Occupation",
 ];
 
 const CATEGORY_TITLES: Record<InsightCategory, string> = {
@@ -31,6 +35,8 @@ const CATEGORY_TITLES: Record<InsightCategory, string> = {
   Education: "Education Distribution",
   Ethnicity: "Ethnicity Distribution",
   Language: "Language Distribution",
+  Construction: "Construction Period Distribution",
+  Occupation: "Occupation Distribution",
 };
 
 /**
@@ -125,7 +131,7 @@ function DistributionBars({
   const [tip, setTip] = useState<{ x: number; y: number; label: string; value: number } | null>(null);
   const width = 560;
   const rowH = 28;
-  const labelW = 78;
+  const labelW = 96;
   const right = 8;
   const height = rows.length * rowH + 28;
   const chartW = width - labelW - right;
@@ -134,7 +140,8 @@ function DistributionBars({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="h-[200px] w-full"
+      className="w-full"
+      style={{ height: Math.max(200, height) }}
       role="img"
       aria-label="Distribution chart"
       onMouseLeave={() => setTip(null)}
