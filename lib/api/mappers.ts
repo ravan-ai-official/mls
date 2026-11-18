@@ -783,10 +783,29 @@ export function mapPropertyTypeFacet(raw: BackendPropertyTypeFacet): PropertyTyp
   };
 }
 
+/** Display name for nav / account UI when the profile name fields are sparse. */
+export function displayNameFromProfile(
+  raw: Pick<BackendUserProfile, "name" | "first_name" | "last_name" | "email">,
+): string {
+  const composed = [raw.first_name, raw.last_name]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const named = (raw.name ?? "").trim() || composed;
+  if (named) return named;
+  const email = (raw.email ?? "").trim();
+  if (!email) return "";
+  const local = email.split("@")[0] ?? email;
+  return local
+    .replace(/[._+-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function mapUser(raw: BackendUserProfile): AuthUser {
   return {
     id: raw.id,
-    name: raw.name,
+    name: displayNameFromProfile(raw),
     email: raw.email,
     phone: raw.phone,
     phoneVerified: raw.phone_verified,

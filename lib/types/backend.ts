@@ -278,6 +278,9 @@ export interface BackendValuationSuggestion {
 export interface BackendUserProfile {
   id: number;
   name: string;
+  /** Present on current backends; used when `name` is blank. */
+  first_name?: string;
+  last_name?: string;
   email: string;
   phone: string | null;
   phone_verified: boolean;

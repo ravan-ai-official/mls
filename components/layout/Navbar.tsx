@@ -263,6 +263,19 @@ export function Navbar({
 }
 
 /** Account dropdown. Dismissal, Escape and focus return come from <Menu>. */
+function avatarInitials(name: string, email: string): string {
+  const fromName = name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  if (fromName) return fromName;
+  const local = (email.split("@")[0] ?? "").replace(/[^a-zA-Z0-9]/g, "");
+  return (local.slice(0, 2) || "?").toUpperCase();
+}
+
 function UserMenu({
   name,
   canUseStudio,
@@ -274,14 +287,8 @@ function UserMenu({
   email: string;
   onSignOut: () => void;
 }) {
-  const initials =
-    name
-      .split(" ")
-      .map((part) => part[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || "?";
+  const label = name.trim() || email;
+  const initials = avatarInitials(name, email);
 
   return (
     <Menu
@@ -292,14 +299,14 @@ function UserMenu({
           className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-caption font-semibold text-white transition-colors hover:bg-navy-deep"
         >
           <span aria-hidden="true">{initials}</span>
-          <span className="sr-only">Account menu for {name}</span>
+          <span className="sr-only">Account menu for {label}</span>
         </button>
       )}
     >
       {(close) => (
         <>
           <div className="border-b border-line px-4 py-3">
-            <p className="truncate text-small font-medium text-ink">{name}</p>
+            <p className="truncate text-small font-medium text-ink">{label}</p>
             <p className="truncate text-caption text-ink-muted">{email}</p>
           </div>
           <MenuItem href="/watched" LinkComponent={Link} onSelect={close}>
