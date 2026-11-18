@@ -5,7 +5,6 @@ import { Hero } from "@/components/home/Hero";
 import { BuyersIncentives } from "@/components/home/sections/BuyersIncentives";
 import { DailyNews } from "@/components/home/sections/DailyNews";
 import { FeaturedListings } from "@/components/home/sections/FeaturedListings";
-import { GtaMarketDeals } from "@/components/home/sections/GtaMarketDeals";
 import { HighReturnProperties } from "@/components/home/sections/HighReturnProperties";
 import { HowItWorks } from "@/components/home/sections/HowItWorks";
 import { MarketIntelligence } from "@/components/home/sections/MarketIntelligence";
@@ -37,7 +36,7 @@ import { SECTION_IDS, type SectionId, type SiteSection } from "@/lib/site/types"
  *
  *   hero → buy/rent/precon/sell → trending communities → featured MLS
  *   listings → property types → new precon → today's new listings → high
- *   return → GTA market deals → sold below last purchase → top-rated schools
+ *   return → sold below last purchase → top-rated schools
  *   → buyer's incentives → market intelligence → neighbour alerts → smart
  *   alerts → thinking of selling → why HomeAtlas → research & insights →
  *   trusted connections → how it works → daily news → resources & guides
@@ -112,11 +111,8 @@ function HomeBlock({ section }: { section: SiteSection }) {
         </Live>
       );
     case "marketDeals":
-      return (
-        <Live fallback={<RailFallback title="GTA Market Deals" tone="alt" />}>
-          <GtaMarketDeals content={content} />
-        </Live>
-      );
+      // Removed from the public homepage — feed/cards were unreliable without photos.
+      return null;
     case "soldBelow":
       return (
         <Live fallback={<RailFallback title="Sold Below Last Purchase" />}>
