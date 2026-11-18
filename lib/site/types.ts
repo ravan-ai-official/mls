@@ -109,7 +109,7 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
   newPrecon: { label: "New preconstruction", summary: "Heading only. Projects come from the pre-construction list.", canHide: true },
   todaysNew: { label: "Today's new listings", summary: "Heading only. The 24-hour subtitle stays automatic so it never overclaims.", canHide: true },
   highReturn: { label: "High return", summary: "Heading and caption. Yield cards come from the investor feed.", canHide: true },
-  marketDeals: { label: "Market deals", summary: "Heading and caption. Deal cards come from the price-drop feed.", canHide: true },
+  marketDeals: { label: "Market deals", summary: "Heading only. Four keyword deal cards (Distress, Detached Under $1M, Power of Sale, Just Sold).", canHide: true },
   soldBelow: { label: "Sold below purchase", summary: "Heading only. Rows come from the sold-below feed.", canHide: true },
   schools: { label: "Top-rated schools", summary: "School cards, ratings, photos, and links.", canHide: true },
   incentives: { label: "Buyer incentives", summary: "Heading only. The programs themselves are edited under Incentives.", canHide: true },

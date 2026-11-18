@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { HeroFrame } from "@/components/home/HeroFrame";
 import { QuickActions } from "@/components/home/sections/QuickActions";
 import { AlertsCta } from "@/components/home/AlertsCta";
+import { GtaMarketDeals } from "@/components/home/sections/GtaMarketDeals";
 import { HowItWorks } from "@/components/home/sections/HowItWorks";
 import { NeighbourAlerts } from "@/components/home/sections/NeighbourAlerts";
 import { ResourcesGuides } from "@/components/home/sections/ResourcesGuides";
@@ -104,6 +105,7 @@ function SectionPreview({ id, content }: { id: SectionId; content: Record<string
     );
   }
   if (id === "quickActions") return <QuickActions content={content} />;
+  if (id === "marketDeals") return <GtaMarketDeals content={content} />;
   if (id === "schools") return <TopRatedSchools content={content} />;
   if (id === "neighbourAlerts") return <NeighbourAlerts content={content} />;
   if (id === "alertsCta") return <AlertsCta content={content} />;

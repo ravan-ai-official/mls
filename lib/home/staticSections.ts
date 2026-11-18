@@ -11,8 +11,6 @@
  * link to a matching search, never to /property/<id>.
  */
 
-import type { PropertyType } from "@/lib/home/sampleData";
-
 /* GTA MARKET DEALS (reference L548-588) */
 
 export type DealIcon = "distress" | "detached" | "powerOfSale" | "sold";
@@ -25,8 +23,8 @@ export interface MarketDeal {
   badge: string;
   badgeTone: DealBadgeTone;
   count: string;
-  /** /listings params (see lib/utils/searchParams.ts). */
-  query: { q?: string; type?: PropertyType; priceMax?: number; status?: string };
+  /** Curated `/homes/...` page or a listings search. */
+  href: string;
 }
 
 export const marketDeals: MarketDeal[] = [
@@ -37,7 +35,7 @@ export const marketDeals: MarketDeal[] = [
     badge: "Urgent",
     badgeTone: "gold",
     count: "24 listings",
-    query: { q: "distress" },
+    href: "/homes/distress-sale",
   },
   {
     title: "Detached Under $1M in GTA",
@@ -46,7 +44,7 @@ export const marketDeals: MarketDeal[] = [
     badge: "Value",
     badgeTone: "navy",
     count: "31 listings",
-    query: { type: "Detached", priceMax: 1000000 },
+    href: "/homes/detached-under-1m",
   },
   {
     title: "Power of Sale",
@@ -55,7 +53,7 @@ export const marketDeals: MarketDeal[] = [
     badge: "Legal",
     badgeTone: "dark",
     count: "12 listings",
-    query: { q: "power of sale" },
+    href: "/homes/power-of-sale",
   },
   {
     title: "Just Sold",
@@ -64,7 +62,7 @@ export const marketDeals: MarketDeal[] = [
     badge: "Recent",
     badgeTone: "gold",
     count: "189 sold",
-    query: { status: "Sold" },
+    href: "/listings?status=Sold",
   },
 ];
 
