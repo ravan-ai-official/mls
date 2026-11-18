@@ -124,7 +124,7 @@ export const newsArticles: NewsArticle[] = [
   { title: "GTA Home Sales Rise 8.3% in August as Buyers Return to Market", time: "2 hours ago", tag: null, img: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&h=220&fit=crop" },
   { title: "Bank of Canada Signals Another Rate Cut as Inflation Eases to 1.9%", time: "9 hours ago", tag: "Mortgage Rates", img: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=220&fit=crop" },
   { title: "Pre-Construction Condo Assignments Surge 42% as Investors Pivot Strategy", time: "Yesterday", tag: null, img: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400&h=220&fit=crop" },
-  { title: "Ontario Announces New Affordable Housing Measures Including FHSA Limit Increase", time: "3 days ago", tag: "Policy", img: null },
+  { title: "Ontario Announces New Affordable Housing Measures Including FHSA Limit Increase", time: "3 days ago", tag: "Policy", img: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&h=220&fit=crop" },
 ];
 
 /* RESOURCES & GUIDES (reference L1205-1208) */
