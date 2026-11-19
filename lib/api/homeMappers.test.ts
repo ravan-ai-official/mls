@@ -37,6 +37,7 @@ describe("mapInvestorPicks", () => {
       ],
       calc_basis: { note: "Estimates from asking rents; excludes financing." },
       generated_at: "2026-09-24T10:00:00Z",
+      pinned_count: 1,
     });
     expect(feed.picks).toHaveLength(1);
     expect(feed.picks[0]).toMatchObject({
@@ -47,6 +48,7 @@ describe("mapInvestorPicks", () => {
       estimatedMonthlyRent: 2900,
       compsUsed: 7,
     });
+    expect(feed.pinnedCount).toBe(1);
     expect(feed.basisNote).toBe(
       "Estimates from asking rents; excludes financing.",
     );
@@ -55,6 +57,7 @@ describe("mapInvestorPicks", () => {
   it("tolerates garbage", () => {
     expect(mapInvestorPicks(null)).toEqual({
       picks: [],
+      pinnedCount: 0,
       basisNote: null,
       generatedAt: null,
     });

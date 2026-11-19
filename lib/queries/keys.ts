@@ -90,6 +90,8 @@ export const qk = {
     siteRevisions: (key: string) => ["me", userId, "studio", "site", key, "revisions"] as const,
     featured: (q: string) => ["me", userId, "studio", "featured", normText(q)] as const,
     featuredAll: ["me", userId, "studio", "featured"] as const,
+    highReturn: (q: string) => ["me", userId, "studio", "high-return", normText(q)] as const,
+    highReturnAll: ["me", userId, "studio", "high-return"] as const,
     editorial: (resource: string) => ["me", userId, "studio", "editorial", resource] as const,
     /** Under "me" only because sold data is sign-in gated: sign-out drops it. */
     recentSales: (city: string, days: number, page: number) =>

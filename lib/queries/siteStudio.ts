@@ -35,6 +35,20 @@ export interface FeaturedBody {
   results: FeaturedBody["pins"];
 }
 
+export interface HighReturnBody {
+  pins: Array<{
+    listing_key: string;
+    address: string;
+    city: string;
+    list_price: string | null;
+    standard_status: string;
+    is_high_return: boolean;
+    high_return_order: number | null;
+    high_return_until: string | null;
+  }>;
+  results: HighReturnBody["pins"];
+}
+
 export interface EditorialBody {
   results: Array<Record<string, unknown>>;
 }
@@ -78,6 +92,24 @@ export function useFeaturedListings(initial: FeaturedBody, submitted: string) {
     enabled: keys !== null,
     queryFn: ({ signal }) =>
       fetchJson<FeaturedBody>(`/api/studio/featured?q=${encodeURIComponent(submitted)}`, {
+        signal,
+        cache: "no-store",
+        fallback: "Could not search listings.",
+      }),
+    initialData: submitted === "" ? initial : undefined,
+    initialDataUpdatedAt: submitted === "" ? seededAt : undefined,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useHighReturnListings(initial: HighReturnBody, submitted: string) {
+  const keys = useUserKeys();
+  const [seededAt] = useState(() => Date.now());
+  return useQuery({
+    queryKey: (keys ?? absent).highReturn(submitted),
+    enabled: keys !== null,
+    queryFn: ({ signal }) =>
+      fetchJson<HighReturnBody>(`/api/studio/high-return?q=${encodeURIComponent(submitted)}`, {
         signal,
         cache: "no-store",
         fallback: "Could not search listings.",

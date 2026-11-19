@@ -103,6 +103,8 @@ export interface InvestorPick {
 
 export interface InvestorPicksFeed {
   picks: InvestorPick[];
+  /** Admin-pinned rows leading the rail (remainder filled by yield rank). */
+  pinnedCount: number;
   /** calc_basis.note — the disclosure shown under the heading. */
   basisNote: string | null;
   generatedAt: string | null;
@@ -133,6 +135,7 @@ export function mapInvestorPicks(payload: unknown): InvestorPicksFeed {
   const p = record(payload);
   return {
     picks,
+    pinnedCount: int(p.pinned_count) ?? 0,
     basisNote: str(record(p.calc_basis).note),
     generatedAt: str(p.generated_at),
   };
