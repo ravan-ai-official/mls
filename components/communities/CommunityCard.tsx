@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/States";
 import { communities as sampleCommunities } from "@/lib/home/sampleData";
 import type { CityCatalogStat } from "@/lib/types/domain";
 import { EMPTY, formatNumber, formatPriceCompact } from "@/lib/utils/format";
+import { buildListingHref } from "@/lib/utils/searchParams";
 
 const SAMPLE_IMAGE_BY_CITY = new Map(
   sampleCommunities.map((c) => [c.name.toLowerCase(), c.image] as const),
@@ -45,7 +46,8 @@ export function CommunityCard({
   const sold = stats?.soldCount90d ?? null;
   const soldPrice = stats?.avgSoldPrice90d ?? stats?.medianSoldPrice90d ?? null;
   const soldPriceLabel = stats?.avgSoldPrice90d != null ? "Avg. sold price" : "Median sold price";
-  const encoded = encodeURIComponent(city);
+  const listingsHref = buildListingHref({ city });
+  const soldHref = buildListingHref({ city, status: "Sold" });
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-surface border border-line bg-surface transition-shadow hover:shadow-card-hover">
@@ -92,10 +94,10 @@ export function CommunityCard({
         </dl>
 
         <div className="mt-auto grid grid-cols-2 gap-3 pt-5">
-          <LinkButton href={`/listings?city=${encoded}`} variant="dark" size="md">
+          <LinkButton href={listingsHref} variant="dark" size="md">
             View Listings
           </LinkButton>
-          <LinkButton href={`/market-trends?city=${encoded}`} variant="secondary" size="md">
+          <LinkButton href={soldHref} variant="secondary" size="md">
             Sold Data
           </LinkButton>
         </div>
