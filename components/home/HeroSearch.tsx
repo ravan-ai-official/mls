@@ -1,5 +1,6 @@
 "use client";
 
+import { LayoutGroup, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode, type FormEvent } from "react";
 import { AiSearchBox, SparkleIcon } from "@/components/search/AiSearchBox";
@@ -17,6 +18,7 @@ import {
 import { listOf } from "@/lib/site/read";
 import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { looksLikePostal, parsePostalList } from "@/lib/utils/postal";
+import { cn } from "@/lib/utils/cn";
 
 const DEFAULT_TRY_PROMPTS = [
   "3 bed condo under $900K near a subway in Toronto",
@@ -82,62 +84,123 @@ const INTENT_QUERY: Record<HeroIntentValue, { status?: string; tx?: string }> = 
 
 type HeroMode = "ai" | "filters";
 
+const TABS = [
+  { value: "ai", label: "AI Search" },
+  { value: "filters", label: "Filters" },
+] as const;
+
+const panelTransition = {
+  duration: 0.38,
+  ease: [0.22, 1, 0.36, 1] as const,
+};
+
 /**
  * Hero search: AI search (a sentence → filters) or the classic filter form.
  * Both land on the same /listings URL-driven results page.
  */
 export function HeroSearch({ content }: { content?: Record<string, unknown> } = {}) {
   const [mode, setMode] = useState<HeroMode>("ai");
+  const [direction, setDirection] = useState(1);
   const tryPrompts = listOf<string>(content, "tryPrompts", DEFAULT_TRY_PROMPTS).filter(
     (prompt) => typeof prompt === "string" && prompt.trim().length > 0,
   );
 
-  return (
-    <div className="w-full max-w-[540px] rounded-surface bg-surface p-6 shadow-pop sm:p-7">
-      <div role="tablist" aria-label="Search mode" className="mb-5 grid grid-cols-2 gap-1 rounded-control bg-surface-alt p-1">
-        {(
-          [
-            { value: "ai", label: "AI Search" },
-            { value: "filters", label: "Filters" },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={mode === tab.value}
-            onClick={() => setMode(tab.value)}
-            className={
-              mode === tab.value
-                ? "flex h-9 items-center justify-center gap-1.5 rounded-control bg-surface text-small font-semibold text-ink shadow-sm"
-                : "flex h-9 items-center justify-center gap-1.5 rounded-control text-small text-ink-muted transition-colors hover:text-ink"
-            }
-          >
-            {tab.value === "ai" && <SparkleIcon className="text-gold-deep" />}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+  function selectMode(next: HeroMode) {
+    if (next === mode) return;
+    setDirection(next === "filters" ? 1 : -1);
+    setMode(next);
+  }
 
-      {mode === "ai" ? (
-        <div role="tabpanel">
-          <div className="mb-4">
-            <p className="text-small font-semibold text-ink">Describe the home you want</p>
-            <p className="text-caption text-ink-muted">
-              Plain English works — we turn it into filters you can adjust
-            </p>
-          </div>
-          <AiSearchBox
-            variant="hero"
-            examples={tryPrompts.length > 0 ? tryPrompts : DEFAULT_TRY_PROMPTS}
-          />
+  return (
+    <LayoutGroup id="hero-search">
+      <div className="w-full max-w-[540px] rounded-surface bg-surface p-6 shadow-pop sm:p-7">
+        <div
+          role="tablist"
+          aria-label="Search mode"
+          className="relative mb-5 grid grid-cols-2 gap-1 rounded-control bg-surface-alt p-1"
+        >
+          {TABS.map((tab) => {
+            const active = mode === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => selectMode(tab.value)}
+                className={cn(
+                  "relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-control text-small transition-colors",
+                  active ? "font-semibold text-ink" : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="hero-search-tab-pill"
+                    className="absolute inset-0 rounded-control bg-surface shadow-sm"
+                    transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  {tab.value === "ai" && <SparkleIcon className="text-gold-deep" />}
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      ) : (
-        <div role="tabpanel">
-          <FilterSearch content={content} />
+
+        {/*
+          Both panels share one grid cell so card height stays the max of the two —
+          switching tabs never resizes the form. Framer animates a soft drop/slide.
+        */}
+        <div className="relative grid overflow-hidden">
+          <motion.div
+            role="tabpanel"
+            aria-hidden={mode !== "ai"}
+            initial={false}
+            animate={
+              mode === "ai"
+                ? { opacity: 1, y: 0 }
+                : { opacity: 0, y: direction > 0 ? 16 : -16 }
+            }
+            transition={panelTransition}
+            className={cn(
+              "col-start-1 row-start-1",
+              mode === "ai" ? "pointer-events-auto z-10" : "pointer-events-none z-0",
+            )}
+          >
+            <div className="mb-4">
+              <p className="text-small font-semibold text-ink">Describe the home you want</p>
+              <p className="text-caption text-ink-muted">
+                Plain English works — we turn it into filters you can adjust
+              </p>
+            </div>
+            <AiSearchBox
+              variant="hero"
+              examples={tryPrompts.length > 0 ? tryPrompts : DEFAULT_TRY_PROMPTS}
+            />
+          </motion.div>
+
+          <motion.div
+            role="tabpanel"
+            aria-hidden={mode !== "filters"}
+            initial={false}
+            animate={
+              mode === "filters"
+                ? { opacity: 1, y: 0 }
+                : { opacity: 0, y: direction > 0 ? -16 : 16 }
+            }
+            transition={panelTransition}
+            className={cn(
+              "col-start-1 row-start-1",
+              mode === "filters" ? "pointer-events-auto z-10" : "pointer-events-none z-0",
+            )}
+          >
+            <FilterSearch content={content} />
+          </motion.div>
         </div>
-      )}
-    </div>
+      </div>
+    </LayoutGroup>
   );
 }
 
