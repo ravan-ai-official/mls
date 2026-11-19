@@ -49,11 +49,11 @@ export function HeroFrame({
         className="absolute inset-0 -z-10 bg-linear-to-r from-navy-deep/80 via-navy-deep/30 to-transparent"
         aria-hidden="true"
       />
-      <div className="container-page flex items-center py-12 sm:min-h-150 sm:py-16 lg:min-h-180 lg:py-20">
-        <div className="grid w-full items-center gap-10 lg:grid-cols-5 lg:gap-14">
+      <div className="container-page flex items-center py-8 sm:min-h-150 sm:py-16 lg:min-h-180 lg:py-20">
+        <div className="grid w-full items-center gap-7 sm:gap-10 lg:grid-cols-5 lg:gap-14">
           <div className="lg:col-span-2">
             <Eyebrow>{textOf(content, "eyebrow", "GTA property intelligence")}</Eyebrow>
-            <h1 className="mt-4 text-[clamp(2.25rem,1.3rem+4.05vw,4.5rem)] font-semibold leading-[0.95] tracking-[-0.02em] text-white">
+            <h1 className="mt-3 text-[clamp(2.1rem,1.2rem+4.05vw,4.5rem)] font-semibold leading-[0.95] tracking-[-0.02em] text-white sm:mt-4">
               {heading.map((line, index) => (
                 <span key={`${line}-${index}`}>
                   {index > 0 && <br />}
@@ -61,12 +61,12 @@ export function HeroFrame({
                 </span>
               ))}
             </h1>
-            <p className="mt-5 max-w-md text-body text-white/80">
+            <p className="mt-4 max-w-md text-body text-white/80 sm:mt-5">
               {textOf(content, "description", DEFAULT_DESCRIPTION)}
             </p>
             {children}
           </div>
-          <div className="lg:col-span-3 lg:flex lg:justify-end">
+          <div className="min-w-0 lg:col-span-3 lg:flex lg:justify-end">
             <HeroSearch content={content} />
           </div>
         </div>

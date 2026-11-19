@@ -115,11 +115,11 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
 
   return (
     <LayoutGroup id="hero-search">
-      <div className="w-full max-w-[540px] rounded-surface bg-surface p-6 shadow-pop sm:p-7">
+      <div className="w-full max-w-[540px] rounded-surface bg-surface p-3.5 shadow-pop sm:p-6 lg:p-7">
         <div
           role="tablist"
           aria-label="Search mode"
-          className="relative mb-5 grid grid-cols-2 gap-1 rounded-control bg-navy-tint p-1 ring-1 ring-navy/10"
+          className="relative mb-3.5 grid grid-cols-2 gap-1 rounded-control bg-navy-tint p-1 ring-1 ring-navy/10 sm:mb-5"
         >
           {TABS.map((tab) => {
             const active = mode === tab.value;
@@ -173,7 +173,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
               mode === "ai" ? "pointer-events-auto z-10" : "pointer-events-none z-0",
             )}
           >
-            <div className="mb-4">
+            <div className="mb-3 sm:mb-4">
               <p className="text-small font-semibold text-ink">Describe the home you want</p>
               <p className="text-caption text-ink-muted">
                 Plain English works — we turn it into filters you can adjust
@@ -270,7 +270,7 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:gap-3.5">
       <div>
         <p className="text-small font-semibold text-ink">Search listings</p>
         <p className="text-caption text-ink-muted">

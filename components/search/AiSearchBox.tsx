@@ -225,7 +225,7 @@ export function AiSearchBox({
         {multiline ? (
           <textarea
             id={id}
-            rows={variant === "panel" ? 2 : 3}
+            rows={variant === "panel" ? 2 : 2}
             maxLength={AI_QUERY_MAX_CHARS}
             value={text}
             onChange={(event) => setText(event.target.value)}
@@ -241,7 +241,7 @@ export function AiSearchBox({
               "box-border w-full min-w-0 max-w-full resize-none rounded-control border border-line bg-surface text-ink placeholder:text-ink-subtle focus:border-navy focus:outline-none",
               variant === "panel"
                 ? "px-3.5 py-2.5 text-small"
-                : "px-4 py-3 text-body",
+                : "min-h-[4.75rem] px-3 py-2.5 text-small sm:min-h-[6rem] sm:px-4 sm:py-3 sm:text-body",
             )}
           />
         ) : (
@@ -287,9 +287,9 @@ export function AiSearchBox({
       )}
 
       {hero && examples.length > 0 && (
-        <div className="mt-4">
-          <p className="mb-2 text-eyebrow uppercase text-ink-muted">Try</p>
-          <div className="flex flex-wrap gap-2">
+        <div className="mt-3 sm:mt-4">
+          <p className="mb-1.5 text-eyebrow uppercase text-ink-muted sm:mb-2">Try</p>
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {examples.map((example) => (
               <button
                 key={example}
@@ -299,7 +299,7 @@ export function AiSearchBox({
                   setText(example);
                   submit(example);
                 }}
-                className="rounded-full border border-line px-3 py-1.5 text-left text-caption text-ink transition-colors hover:border-gold hover:text-gold-deep disabled:opacity-50"
+                className="max-w-full rounded-full border border-line px-2.5 py-1 text-left text-[11px] leading-snug text-ink transition-colors hover:border-gold hover:text-gold-deep disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-caption"
               >
                 {example}
               </button>
