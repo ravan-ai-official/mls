@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AnnouncementBar } from "@/components/layout/AnnouncementBar";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import { getChromeDocument } from "@/lib/site/load";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { PhoneVerifyModal } from "@/components/auth/PhoneVerifyModal";
@@ -24,6 +25,7 @@ export default async function SiteLayout({ children }: { children: ReactNode }) 
       {/* Mounted at layout level so a compare selection survives navigation. */}
       <CompareTray />
       <AiAssistant />
+      <ScrollToTop />
     </>
   );
 }
