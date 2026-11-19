@@ -7,22 +7,23 @@ import {
   getFeaturedProperties,
   getNewlyListed,
 } from "@/lib/api/properties";
+import { getVisitorPersonalization } from "@/lib/personalize/visitorContext";
 import { boolOf, textOf } from "@/lib/site/read";
 import type { PropertySummary } from "@/lib/types/domain";
 
 /**
- * "Curated for you / Featured MLS Listings" (HomeAtlasUI HomePage L295-352).
- *
- * LIVE: listings the team pinned in admin (`is_featured`), topped up by the
- * backend with the brokerage's exclusive listings. If that feed is empty or
- * unreachable (e.g. a backend without `featured-properties/`), falls back to
- * exclusive listings, then the newest, so the slot never renders empty; the
- * description stays honest about which one is showing.
+ * Featured MLS rail. Admin pins always lead; remaining slots follow the
+ * visitor's search-history / IP cities, then exclusive / newest fallbacks.
  */
 export async function FeaturedListings({ content }: { content?: Record<string, unknown> }) {
+  const visitor = await getVisitorPersonalization();
   const featured = await safeFetch(
-    getFeaturedProperties(3),
-    { listings: [], pinnedCount: 0 },
+    getFeaturedProperties(3, {
+      cities: visitor.cities,
+      headers: visitor.headers,
+      cache: "no-store",
+    }),
+    { listings: [], pinnedCount: 0, localCount: 0 },
     "home:featured",
   );
   let listings: PropertySummary[] = featured.listings;
@@ -30,7 +31,9 @@ export async function FeaturedListings({ content }: { content?: Record<string, u
   let description = automatic
     ? featured.pinnedCount > 0
       ? "Hand-picked homes from the HomeAtlas team."
-      : "Homes offered directly through HomeAtlas."
+      : featured.localCount > 0
+        ? "Homes near areas you’ve been exploring."
+        : "Homes offered directly through HomeAtlas."
     : textOf(content, "description", "Hand-picked homes from the HomeAtlas team.");
 
   if (listings.length === 0) {

@@ -39,6 +39,7 @@ import { SEARCH_PROPERTY_TYPES, LISTING_SORTS, RELEVANCE_SORT } from "@/lib/type
 import type { ListingQuery } from "@/lib/types/domain";
 import { formatNumber, formatPrice } from "@/lib/utils/format";
 import { formatPostal, looksLikePostal, parsePostalList } from "@/lib/utils/postal";
+import { rememberPlace } from "@/lib/personalize/places";
 import { parseListingSearch } from "@/lib/utils/searchParams";
 import { STATUS_TABS } from "@/lib/utils/status";
 
@@ -255,10 +256,12 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
       [sqftMin, sqftMax] = [sqftMax, sqftMin];
     }
 
+    const nextCity = draft.city.trim() || null;
+    rememberPlace(nextCity);
     update({
       priceMin: priceMin || null,
       priceMax: priceMax || null,
-      city: draft.city.trim() || null,
+      city: nextCity,
       postal: postal.codes.join(",") || null,
       beds: draft.beds || null,
       baths: draft.baths || null,

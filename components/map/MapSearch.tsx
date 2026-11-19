@@ -39,6 +39,7 @@ import {
   type SchoolSearchHit,
 } from "@/lib/api/schools";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { PLACE_SEARCH_MIN_CHARS, usePlaceSearch } from "@/lib/queries/geo";
 import { useSchoolSearch } from "@/lib/queries/schools";
 import {
@@ -425,6 +426,7 @@ export function MapSearch() {
         <PlaceSearch
           onSelect={(result) => {
             placeChosen.current = true;
+            rememberPlace(cityFromText(result.label));
             setFlyTarget([result.latitude, result.longitude]);
           }}
           onSelectSchool={applySchool}

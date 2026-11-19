@@ -104,7 +104,12 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
   },
   quickActions: { label: "Quick actions", summary: "The Buy, Rent, Preconstruction, and Sell cards under the hero.", canHide: true },
   trendingCommunities: { label: "Trending communities", summary: "Heading only. City tiles come from live inventory.", canHide: true },
-  featuredListings: { label: "Featured listings", summary: "Heading around the rail. Which homes appear is set under Featured homes.", canHide: true },
+  featuredListings: {
+    label: "Featured listings",
+    summary:
+      "Heading around the rail. Admin pins under Featured homes always lead; empty slots follow visitor search history and IP city.",
+    canHide: true,
+  },
   propertyTypes: { label: "Property types", summary: "The six type tiles and their links. Counts stay live.", canHide: true },
   newPrecon: { label: "New preconstruction", summary: "Heading only. Projects come from the pre-construction list.", canHide: true },
   todaysNew: { label: "Today's new listings", summary: "Heading only. The 24-hour subtitle stays automatic so it never overclaims.", canHide: true },
@@ -115,7 +120,12 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
   },
   marketDeals: { label: "Market deals", summary: "Heading only. Four keyword deal cards (Distress, Detached Under $1M, Power of Sale, Just Sold).", canHide: true },
   soldBelow: { label: "Sold below purchase", summary: "Heading only. Rows come from the sold-below feed.", canHide: true },
-  schools: { label: "Top-rated schools", summary: "School cards, ratings, photos, and links.", canHide: true },
+  schools: {
+    label: "Top-rated schools",
+    summary:
+      "Heading and optional school names. Named cards lead when they match Ministry schools; otherwise EQAO results follow visitor search history and IP city.",
+    canHide: true,
+  },
   incentives: { label: "Buyer incentives", summary: "Heading only. The programs themselves are edited under Incentives.", canHide: true },
   marketIntelligence: { label: "Market intelligence", summary: "Heading only. The snapshot figures stay live.", canHide: true },
   neighbourAlerts: { label: "Neighbour alerts", summary: "Heading, bullets, and the WhatsApp message.", canHide: true },

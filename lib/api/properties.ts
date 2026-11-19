@@ -345,24 +345,32 @@ export async function getNewlyListed(
 }
 
 /**
- * Home "Featured" rail: listings an admin pinned (`is_featured`, in
- * `featured_order`) first, topped up by the backend with exclusive listings.
- * `pinnedCount` says how many of the rows were hand-picked.
+ * Home "Featured" rail: admin pins first, then listings in preferred cities
+ * (search history / IP), then exclusive fill. `pinnedCount` is admin-only.
  */
 export async function getFeaturedProperties(
   limit = 6,
-  options: RequestOptions = {},
-): Promise<{ listings: PropertySummary[]; pinnedCount: number }> {
+  options: RequestOptions & { cities?: string[] } = {},
+): Promise<{ listings: PropertySummary[]; pinnedCount: number; localCount: number }> {
+  const { cities, ...rest } = options;
   const data = await apiFetch<
-    BackendListResponse<BackendPropertySummary> & { pinned_count?: number }
+    BackendListResponse<BackendPropertySummary> & {
+      pinned_count?: number;
+      local_count?: number;
+    }
   >(`${MLS}/properties/featured-properties/`, {
-    revalidate: 300,
-    ...options,
-    params: { limit, ...options.params },
+    revalidate: cities?.length ? 60 : 300,
+    ...rest,
+    params: {
+      limit,
+      cities: cities?.length ? cities.join(",") : undefined,
+      ...rest.params,
+    },
   });
   return {
     listings: (data.results ?? []).map(mapPropertySummary),
     pinnedCount: data.pinned_count ?? 0,
+    localCount: data.local_count ?? 0,
   };
 }
 

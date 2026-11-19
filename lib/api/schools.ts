@@ -174,13 +174,18 @@ export async function getSchoolsNear(
 }
 
 export async function getTopSchools(
-  options: RequestOptions & { limit?: number } = {},
+  options: RequestOptions & { limit?: number; cities?: string[]; names?: string[] } = {},
 ): Promise<OfficialSchool[]> {
-  const { limit = 4, ...rest } = options;
+  const { limit = 4, cities, names, ...rest } = options;
+  const personalized = Boolean(cities?.length || names?.length);
   const data = await apiFetch<{ schools?: RawSchool[] }>(`${MLS}/schools/top/`, {
-    revalidate: 86_400,
+    revalidate: personalized ? 3_600 : 86_400,
     ...rest,
-    params: { limit },
+    params: {
+      limit,
+      cities: cities?.length ? cities.join(",") : undefined,
+      names: names?.length ? names.join(",") : undefined,
+    },
   });
   return (data.schools ?? [])
     .map((school) => mapSchool(school))

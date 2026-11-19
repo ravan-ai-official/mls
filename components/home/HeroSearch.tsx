@@ -15,6 +15,7 @@ import {
   type HeroOption,
 } from "@/lib/site/heroFilters";
 import { listOf } from "@/lib/site/read";
+import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { looksLikePostal, parsePostalList } from "@/lib/utils/postal";
 
 const DEFAULT_TRY_PROMPTS = [
@@ -197,6 +198,7 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    rememberPlace(cityFromText(query));
     router.push(buildHref());
   }
 
@@ -271,7 +273,10 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
         <Button
           type="button"
           variant="secondary"
-          onClick={() => router.push(buildHref())}
+          onClick={() => {
+            rememberPlace(cityFromText(query));
+            router.push(buildHref());
+          }}
           className="h-11 justify-between rounded-control px-3.5 text-small font-normal"
         >
           More Filters
