@@ -150,9 +150,9 @@
               "href": "/listings?priceMin=2000000"
             },
             {
-              "icon": "openHouse",
-              "label": "Open Houses",
-              "href": "/listings?openHouse=1"
+              "icon": "semi",
+              "label": "Semi-Detached",
+              "href": "/listings?type=Semi-Detached"
             },
             {
               "icon": "rental",

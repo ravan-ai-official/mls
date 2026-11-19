@@ -108,7 +108,7 @@ const MAX: Record<string, number> = {
 
 const ICONS: Record<string, string[]> = {
   quick: ["buy", "rent", "precon", "sell"],
-  type: ["detached", "condo", "townhome", "luxury", "openHouse", "rental"],
+  type: ["detached", "condo", "townhome", "luxury", "semi", "rental"],
   advantage: ["mls", "precon", "local", "guidance"],
 };
 

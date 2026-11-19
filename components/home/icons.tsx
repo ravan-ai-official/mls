@@ -91,6 +91,17 @@ export const IconPrecon = makeIcon(
 export const IconSell = makeIcon("0 0 20 20", [P.chartAxis, P.chartLine], "IconSell");
 export const IconCondo = makeIcon("0 0 18 22", [P.condoWindows, P.condoBody], "IconCondo");
 export const IconTownhome = makeIcon("0 0 24 24", [P.townhome], "IconTownhome");
+/** Two joined houses — Semi-Detached tile. */
+export const IconSemi = makeIcon(
+  "0 0 24 22",
+  [
+    "M1 10.5L6.5 5.5L12 10.5V20H1V10.5Z",
+    "M12 10.5L17.5 5.5L23 10.5V20H12V10.5Z",
+    "M5 20V14H8V20",
+    "M16 20V14H19V20",
+  ],
+  "IconSemi",
+);
 export const IconLuxury = makeIcon(
   "0 0 22 21.0003",
   [P.gemFacets, P.gemOutline],

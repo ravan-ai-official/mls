@@ -110,7 +110,12 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
       "Heading around the rail. Admin pins under Featured homes always lead; empty slots follow visitor search history and IP city.",
     canHide: true,
   },
-  propertyTypes: { label: "Property types", summary: "The six type tiles and their links. Counts stay live.", canHide: true },
+  propertyTypes: {
+    label: "Property types",
+    summary:
+      "The six type tiles (Detached, Condos, Townhomes, Luxury, Semi-Detached, Rentals) and their links. Counts stay live.",
+    canHide: true,
+  },
   newPrecon: { label: "New preconstruction", summary: "Heading only. Projects come from the pre-construction list.", canHide: true },
   todaysNew: { label: "Today's new listings", summary: "Heading only. The 24-hour subtitle stays automatic so it never overclaims.", canHide: true },
   highReturn: {

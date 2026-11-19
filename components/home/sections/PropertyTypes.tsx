@@ -4,8 +4,8 @@ import {
   IconCondo,
   IconDetached,
   IconLuxury,
-  IconOpenHouse,
   IconRental,
+  IconSemi,
   IconTownhome,
 } from "@/components/home/icons";
 import { Section } from "@/components/ui/Section";
@@ -16,30 +16,26 @@ import { textOf } from "@/lib/site/read";
 import { formatNumber } from "@/lib/utils/format";
 
 /**
- * "Explore by Property Type" (HomeAtlasUI HomePage L354-373).
- *
- * The six tiles are static, as in the reference. Links use the params
- * parseListingParams understands: `type` takes a UI type (UI_PROPERTY_TYPES),
- * open houses use `openHouse=1`.
- *
- * Luxury: the backend has no luxury property type (RESO has no such class and
- * no facet maps to it), so the tile links to a $2M+ price filter instead.
- *
- * Counts: when the property-types facet is reachable, tiles whose `type` maps
- * to a UI type show the live count summed across matching facets. Luxury and
- * Open Houses have no facet, and a failed fetch simply hides all counts.
+ * "Explore by Property Type" — six real UI types with live counts from
+ * `/properties/property-types/` (structure_type / attached for home types,
+ * $2M+ for Luxury, active leases for Rentals).
  */
 const TILES: Array<{
   label: string;
   href: string;
   Icon: ComponentType<{ className?: string }>;
-  uiType?: UiPropertyType;
+  uiType: UiPropertyType;
 }> = [
   { label: "Detached", href: "/listings?type=Detached", Icon: IconDetached, uiType: "Detached" },
   { label: "Condos", href: "/listings?type=Condo", Icon: IconCondo, uiType: "Condo" },
   { label: "Townhomes", href: "/listings?type=Townhome", Icon: IconTownhome, uiType: "Townhome" },
-  { label: "Luxury", href: "/listings?priceMin=2000000", Icon: IconLuxury },
-  { label: "Open Houses", href: "/listings?openHouse=1", Icon: IconOpenHouse },
+  { label: "Luxury", href: "/listings?priceMin=2000000", Icon: IconLuxury, uiType: "Luxury" },
+  {
+    label: "Semi-Detached",
+    href: "/listings?type=Semi-Detached",
+    Icon: IconSemi,
+    uiType: "Semi-Detached",
+  },
   { label: "Rentals", href: "/listings?tx=rent", Icon: IconRental, uiType: "Rental" },
 ];
 
@@ -48,7 +44,9 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   condo: IconCondo,
   townhome: IconTownhome,
   luxury: IconLuxury,
-  openHouse: IconOpenHouse,
+  semi: IconSemi,
+  // Legacy CMS value — treat as Semi-Detached.
+  openHouse: IconSemi,
   rental: IconRental,
 };
 
@@ -56,7 +54,20 @@ const UI_TYPES: Record<string, UiPropertyType | undefined> = {
   detached: "Detached",
   condo: "Condo",
   townhome: "Townhome",
+  luxury: "Luxury",
+  semi: "Semi-Detached",
+  openHouse: "Semi-Detached",
   rental: "Rental",
+};
+
+const DEFAULT_HREFS: Record<string, string> = {
+  detached: "/listings?type=Detached",
+  condo: "/listings?type=Condo",
+  townhome: "/listings?type=Townhome",
+  luxury: "/listings?priceMin=2000000",
+  semi: "/listings?type=Semi-Detached",
+  openHouse: "/listings?type=Semi-Detached",
+  rental: "/listings?tx=rent",
 };
 
 export async function PropertyTypes({ content }: { content?: Record<string, unknown> }) {
@@ -70,11 +81,17 @@ export async function PropertyTypes({ content }: { content?: Record<string, unkn
   const custom = Array.isArray(content?.items) ? content.items : [];
   const tiles = custom.length
     ? custom.map((item) => {
-        const row = item && typeof item === "object" ? (item as { icon?: string; label?: string; href?: string }) : {};
+        const row =
+          item && typeof item === "object"
+            ? (item as { icon?: string; label?: string; href?: string })
+            : {};
         const icon = row.icon || "detached";
+        const legacyOpenHouse = icon === "openHouse";
         return {
-          label: row.label || "Homes",
-          href: row.href || "/listings",
+          label: legacyOpenHouse ? "Semi-Detached" : row.label || "Homes",
+          href: legacyOpenHouse
+            ? DEFAULT_HREFS.semi
+            : row.href || DEFAULT_HREFS[icon] || "/listings",
           Icon: ICONS[icon] ?? IconDetached,
           uiType: UI_TYPES[icon],
         };
@@ -82,7 +99,11 @@ export async function PropertyTypes({ content }: { content?: Record<string, unkn
     : TILES;
 
   return (
-    <Section tone="alt" title={textOf(content, "title", "Explore by Property Type")} className="border-y border-line">
+    <Section
+      tone="alt"
+      title={textOf(content, "title", "Explore by Property Type")}
+      className="border-y border-line"
+    >
       <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map(({ label, href, Icon, uiType }) => {
           const count = uiType ? counts.get(uiType) : undefined;

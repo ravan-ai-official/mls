@@ -185,6 +185,8 @@ export interface BackendPropertyTypeFacet {
   value: string;
   label: string;
   count: number;
+  /** Present on the UI home-type feed (Detached / Semi-Detached / …). */
+  ui_type?: string;
 }
 
 export interface BackendCatalogStats {

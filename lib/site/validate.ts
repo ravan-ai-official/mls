@@ -24,7 +24,7 @@ import { parsePostalList } from "@/lib/utils/postal";
 export type FieldErrors = Record<string, string>;
 
 const QUICK = new Set(["buy", "rent", "precon", "sell"]);
-const TYPES = new Set(["detached", "condo", "townhome", "luxury", "openHouse", "rental"]);
+const TYPES = new Set(["detached", "condo", "townhome", "luxury", "semi", "openHouse", "rental"]);
 const ADVANTAGE = new Set(["mls", "precon", "local", "guidance"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

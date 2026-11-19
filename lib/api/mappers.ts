@@ -16,16 +16,17 @@ import type {
   BackendRoom,
   BackendUserProfile,
 } from "@/lib/types/backend";
-import type {
-  AuthUser,
-  PropertyBadge,
-  PropertyDetail,
-  PropertyFact,
-  PropertyImage,
-  PropertyStatus,
-  PropertySummary,
-  PropertyTypeFacet,
-  UiPropertyType,
+import {
+  UI_PROPERTY_TYPES,
+  type AuthUser,
+  type PropertyBadge,
+  type PropertyDetail,
+  type PropertyFact,
+  type PropertyImage,
+  type PropertyStatus,
+  type PropertySummary,
+  type PropertyTypeFacet,
+  type UiPropertyType,
 } from "@/lib/types/domain";
 import {
   EMPTY,
@@ -774,6 +775,15 @@ export function collectFeatures(raw: BackendPropertyDetail): string[] {
 /* -------------------------------------------------------------------------- */
 
 export function mapPropertyTypeFacet(raw: BackendPropertyTypeFacet): PropertyTypeFacet {
+  const fromApi = (raw.ui_type ?? "").trim();
+  if (fromApi && (UI_PROPERTY_TYPES as readonly string[]).includes(fromApi)) {
+    return {
+      value: raw.value,
+      label: raw.label || fromApi,
+      count: raw.count,
+      uiType: fromApi as UiPropertyType,
+    };
+  }
   const { label, uiType } = normalizePropertyType(raw.value);
   return {
     value: raw.value,
