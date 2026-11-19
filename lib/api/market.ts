@@ -450,7 +450,7 @@ export async function getListingSyncStatus(
       active_listing_count?: number | null;
     }>(
       `${MLS}/listing-sync-status/`,
-      { revalidate: 600, timeoutMs: 5_000, ...options },
+      { revalidate: 60, timeoutMs: 5_000, ...options },
     );
     if (!data.last_successful_at) return null;
     return {

@@ -3,7 +3,9 @@ import {
   getCatalogStats,
   getHomeTypeDistribution,
   getMarketTrends,
+  getSoldTrends,
   HOME_TYPE_DISTRIBUTION,
+  type SoldTrends,
 } from "@/lib/api/market";
 import {
   getCensusProfile,
@@ -11,7 +13,6 @@ import {
   type AmenitiesByCategory,
   type CensusProfile,
 } from "@/lib/api/neighbourhood";
-import { searchProperties } from "@/lib/api/properties";
 import { getWpCommunityProfile } from "@/lib/api/wpCommunity";
 import {
   NeighbourhoodInsightsCard,
@@ -20,16 +21,12 @@ import {
   type InsightMetric,
 } from "@/components/property/NeighbourhoodInsightsCard";
 import { AmenitiesSection } from "@/components/property/Neighbourhood";
-import {
-  PriceDistribution,
-  TrendChart,
-  TypeSplit,
-} from "@/components/property/CommunityCharts";
+import { TrendChart, TypeSplit } from "@/components/property/CommunityCharts";
+import { SalesListingsChart } from "@/components/market/InsightCharts";
 import {
   REFERENCE_DISTRIBUTIONS,
   REFERENCE_INSIGHT_METRICS,
 } from "@/lib/demo/neighbourhoodInsights";
-import type { PropertySummary } from "@/lib/types/domain";
 import { formatPrice } from "@/lib/utils/format";
 
 /**
@@ -52,21 +49,23 @@ export async function CommunityPanel({
   longitude: number | null;
 }) {
   const fsa = postalCode?.replace(/\s/g, "").slice(0, 3) ?? "";
-  const emptySold = {
-    items: [] as PropertySummary[],
-    total: 0,
-    nextOffset: null,
-    previousOffset: null,
-    approximate: false,
-    truncated: false,
-  };
   const emptyAmenities: AmenitiesByCategory = {
     groceries: [],
     cafes: [],
     parks: [],
     transit: [],
   };
-  const [stats, trends, census, wpCommunity, amenities, sold, active, homeTypes] = await Promise.all([
+  const emptySoldTrends: SoldTrends = {
+    city: city ?? "",
+    windowMonths: 12,
+    months: [],
+    communities: [],
+    community: neighbourhood ?? null,
+    unavailable: true,
+    generatedAt: null,
+    stale: false,
+  };
+  const [stats, trends, census, wpCommunity, amenities, soldTrends, homeTypes] = await Promise.all([
     city
       ? safeFetch(getCatalogStats({ city }), null, "property:catalog")
       : Promise.resolve(null),
@@ -83,11 +82,8 @@ export async function CommunityPanel({
         )
       : Promise.resolve(null),
     city
-      ? safeFetch(searchProperties({ city, status: "Sold", limit: 24 }), emptySold, "property:sold-dist")
-      : Promise.resolve(emptySold),
-    city
-      ? safeFetch(searchProperties({ city, status: "Active", limit: 24 }), emptySold, "property:ask-dist")
-      : Promise.resolve(emptySold),
+      ? getSoldTrends(city, 12, {}, { community: neighbourhood ?? undefined })
+      : Promise.resolve(emptySoldTrends),
     city
       ? safeFetch(
           getHomeTypeDistribution(city, { community: neighbourhood }),
@@ -96,6 +92,11 @@ export async function CommunityPanel({
         )
       : Promise.resolve([] as Array<{ name: string; count: number }>),
   ]);
+  const activityRows = comparisonRows(
+    trends?.series ?? [],
+    soldTrends.unavailable ? [] : soldTrends.months.slice(-12),
+    trends?.activeCurrent ?? null,
+  );
 
   const series = (trends?.series ?? []).filter((point) => point.medianListPrice !== null);
   // Always keep Detached / Semi-detached / townhouse / Condo apartment in the
@@ -160,11 +161,22 @@ export async function CommunityPanel({
         />
       )}
 
-      <PriceDistribution
-        sold={sold.items.map((item) => item.closePrice ?? item.price)}
-        asking={active.items.map((item) => (item.isLease ? null : item.price))}
-        city={city}
-      />
+      {city ? (
+        <div className="rounded-2xl border border-line p-4 sm:p-5">
+          <h3 className="mb-1 text-[15px] font-semibold text-ink">Sold, Active and New Listing</h3>
+          <p className="mb-4 text-[12px] text-ink-muted">
+            Closed sales, active inventory and new listings
+            {placeLabel !== "this area" ? ` in ${placeLabel}` : city ? ` in ${city}` : ""}.
+          </p>
+          {soldTrends.unavailable && activityRows.every((row) => row.sold === 0) ? (
+            <p className="rounded-control bg-surface-alt px-4 py-8 text-center text-small text-ink-muted">
+              Sold, active and new listing figures are temporarily unavailable for this area.
+            </p>
+          ) : (
+            <SalesListingsChart rows={activityRows} />
+          )}
+        </div>
+      ) : null}
 
       {city ? (
         <TypeSplit slices={typeSlices} city={placeLabel !== "this area" ? placeLabel : city} />
@@ -262,5 +274,48 @@ function yearChange(points: Array<{ medianListPrice: number | null }>): string |
   if (values.length < 2 || values[0] === 0) return null;
   const pct = ((values[values.length - 1] - values[0]) / values[0]) * 100;
   return `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
+}
+
+/** Merge catalogue new-listings with sold units, then back-fill active inventory. */
+function comparisonRows(
+  series: Array<{ month: string; newListings: number }>,
+  sold: SoldTrends["months"],
+  activeCurrent: number | null,
+) {
+  const rows = new Map<
+    string,
+    { month: string; sold: number; active: number; newListings: number }
+  >();
+  for (const point of series) {
+    rows.set(point.month.slice(0, 7), {
+      month: point.month,
+      sold: 0,
+      active: 0,
+      newListings: point.newListings,
+    });
+  }
+  for (const month of sold) {
+    const key = month.month.slice(0, 7);
+    const current = rows.get(key) ?? {
+      month: month.month,
+      sold: 0,
+      active: 0,
+      newListings: 0,
+    };
+    current.sold = month.unitsSold;
+    rows.set(key, current);
+  }
+  const ordered = [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, row]) => row);
+  if (ordered.length === 0) return ordered;
+
+  if (activeCurrent != null && activeCurrent > 0) {
+    ordered[ordered.length - 1]!.active = Math.round(activeCurrent);
+    for (let i = ordered.length - 1; i >= 1; i--) {
+      const newer = ordered[i]!;
+      const older = ordered[i - 1]!;
+      older.active = Math.max(0, Math.round(newer.active - newer.newListings + newer.sold));
+    }
+  }
+  return ordered;
 }
 
