@@ -9,6 +9,7 @@ import { ListingShareActions, ListingWhatsAppCard } from "@/components/property/
 import { KeyFacts, MarketDemand } from "@/components/property/KeyFacts";
 import { EstimatesPanel } from "@/components/property/EstimatesPanel";
 import { CommunityPanel } from "@/components/property/CommunityPanel";
+import { ClimateRisk } from "@/components/property/ClimateRisk";
 import { ComparablesBoard } from "@/components/property/ComparablesBoard";
 import { SchoolsSection } from "@/components/property/Neighbourhood";
 import { PriceHistory } from "@/components/property/PriceHistory";
@@ -391,6 +392,7 @@ export default async function PropertyPage({
                           </div>
                         </section>
                       )}
+                      <ClimateRisk />
                       <PropertyNote listingKey={property.id} />
                     </div>
                   ),

@@ -44,32 +44,30 @@ const RISKS: ClimateRiskItem[] = [
 
 export function ClimateRisk() {
   return (
-    <section className="rounded-2xl border border-line p-4 sm:p-6">
+    <section className="rounded-surface border border-line bg-surface p-4 sm:p-6">
       <h2 className="mb-1 text-[18px] font-semibold text-ink">Climate Risk</h2>
-      <p className="mb-4 text-[13px] text-ink-muted">
+      <p className="mb-4 text-small text-ink-muted">
         Projected hazards for this property by 2050
       </p>
       <div className="space-y-3">
         {RISKS.map((item) => (
           <div
             key={item.risk}
-            className="flex items-start gap-3 rounded-xl bg-surface-alt p-4"
+            className="rounded-control bg-surface-alt p-4"
           >
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="text-[14px] font-semibold text-ink">{item.risk}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.tone}`}
-                >
-                  {item.level}
-                </span>
-              </div>
-              <p className="text-[12px] text-ink-muted">{item.desc}</p>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="text-small font-semibold text-ink">{item.risk}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-caption font-semibold ${item.tone}`}
+              >
+                {item.level}
+              </span>
             </div>
+            <p className="text-caption text-ink-muted">{item.desc}</p>
           </div>
         ))}
       </div>
-      <p className="mt-3 text-[11px] text-ink-subtle">Source: ClimateCheck</p>
+      <p className="mt-3 text-caption text-ink-subtle">Source: ClimateCheck</p>
     </section>
   );
 }
