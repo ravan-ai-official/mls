@@ -101,9 +101,10 @@ function mapPrecon(raw: BackendPrecon): PreconProject {
 }
 
 export async function getPreconProjects(
-  options: RequestOptions & { limit?: number; page?: number } = {},
+  options: RequestOptions & { limit?: number; page?: number; city?: string } = {},
 ): Promise<{ items: PreconProject[]; total: number }> {
-  const { limit = 12, page = 1, ...rest } = options;
+  const { limit = 12, page = 1, city, ...rest } = options;
+  const cityFilter = city?.trim() || undefined;
 
   const data = await apiFetch<{
     count?: number;
@@ -111,7 +112,7 @@ export async function getPreconProjects(
   }>(`${MLS}/precon-properties/`, {
     revalidate: 300,
     ...rest,
-    params: { page_size: limit, page, ...rest.params },
+    params: { page_size: limit, page, city: cityFilter, ...rest.params },
   });
 
   const rows = data.results ?? [];
