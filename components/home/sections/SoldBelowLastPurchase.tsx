@@ -3,30 +3,25 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Section } from "@/components/ui/Section";
 import { getSoldBelowPurchase } from "@/lib/api/home";
-import { formatDay, type SoldBelowRow } from "@/lib/api/homeMappers";
-import { formatFullPrice, properties } from "@/lib/home/sampleData";
-import { soldBelowPicks } from "@/lib/home/staticSections";
+import type { SoldBelowRow } from "@/lib/api/homeMappers";
+import { getVisitorPersonalization } from "@/lib/personalize/visitorContext";
 import { textOf } from "@/lib/site/read";
 import { formatPrice } from "@/lib/utils/format";
 import { buildListingHref } from "@/lib/utils/searchParams";
 
 /**
- * "Sold Below Last Purchase" — HomeAtlasUI HomePage L613-667.
- *
- * LIVE from `/api/home/sold-below-purchase/`, a table the nightly job fills
- * with GTA homes whose latest sale closed below their previous sale. These are
- * sold homes that aren't in our active catalogue, so live rows carry no
- * property link; the section action opens the sold search.
- *
- * Until the job has produced rows (or if the feed fails), the reference's
- * sample records render instead. The reference's badge read
- * "-5.0% below ask", but the percentage is measured against the previous
- * purchase price, not the asking price, so the badge says that instead.
- * Cards open the sold search for the same city and type.
+ * Sold-below rail: live repeat sales that closed under the prior purchase.
+ * Prefer visitor cities (search history / IP); hide the section when the feed
+ * has nothing rather than showing sample cards.
  */
 export async function SoldBelowLastPurchase({ content }: { content?: Record<string, unknown> }) {
-  const rows = await getSoldBelowPurchase(3);
-  const live = rows !== null && rows.length > 0;
+  const visitor = await getVisitorPersonalization();
+  const rows = await getSoldBelowPurchase(3, {
+    cities: visitor.cities,
+    headers: visitor.headers,
+    cache: "no-store",
+  });
+  if (!rows || rows.length === 0) return null;
 
   return (
     <Section
@@ -43,85 +38,49 @@ export async function SoldBelowLastPurchase({ content }: { content?: Record<stri
       }}
     >
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {live ? (
-          rows.map((row) => <SoldRow key={row.listingKey} row={row} />)
-        ) : (
-          <SampleCards />
-        )}
+        {rows.map((row) => (
+          <SoldCard key={row.listingKey} row={row} />
+        ))}
       </div>
     </Section>
   );
 }
 
-function SoldRow({ row }: { row: SoldBelowRow }) {
-  const pct = ((row.lossAmount / row.previousClosePrice) * 100).toFixed(1);
-  const facts = [
-    row.city,
-    row.propertySubType,
-    row.bedrooms ? `${row.bedrooms} bd` : null,
-    row.bathrooms ? `${row.bathrooms} ba` : null,
-  ].filter(Boolean);
-  return (
-    <article className="flex flex-col rounded-surface border border-line bg-surface p-5">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <Badge tone="navy" className="font-bold">
-          {pct}% below last purchase
-        </Badge>
-        <Badge tone="warm" className="shrink-0 px-2 py-0.5 font-bold">
-          -{formatPrice(row.lossAmount)}
-        </Badge>
-      </div>
-      <p className="truncate text-small font-medium text-ink">{row.address}</p>
-      <p className="mb-4 mt-0.5 text-caption text-ink-muted">
-        {facts.join(" · ")}
-      </p>
-      <dl className="mt-auto space-y-1 text-small">
-        <div className="flex justify-between gap-2">
-          <dt className="text-ink-muted">Sold {formatDay(row.closeDate)}</dt>
-          <dd className="font-semibold text-ink">
-            {formatPrice(row.closePrice)}
-          </dd>
-        </div>
-        <div className="flex justify-between gap-2">
-          <dt className="text-ink-muted">
-            Bought {formatDay(row.previousCloseDate)}
-          </dt>
-          <dd className="text-ink-muted line-through">
-            {formatPrice(row.previousClosePrice)}
-          </dd>
-        </div>
-      </dl>
-    </article>
-  );
+function compactLoss(amount: number): string {
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) {
+    const millions = abs / 1_000_000;
+    return `$${millions >= 10 ? Math.round(millions) : millions.toFixed(1)}M`;
+  }
+  return `$${Math.round(abs / 1000)}K`;
 }
 
-function SampleCards() {
-  const cards = soldBelowPicks.flatMap((pick) => {
-    const prop = properties.find((p) => p.id === pick.id);
-    if (!prop?.soldPrice) return [];
-    const diff = prop.soldPrice - pick.prevPrice;
-    const pct = Math.abs((diff / pick.prevPrice) * 100).toFixed(1);
-    return [{ ...pick, prop, soldPrice: prop.soldPrice, diff, pct }];
+function SoldCard({ row }: { row: SoldBelowRow }) {
+  const pct = ((row.lossAmount / row.previousClosePrice) * 100).toFixed(1);
+  const href = buildListingHref({
+    city: row.city || undefined,
+    type: row.propertySubType || undefined,
+    status: "Sold",
   });
+  const bottomLine = `Sold ${compactLoss(row.lossAmount)} below previous purchase`;
 
-  return cards.map(({ id, prop, soldPrice, prevPrice, diff, pct, desc }) => (
+  return (
     <Link
-      key={id}
-      href={buildListingHref({
-        city: prop.community,
-        type: prop.type,
-        status: "Sold",
-      })}
+      href={href}
       className="group overflow-hidden rounded-surface border border-line bg-surface transition-shadow hover:shadow-card-hover"
     >
-      <div className="relative h-[180px] overflow-hidden">
-        <SafeImage
-          src={prop.image}
-          alt={prop.address}
-          fill
-          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+      <div className="relative h-[180px] overflow-hidden bg-surface-alt">
+        {row.imageUrl ? (
+          <SafeImage
+            src={row.imageUrl}
+            alt={row.address}
+            fill
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-linear-to-br from-navy/20 to-navy/5" aria-hidden="true" />
+        )}
         <Badge tone="navy" className="absolute left-3 top-3 font-bold">
           {pct}% below last purchase
         </Badge>
@@ -129,20 +88,18 @@ function SampleCards() {
       <div className="p-4">
         <div className="mb-1 flex items-start justify-between gap-2">
           <div>
-            <p className="text-h3 text-ink">{formatFullPrice(soldPrice)}</p>
+            <p className="text-h3 text-ink">{formatPrice(row.closePrice)}</p>
             <p className="text-caption text-ink-muted line-through">
-              Prev: {formatFullPrice(prevPrice)}
+              Prev: {formatPrice(row.previousClosePrice)}
             </p>
           </div>
           <Badge tone="warm" className="shrink-0 px-2 py-0.5 font-bold">
-            Saved {formatFullPrice(Math.abs(diff))}
+            Saved {formatPrice(row.lossAmount)}
           </Badge>
         </div>
-        <p className="truncate text-small font-medium text-ink">
-          {prop.address}
-        </p>
-        <p className="mt-0.5 text-caption text-ink-muted">{desc}</p>
+        <p className="truncate text-small font-medium text-ink">{row.address}</p>
+        <p className="mt-0.5 text-caption text-ink-muted">{bottomLine}</p>
       </div>
     </Link>
-  ));
+  );
 }

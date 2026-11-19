@@ -221,6 +221,7 @@ export interface SoldBelowRow {
   previousClosePrice: number;
   previousCloseDate: string | null;
   lossAmount: number;
+  imageUrl: string | null;
 }
 
 export function mapSoldBelow(payload: unknown): SoldBelowRow[] {
@@ -244,6 +245,7 @@ export function mapSoldBelow(payload: unknown): SoldBelowRow[] {
         previousClosePrice,
         previousCloseDate: str(r.previous_close_date),
         lossAmount: toNumber(r.loss_amount) ?? previousClosePrice - closePrice,
+        imageUrl: safeUrl(r.image_url),
       },
     ];
   });

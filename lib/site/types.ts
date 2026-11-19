@@ -119,7 +119,12 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
     canHide: true,
   },
   marketDeals: { label: "Market deals", summary: "Heading only. Four keyword deal cards (Distress, Detached Under $1M, Power of Sale, Just Sold).", canHide: true },
-  soldBelow: { label: "Sold below purchase", summary: "Heading only. Rows come from the sold-below feed.", canHide: true },
+  soldBelow: {
+    label: "Sold below purchase",
+    summary:
+      "Heading only. Cards come from live sold-below feed, preferring visitor search history and IP city.",
+    canHide: true,
+  },
   schools: {
     label: "Top-rated schools",
     summary:

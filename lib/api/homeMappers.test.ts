@@ -139,6 +139,7 @@ describe("mapSoldBelow", () => {
       listingKey: "S1",
       lossAmount: 100000,
       previousCloseDate: "2021-04-01",
+      imageUrl: null,
     });
   });
 });

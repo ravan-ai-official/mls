@@ -7,7 +7,7 @@
  * rails and ISR re-renders them in the background anyway.
  */
 
-import { apiFetch, safeFetch } from "./client";
+import { apiFetch, safeFetch, type RequestOptions } from "./client";
 import {
   mapCommunityImages,
   mapDeals,
@@ -35,8 +35,9 @@ async function get<T>(
   path: string,
   revalidate: number,
   map: (payload: unknown) => T,
-  params?: Record<string, number>,
+  params?: RequestOptions["params"],
   tags?: string[],
+  options: RequestOptions = {},
 ): Promise<T | null> {
   return safeFetch(
     apiFetch<unknown>(`${HOME}/${path}`, {
@@ -44,6 +45,7 @@ async function get<T>(
       timeoutMs: TIMEOUT_MS,
       params,
       tags,
+      ...options,
     }).then(map),
     null,
     `home:${path}`,
@@ -62,8 +64,25 @@ export function getMarketDeals(limit = 4): Promise<PriceDropDeal[] | null> {
 
 export function getSoldBelowPurchase(
   limit = 3,
+  options: { cities?: string[]; headers?: Record<string, string>; cache?: RequestCache } = {},
 ): Promise<SoldBelowRow[] | null> {
-  return get("sold-below-purchase/", FEED_REVALIDATE, mapSoldBelow, { limit });
+  const { cities, headers, cache } = options;
+  return get(
+    "sold-below-purchase/",
+    cities?.length ? 120 : FEED_REVALIDATE,
+    mapSoldBelow,
+    {
+      limit,
+      cities: cities?.length ? cities.join(",") : undefined,
+    },
+    undefined,
+    {
+      headers,
+      cache,
+      // AMPRE fill can take longer than the default homepage timeout.
+      timeoutMs: 12_000,
+    },
+  );
 }
 
 export function getMarketSnapshot(): Promise<MarketSnapshot | null> {
