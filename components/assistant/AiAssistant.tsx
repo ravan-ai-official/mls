@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { WhatsappLink } from "@/components/providers/WhatsappProvider";
@@ -26,8 +26,9 @@ const SUGGESTIONS = [
   "Assignments for sale",
 ] as const;
 
-const spring = { type: "spring" as const, stiffness: 380, damping: 32, mass: 0.85 };
-const soft = { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const };
+/** Transform-only — avoids laggy layoutId morphs on the full chat panel. */
+const panelEase = { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const };
+const fabEase = { duration: 0.16, ease: [0.22, 1, 0.36, 1] as const };
 
 /**
  * Floating site assistant. Answers come from the backend, which only sees
@@ -45,7 +46,7 @@ export function AiAssistant() {
 
   useEffect(() => {
     if (!open) return;
-    const timer = window.setTimeout(() => inputRef.current?.focus(), 220);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 160);
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
@@ -114,74 +115,53 @@ export function AiAssistant() {
   }
 
   return (
-    <LayoutGroup id="homeatlas-assistant">
-      <div className="pointer-events-none fixed bottom-6 right-4 z-[60] flex flex-col items-end gap-3 sm:right-6">
-        <AnimatePresence mode="popLayout" initial={false}>
-          {open ? (
-            <motion.section
-              key="assistant-panel"
-              layoutId="assistant-shell"
-              role="dialog"
-              aria-labelledby={titleId}
-              transition={spring}
-              initial={{ opacity: 0.92, borderRadius: 999 }}
-              animate={{ opacity: 1, borderRadius: 16 }}
-              exit={{ opacity: 0.92, borderRadius: 999 }}
-              className="pointer-events-auto flex h-[min(34rem,calc(100dvh-7.5rem))] w-[min(23.5rem,calc(100vw-1.5rem))] origin-bottom-right flex-col overflow-hidden border border-white/10 bg-surface shadow-[0_24px_64px_-16px_rgba(21,35,56,0.45)] ring-1 ring-navy/10"
-              style={{ borderRadius: 16 }}
-            >
-              <header className="relative overflow-hidden bg-gradient-to-br from-navy via-navy to-navy-soft px-4 pb-3.5 pt-3.5 text-white">
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gold/20 blur-2xl"
-                />
-                <div className="relative flex items-start gap-3">
-                  <motion.span
-                    layoutId="assistant-mark"
-                    transition={spring}
-                    className="relative mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/20"
-                  >
-                    <AssistantMark className="h-5 w-5 text-gold" />
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400" />
-                  </motion.span>
-                  <motion.div
-                    className="min-w-0 flex-1"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ ...soft, delay: 0.08 }}
-                  >
-                    <h2 id={titleId} className="text-[15px] font-semibold tracking-tight">
-                      HomeAtlas assistant
-                    </h2>
-                    <p className="mt-0.5 text-[12px] text-white/75">
-                      Online · listings, projects & pages
-                    </p>
-                  </motion.div>
-                  <motion.button
-                    type="button"
-                    onClick={() => setOpen(false)}
-                    aria-label="Close assistant"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ ...soft, delay: 0.12 }}
-                    className="grid h-8 w-8 place-items-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white"
-                  >
-                    <CloseIcon className="h-4 w-4" />
-                  </motion.button>
+    <div className="pointer-events-none fixed bottom-6 right-4 z-[60] flex flex-col items-end gap-3 sm:right-6">
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.section
+            key="assistant-panel"
+            role="dialog"
+            aria-labelledby={titleId}
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.97 }}
+            transition={panelEase}
+            className="pointer-events-auto flex h-[min(34rem,calc(100dvh-7.5rem))] w-[min(23.5rem,calc(100vw-1.5rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-[0_24px_64px_-16px_rgba(21,35,56,0.45)] ring-1 ring-navy/10 will-change-transform"
+          >
+            <header className="relative overflow-hidden bg-gradient-to-br from-navy via-navy to-navy-soft px-4 pb-3.5 pt-3.5 text-white">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gold/20 blur-2xl"
+              />
+              <div className="relative flex items-start gap-3">
+                <span className="relative mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/20">
+                  <AssistantMark className="h-5 w-5 text-gold" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 id={titleId} className="text-[15px] font-semibold tracking-tight">
+                    HomeAtlas assistant
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-white/75">
+                    Online · listings, projects & pages
+                  </p>
                 </div>
-              </header>
-
-              <motion.div
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                transition={{ ...soft, delay: 0.1 }}
-                className="flex min-h-0 flex-1 flex-col"
-              >
-                <div
-                  ref={listRef}
-                  className="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,#f8f7f4_0%,#ffffff_40%)] px-3.5 py-4"
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close assistant"
+                  className="grid h-8 w-8 place-items-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white"
                 >
+                  <CloseIcon className="h-4 w-4" />
+                </button>
+              </div>
+            </header>
+
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div
+                ref={listRef}
+                className="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,#f8f7f4_0%,#ffffff_40%)] px-3.5 py-4"
+              >
                   {messages.length === 0 && (
                     <div className="space-y-4">
                       <div className="rounded-2xl rounded-tl-md border border-line bg-surface px-3.5 py-3 shadow-sm">
@@ -317,56 +297,32 @@ export function AiAssistant() {
                     Enter to send · Shift+Enter for a new line
                   </p>
                 </form>
-              </motion.div>
-            </motion.section>
-          ) : (
-            <motion.button
-              key="assistant-launcher"
-              type="button"
-              layoutId="assistant-shell"
-              transition={spring}
-              onClick={() => setOpen(true)}
-              aria-expanded={false}
-              aria-label="Ask HomeAtlas"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="pointer-events-auto group inline-flex items-center gap-2.5 overflow-hidden rounded-full bg-navy py-2 pl-2 pr-4 text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] hover:bg-navy-deep"
-              style={{ borderRadius: 999 }}
-            >
-              <motion.span
-                layoutId="assistant-mark"
-                transition={spring}
-                className="grid h-9 w-9 place-items-center rounded-full bg-white/10 ring-1 ring-white/15"
-              >
-                <AssistantMark className="h-[18px] w-[18px] text-gold" />
-              </motion.span>
-              <span className="text-[13px] font-semibold tracking-tight">Ask HomeAtlas</span>
-            </motion.button>
-          )}
-        </AnimatePresence>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
-        <AnimatePresence>
-          {open && (
-            <motion.button
-              key="assistant-close-fab"
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close assistant"
-              initial={{ opacity: 0, y: 10, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.92 }}
-              transition={soft}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] hover:bg-navy-deep"
-            >
-              <CloseIcon className="h-4 w-4" />
-              Close
-            </motion.button>
+      <motion.button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={open ? "Close assistant" : "Ask HomeAtlas"}
+        whileTap={{ scale: 0.97 }}
+        transition={fabEase}
+        className="pointer-events-auto inline-flex items-center gap-2.5 rounded-full bg-navy py-2 pl-2 pr-4 text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] hover:bg-navy-deep"
+      >
+        <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 ring-1 ring-white/15">
+          {open ? (
+            <CloseIcon className="h-4 w-4" />
+          ) : (
+            <AssistantMark className="h-[18px] w-[18px] text-gold" />
           )}
-        </AnimatePresence>
-      </div>
-    </LayoutGroup>
+        </span>
+        <span className="text-[13px] font-semibold tracking-tight">
+          {open ? "Close" : "Ask HomeAtlas"}
+        </span>
+      </motion.button>
+    </div>
   );
 }
 
