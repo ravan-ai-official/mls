@@ -33,7 +33,8 @@ type Variant = "pill" | "segmented" | "underline" | "folder";
 
 const TRACK: Record<Variant, string> = {
   pill: "flex flex-wrap gap-2",
-  segmented: "inline-flex max-w-full gap-1 overflow-x-auto rounded-control bg-surface-alt p-1",
+  segmented:
+    "inline-flex max-w-full gap-1 overflow-x-auto rounded-control bg-navy-tint p-1 ring-1 ring-navy/10",
   underline: "flex gap-6 overflow-x-auto border-b border-line",
   folder: "flex gap-1 overflow-x-auto border-b border-line px-2 pt-2",
 };
@@ -50,9 +51,11 @@ function tabClasses(variant: Variant, active: boolean, size: "sm" | "md") {
       );
     case "segmented":
       return cn(
-        "rounded-[calc(var(--radius-control)-0.25rem)] font-medium transition-colors whitespace-nowrap",
+        "rounded-[calc(var(--radius-control)-0.25rem)] font-semibold transition-colors whitespace-nowrap",
         size === "sm" ? "px-3 py-1.5 text-caption" : "px-4 py-2 text-small",
-        active ? "bg-surface text-ink shadow-card" : "text-ink-muted hover:text-ink",
+        active
+          ? "bg-navy text-white shadow-md"
+          : "text-navy/75 hover:text-navy",
       );
     case "folder":
       return cn(
@@ -75,7 +78,11 @@ function Label({ item, active, variant }: { item: TabItem<string>; active: boole
         <span
           className={cn(
             "ml-1.5 tabular-nums",
-            active && (variant === "pill" || variant === "folder") ? "text-white/75" : "text-ink-subtle",
+            active && (variant === "pill" || variant === "folder" || variant === "segmented")
+              ? "text-white/75"
+              : active
+                ? "text-ink-subtle"
+                : "text-navy/45",
           )}
         >
           {item.count.toLocaleString("en-CA")}
