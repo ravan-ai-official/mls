@@ -21,7 +21,12 @@ import { ViewTracker } from "@/components/property/ViewTracker";
 import { Badge } from "@/components/ui/Badge";
 import { PropertyGridSkeleton, Skeleton, UnavailableNote } from "@/components/ui/States";
 import { ApiError, safeFetch } from "@/lib/api/client";
-import { getProperty, getSimilarProperties, searchProperties } from "@/lib/api/properties";
+import {
+  getProperty,
+  getPropertyComparables,
+  getSimilarProperties,
+  searchProperties,
+} from "@/lib/api/properties";
 import { getListingEngagement, getPropertySnapshots } from "@/lib/api/neighbourhood";
 import { getSchoolsNear } from "@/lib/api/schools";
 import { statusLabel } from "@/lib/api/mappers";
@@ -31,12 +36,62 @@ import {
   formatNumber,
   formatPrice,
 } from "@/lib/utils/format";
-import type { PropertyDetail, PropertySummary } from "@/lib/types/domain";
+import type { ListingQuery, PropertyDetail, PropertySummary } from "@/lib/types/domain";
 import { absoluteUrl, JsonLd } from "@/components/seo/JsonLd";
 import { propertyJsonLd } from "@/lib/seo/jsonld";
 import { propertyPath } from "@/lib/seo/urls";
 
 export const revalidate = 300;
+
+const EMPTY_LISTINGS = {
+  items: [] as PropertySummary[],
+  total: 0,
+  nextOffset: null,
+  previousOffset: null,
+  approximate: false,
+  truncated: false,
+};
+
+/** ~km box around a point for peer searches when the comps API is unavailable. */
+function nearbyBounds(lat: number, lng: number, km: number) {
+  const dlat = km / 111;
+  const dlng = km / Math.max(111 * Math.cos((lat * Math.PI) / 180), 1e-6);
+  return {
+    latMin: lat - dlat,
+    latMax: lat + dlat,
+    lngMin: lng - dlng,
+    lngMax: lng + dlng,
+  };
+}
+
+/** Tight peer query: same type/beds/price band, nearby when coords exist. */
+function peerQuery(
+  property: PropertyDetail,
+  extras: ListingQuery = {},
+): ListingQuery {
+  const price = property.price;
+  const query: ListingQuery = {
+    city: property.community ?? undefined,
+    type: property.uiType ?? undefined,
+    bedsMin: property.beds != null ? Math.max(0, property.beds - 1) : undefined,
+    bathsMin: property.baths != null ? Math.max(0, property.baths - 1) : undefined,
+    limit: extras.limit ?? 6,
+    ...extras,
+  };
+  if (price != null && price > 0 && !property.isLease) {
+    query.priceMin = Math.round(price * 0.7);
+    query.priceMax = Math.round(price * 1.35);
+  }
+  if (
+    property.latitude != null &&
+    property.longitude != null &&
+    Number.isFinite(property.latitude) &&
+    Number.isFinite(property.longitude)
+  ) {
+    query.bounds = nearbyBounds(property.latitude, property.longitude, 8);
+  }
+  return query;
+}
 
 /**
  * Returns null only when the backend genuinely reports the listing is missing.
@@ -322,7 +377,7 @@ export default async function PropertyPage({
               </span>
             </Link>
             <Suspense fallback={null}>
-              <SimilarHomes listingKey={property.id} city={property.community} />
+              <SimilarHomes property={property} />
             </Suspense>
           </div>
         }
@@ -481,38 +536,35 @@ function LocationUnavailable({ title, detail }: { title: string; detail: string 
   );
 }
 
-async function SimilarHomes({
-  listingKey,
-  city,
-}: {
-  listingKey: string;
-  city: string | null;
-}) {
-  let similar = await safeFetch(getSimilarProperties(listingKey), [], "property:similar");
-  similar = similar.filter((item) => item.id !== listingKey);
+async function SimilarHomes({ property }: { property: PropertyDetail }) {
+  let similar = await safeFetch(getSimilarProperties(property.id), [], "property:similar");
+  similar = similar.filter((item) => item.id !== property.id);
 
-  // Fill out the sidebar when recommendations are short. Same city, active.
-  if (similar.length < 3 && city) {
+  // Fill the rail with tight peers (type / beds / price / nearby), not random city stock.
+  if (similar.length < 3) {
     const found = await safeFetch(
-      searchProperties({ city, status: "Active", limit: 4 }),
-      {
-        items: [] as PropertySummary[],
-        total: 0,
-        nextOffset: null,
-        previousOffset: null,
-        approximate: false,
-        truncated: false,
-      },
-      "property:similar-city",
+      searchProperties(
+        peerQuery(property, {
+          status: "Active",
+          transaction: property.isLease ? "rent" : "sale",
+          limit: 6,
+        }),
+      ),
+      EMPTY_LISTINGS,
+      "property:similar-peers",
     );
     const extra = found.items.filter(
-      (item) => item.id !== listingKey && !similar.some((row) => row.id === item.id),
+      (item) =>
+        item.id !== property.id &&
+        !similar.some((row) => row.id === item.id) &&
+        (property.uiType == null || item.uiType == null || item.uiType === property.uiType),
     );
     similar = [...similar, ...extra];
   }
 
   if (similar.length === 0) return null;
 
+  const city = property.community;
   return (
     <section className="rounded-2xl border border-line p-4 sm:p-5">
       <h2 className="mb-4 text-[15px] font-semibold text-ink">
@@ -593,41 +645,78 @@ async function DemandPanel({ listingKey }: { listingKey: string }) {
 }
 
 async function ComparablesSection({ property }: { property: PropertyDetail }) {
-  const city = property.community ?? undefined;
-  const empty = {
-    items: [] as PropertySummary[],
-    total: 0,
-    nextOffset: null,
-    previousOffset: null,
-    approximate: false,
-    truncated: false,
-  };
-  const [recommended, sold, rent, active, engagement] = await Promise.all([
-    safeFetch(getSimilarProperties(property.id), [], "property:similar"),
-    city
-      ? safeFetch(searchProperties({ city, status: "Sold", limit: 4 }), empty, "property:sold-comps")
-      : Promise.resolve(empty),
-    city
-      ? safeFetch(
-          searchProperties({ city, transaction: "rent", status: "Active", limit: 4 }),
-          empty,
-          "property:rent-comps",
-        )
-      : Promise.resolve(empty),
-    city
-      ? safeFetch(searchProperties({ city, status: "Active", limit: 8 }), empty, "property:sale-comps")
-      : Promise.resolve(empty),
+  const dropSelf = (items: PropertySummary[]) => items.filter((item) => item.id !== property.id);
+  const sameType = (items: PropertySummary[]) =>
+    property.uiType
+      ? items.filter((item) => !item.uiType || item.uiType === property.uiType)
+      : items;
+
+  const [comps, engagement] = await Promise.all([
+    safeFetch(
+      getPropertyComparables(property.id, 4),
+      { sale: [] as PropertySummary[], sold: [] as PropertySummary[], rent: [] as PropertySummary[] },
+      "property:comparables",
+    ),
     getListingEngagement(property.id),
   ]);
-  const dropSelf = (items: PropertySummary[]) => items.filter((item) => item.id !== property.id);
-  const sale = dropSelf(recommended);
-  const citySale = dropSelf(active.items).filter((item) => !sale.some((row) => row.id === item.id));
+
+  let sale = sameType(dropSelf(comps.sale));
+  let sold = sameType(dropSelf(comps.sold));
+  let rent = dropSelf(comps.rent);
+
+  // Fallback when the comps endpoint is empty/unavailable: tight peer search.
+  if (sale.length < 2 || sold.length < 2 || rent.length < 2) {
+    const [recommended, soldFallback, rentFallback, saleFallback] = await Promise.all([
+      sale.length < 2
+        ? safeFetch(getSimilarProperties(property.id), [], "property:similar")
+        : Promise.resolve([] as PropertySummary[]),
+      sold.length < 2
+        ? safeFetch(
+            searchProperties(peerQuery(property, { status: "Sold", limit: 6 })),
+            EMPTY_LISTINGS,
+            "property:sold-comps",
+          )
+        : Promise.resolve(EMPTY_LISTINGS),
+      rent.length < 2
+        ? safeFetch(
+            searchProperties(
+              peerQuery(property, { transaction: "rent", status: "Active", limit: 6 }),
+            ),
+            EMPTY_LISTINGS,
+            "property:rent-comps",
+          )
+        : Promise.resolve(EMPTY_LISTINGS),
+      sale.length < 2
+        ? safeFetch(
+            searchProperties(
+              peerQuery(property, {
+                status: "Active",
+                transaction: "sale",
+                limit: 8,
+              }),
+            ),
+            EMPTY_LISTINGS,
+            "property:sale-comps",
+          )
+        : Promise.resolve(EMPTY_LISTINGS),
+    ]);
+
+    if (sale.length < 2) {
+      const fromRec = sameType(dropSelf(recommended));
+      const fromSearch = sameType(dropSelf(saleFallback.items)).filter(
+        (item) => !fromRec.some((row) => row.id === item.id),
+      );
+      sale = [...fromRec, ...fromSearch];
+    }
+    if (sold.length < 2) sold = sameType(dropSelf(soldFallback.items));
+    if (rent.length < 2) rent = dropSelf(rentFallback.items);
+  }
 
   return (
     <ComparablesBoard
-      sale={[...sale, ...citySale]}
-      sold={dropSelf(sold.items)}
-      rent={dropSelf(rent.items)}
+      sale={sale}
+      sold={sold}
+      rent={rent}
       engagement={engagement}
       price={property.price}
       annualTax={property.taxAnnualAmount}

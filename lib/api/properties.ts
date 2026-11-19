@@ -410,17 +410,44 @@ export async function getSimilarProperties(
         results?: BackendPropertySummary[];
         /** Ranked matches. Each row wraps the listing under `property`. */
         for_this_home?: Array<{ property?: BackendPropertySummary | null }>;
+        fallback?: Array<{ property?: BackendPropertySummary | null }>;
       }
   >(`${MLS}/properties/${encodeURIComponent(listingKey)}/recommendations/`, {
-    revalidate: 600,
+    revalidate: 300,
     ...options,
   });
   if (Array.isArray(data)) return data.map(mapPropertySummary);
   const ranked = (data.for_this_home ?? [])
     .map((row) => row.property)
     .filter((row): row is BackendPropertySummary => Boolean(row?.listing_key));
-  const rows = ranked.length > 0 ? ranked : (data.results ?? []);
+  if (ranked.length > 0) return ranked.map(mapPropertySummary);
+  const fallback = (data.fallback ?? [])
+    .map((row) => row.property)
+    .filter((row): row is BackendPropertySummary => Boolean(row?.listing_key));
+  const rows = fallback.length > 0 ? fallback : (data.results ?? []);
   return rows.map(mapPropertySummary);
+}
+
+/** Sold / for-sale / rent peers for the Comparables tab (distance + type + beds + price). */
+export async function getPropertyComparables(
+  listingKey: string,
+  limit = 4,
+  options: RequestOptions = {},
+): Promise<{ sale: PropertySummary[]; sold: PropertySummary[]; rent: PropertySummary[] }> {
+  const data = await apiFetch<{
+    sale?: BackendPropertySummary[];
+    sold?: BackendPropertySummary[];
+    rent?: BackendPropertySummary[];
+  }>(`${MLS}/properties/${encodeURIComponent(listingKey)}/comparables/`, {
+    revalidate: 300,
+    ...options,
+    params: { limit, ...options.params },
+  });
+  return {
+    sale: (data.sale ?? []).map(mapPropertySummary),
+    sold: (data.sold ?? []).map(mapPropertySummary),
+    rent: (data.rent ?? []).map(mapPropertySummary),
+  };
 }
 
 /** Listings flagged as community features (curated by the brokerage). */
