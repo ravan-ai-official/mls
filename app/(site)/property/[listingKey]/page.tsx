@@ -27,6 +27,7 @@ import {
   getSimilarProperties,
   searchProperties,
 } from "@/lib/api/properties";
+import { getClimateRisk } from "@/lib/api/climate";
 import { getListingEngagement, getPropertySnapshots } from "@/lib/api/neighbourhood";
 import { getSchoolsNear } from "@/lib/api/schools";
 import { statusLabel } from "@/lib/api/mappers";
@@ -447,7 +448,14 @@ export default async function PropertyPage({
                           </div>
                         </section>
                       )}
-                      <ClimateRisk />
+                      {hasLocation ? (
+                        <Suspense fallback={<SectionSkeleton label="Loading climate risk" />}>
+                          <ClimateRiskPanel
+                            latitude={property.latitude ?? 0}
+                            longitude={property.longitude ?? 0}
+                          />
+                        </Suspense>
+                      ) : null}
                       <PropertyNote listingKey={property.id} />
                     </div>
                   ),
@@ -637,6 +645,22 @@ async function SchoolsPanel({
     "property:schools",
   );
   return <SchoolsSection schools={schools} />;
+}
+
+async function ClimateRiskPanel({
+  latitude,
+  longitude,
+}: {
+  latitude: number;
+  longitude: number;
+}) {
+  const payload = await safeFetch(
+    getClimateRisk(latitude, longitude),
+    null,
+    "property:climate-risk",
+  );
+  if (!payload?.risks?.length) return null;
+  return <ClimateRisk risks={payload.risks} source={payload.source} />;
 }
 
 async function DemandPanel({ listingKey }: { listingKey: string }) {

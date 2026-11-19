@@ -10,8 +10,7 @@ import { cn } from "@/lib/utils/cn";
  * screen; the Watch / Share / tour actions wrap onto their own row so they
  * are never clipped. Estimates, schools and community only render data the
  * catalogue actually has — sample school ratings from the reference are not
- * reproduced. Climate Risk on Overview uses the HomeAtlasUI ClimateCheck
- * sample projections until a live feed exists.
+ * reproduced. Climate Risk on Overview is location-based (Open-Meteo CMIP6).
  */
 export interface PropertyTab {
   id: string;

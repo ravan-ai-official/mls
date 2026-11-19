@@ -1,17 +1,8 @@
-/**
- * Climate Risk card from HomeAtlasUI's property Overview tab.
- *
- * The reference uses ClimateCheck sample projections (heat / precipitation /
- * flood for 2050). There is no live climate feed yet, so these scores match
- * that prototype rather than a property-specific API.
- */
+import type { ClimateRiskItem, ClimateRiskLevel } from "@/lib/api/climate";
 
-type RiskLevel = "Low" | "Medium" | "High";
+type RiskLevel = ClimateRiskLevel;
 
-interface ClimateRiskItem {
-  risk: string;
-  level: RiskLevel;
-  desc: string;
+interface DisplayRisk extends ClimateRiskItem {
   tone: string;
 }
 
@@ -21,28 +12,30 @@ const LEVEL_TONE: Record<RiskLevel, string> = {
   High: "bg-red-100 text-red-700",
 };
 
-const RISKS: ClimateRiskItem[] = [
-  {
-    risk: "Heat Risk",
-    level: "Medium",
-    desc: "Around 2050, projected 10 extremely hot days/year above 31°C.",
-    tone: LEVEL_TONE.Medium,
-  },
-  {
-    risk: "Precipitation Risk",
-    level: "Medium",
-    desc: "Heavy rainfall projected to increase by 12mm to 87mm annually by 2050.",
-    tone: "bg-blue-100 text-blue-700",
-  },
-  {
-    risk: "Flood Risk",
-    level: "Low",
-    desc: "This property has a 3% chance of flooding over the next 25 years.",
-    tone: LEVEL_TONE.Low,
-  },
-];
+/** Precipitation keeps the blue chip from the reference UI. */
+function toneFor(risk: string, level: RiskLevel): string {
+  if (risk.toLowerCase().includes("precip")) {
+    if (level === "Low") return "bg-blue-50 text-blue-700";
+    if (level === "High") return "bg-blue-200 text-blue-900";
+    return "bg-blue-100 text-blue-700";
+  }
+  return LEVEL_TONE[level];
+}
 
-export function ClimateRisk() {
+export function ClimateRisk({
+  risks,
+  source,
+}: {
+  risks: ClimateRiskItem[];
+  source?: string;
+}) {
+  if (!risks.length) return null;
+
+  const items: DisplayRisk[] = risks.map((item) => ({
+    ...item,
+    tone: toneFor(item.risk, item.level),
+  }));
+
   return (
     <section className="rounded-surface border border-line bg-surface p-4 sm:p-6">
       <h2 className="mb-1 text-[18px] font-semibold text-ink">Climate Risk</h2>
@@ -50,11 +43,8 @@ export function ClimateRisk() {
         Projected hazards for this property by 2050
       </p>
       <div className="space-y-3">
-        {RISKS.map((item) => (
-          <div
-            key={item.risk}
-            className="rounded-control bg-surface-alt p-4"
-          >
+        {items.map((item) => (
+          <div key={item.risk} className="rounded-control bg-surface-alt p-4">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <span className="text-small font-semibold text-ink">{item.risk}</span>
               <span
@@ -67,7 +57,9 @@ export function ClimateRisk() {
           </div>
         ))}
       </div>
-      <p className="mt-3 text-caption text-ink-subtle">Source: ClimateCheck</p>
+      <p className="mt-3 text-caption text-ink-subtle">
+        Source: {source ?? "Open-Meteo CMIP6"}
+      </p>
     </section>
   );
 }
