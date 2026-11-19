@@ -89,12 +89,9 @@ const TABS = [
   { value: "filters", label: "Filters" },
 ] as const;
 
-const panelTransition = {
-  type: "spring" as const,
-  stiffness: 320,
-  damping: 28,
-  mass: 0.85,
-};
+const tabPillTransition = { type: "spring" as const, stiffness: 480, damping: 36, mass: 0.6 };
+/** Content + height move together — no separate layout height tween. */
+const panelTransition = { duration: 0.22, ease: [0.22, 1, 0.36, 1] as const };
 
 /**
  * Hero search: AI search (a sentence → filters) or the classic filter form.
@@ -115,11 +112,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
 
   return (
     <LayoutGroup id="hero-search">
-      <motion.div
-        layout
-        transition={panelTransition}
-        className="w-full max-w-[540px] overflow-hidden rounded-surface bg-surface p-3.5 shadow-pop sm:p-6 lg:p-7"
-      >
+      <div className="w-full max-w-[540px] overflow-hidden rounded-surface bg-surface p-3.5 shadow-pop sm:p-6 lg:p-7">
         <div
           role="tablist"
           aria-label="Search mode"
@@ -143,7 +136,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
                   <motion.span
                     layoutId="hero-search-tab-pill"
                     className="absolute inset-0 rounded-control bg-navy shadow-md"
-                    transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+                    transition={tabPillTransition}
                   />
                 )}
                 <span className="relative z-10 flex items-center gap-1.5">
@@ -157,21 +150,16 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
           })}
         </div>
 
-        {/* Height follows the active panel; only one mounts. Drop-in on switch. */}
-        <AnimatePresence mode="wait" initial={false} custom={direction}>
+        <AnimatePresence mode="popLayout" initial={false} custom={direction}>
           <motion.div
             key={mode}
             role="tabpanel"
             custom={direction}
-            variants={{
-              enter: (dir: number) => ({ opacity: 0, y: dir > 0 ? -28 : 28 }),
-              center: { opacity: 1, y: 0 },
-              exit: (dir: number) => ({ opacity: 0, y: dir > 0 ? 20 : -20 }),
-            }}
-            initial="enter"
-            animate="center"
-            exit="exit"
+            initial={{ opacity: 0, y: direction > 0 ? -22 : 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: direction > 0 ? 14 : -14 }}
             transition={panelTransition}
+            className="will-change-transform"
           >
             {mode === "ai" ? (
               <>
@@ -191,7 +179,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
             )}
           </motion.div>
         </AnimatePresence>
-      </motion.div>
+      </div>
     </LayoutGroup>
   );
 }
