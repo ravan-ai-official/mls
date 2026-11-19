@@ -15,6 +15,7 @@ import type {
   ValuationSubject,
 } from "@/lib/api/valuation";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { fetchJson } from "@/lib/queries/fetcher";
 import {
   useAddressAutocomplete,
   useValuationEstimate,
@@ -51,8 +52,34 @@ export function ValuationWizard() {
   function handleSelectAddress(suggestion: AddressSuggestion) {
     estimate.reset();
     lookup.mutate(suggestion, {
-      onSuccess: (data) => {
-        setSubject(data);
+      onSuccess: async (data) => {
+        let next: ValuationSubject = {
+          ...data,
+          // Autocomplete may already carry coords the lookup row lacks.
+          latitude: data.latitude ?? suggestion.latitude,
+          longitude: data.longitude ?? suggestion.longitude,
+        };
+        if (next.latitude == null || next.longitude == null) {
+          const query = [next.address, next.city, "Ontario", "Canada"]
+            .filter(Boolean)
+            .join(", ");
+          try {
+            const places = await fetchJson<
+              Array<{ latitude: number; longitude: number }>
+            >(`/api/geocode?q=${encodeURIComponent(query)}`);
+            const place = places[0];
+            if (place) {
+              next = {
+                ...next,
+                latitude: place.latitude,
+                longitude: place.longitude,
+              };
+            }
+          } catch {
+            // Estimate endpoint also geocodes; continue without blocking.
+          }
+        }
+        setSubject(next);
         setStep("details");
       },
     });
@@ -74,6 +101,7 @@ export function ValuationWizard() {
     estimate.mutate(
       {
         listingKey: subject.listingKey,
+        address: subject.address,
         latitude: subject.latitude,
         longitude: subject.longitude,
         postalCode: subject.postalCode,
@@ -333,6 +361,16 @@ function AddressStep({
 
 const NO_SUGGESTIONS: AddressSuggestion[] = [];
 
+function friendlyEstimateMessage(message: string | null | undefined): string {
+  const fallback =
+    "We couldn't find enough nearby sold or active listings to price this home. Try another address, or ask an agent for a manual CMA.";
+  if (!message) return fallback;
+  if (/latitude|longitude|geolocat/i.test(message)) {
+    return "We couldn't locate this address on the map. Try another nearby listing, or ask an agent for a manual CMA.";
+  }
+  return message;
+}
+
 function ResultCard({
   result,
   address,
@@ -348,8 +386,7 @@ function ResultCard({
       <div className="rounded-surface border border-line bg-surface p-6 text-center shadow-card">
         <h2 className="text-h2 text-ink">We can&rsquo;t estimate this home yet</h2>
         <p className="mt-2 text-small text-ink-muted">
-          {result.message ??
-            "We couldn't find enough nearby sold or active listings to price this home. Try another address, or ask an agent for a manual CMA."}
+          {friendlyEstimateMessage(result.message)}
         </p>
         <Button variant="secondary" className="mt-5" onClick={onRestart}>
           Try another address

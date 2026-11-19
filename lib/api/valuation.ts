@@ -193,8 +193,8 @@ export async function autocompleteAddress(
   return (data.results ?? []).map((item) => ({
     label: item.label,
     listingKey: item.listing_key ?? null,
-    latitude: typeof item.latitude === "number" ? item.latitude : null,
-    longitude: typeof item.longitude === "number" ? item.longitude : null,
+    latitude: toNumber(item.latitude),
+    longitude: toNumber(item.longitude),
     fsa: typeof item.fsa === "string" ? item.fsa : null,
   }));
 }
@@ -208,29 +208,28 @@ export async function lookupSubject(
     params: { listing_key: input.listingKey, address: input.address },
   });
 
-  const num = (value: unknown) => (typeof value === "number" ? value : null);
-
   return {
     listingKey: (raw.listing_key as string) ?? null,
     address: (raw.unparsed_address as string) ?? "",
     city: (raw.city as string) ?? "",
     cityRegion: (raw.city_region as string) ?? "",
     postalCode: (raw.postal_code as string) ?? "",
-    latitude: num(raw.latitude),
-    longitude: num(raw.longitude),
-    bedroomsTotal: num(raw.bedrooms_total),
-    bathroomsTotal: num(raw.bathrooms_total),
-    livingArea: num(raw.living_area) ?? num(raw.above_grade_finished_area),
-    parkingTotal: num(raw.parking_total),
-    taxAnnualAmount: num(raw.tax_annual_amount),
+    latitude: toNumber(raw.latitude),
+    longitude: toNumber(raw.longitude),
+    bedroomsTotal: toNumber(raw.bedrooms_total),
+    bathroomsTotal: toNumber(raw.bathrooms_total),
+    livingArea: toNumber(raw.living_area) ?? toNumber(raw.above_grade_finished_area),
+    parkingTotal: toNumber(raw.parking_total),
+    taxAnnualAmount: toNumber(raw.tax_annual_amount),
     propertySubType: (raw.property_sub_type as string) ?? "",
-    lotFrontage: num(raw.lot_frontage),
-    lotDepth: num(raw.lot_depth),
+    lotFrontage: toNumber(raw.lot_frontage),
+    lotDepth: toNumber(raw.lot_depth),
   };
 }
 
 export interface EstimateInput {
   listingKey?: string | null;
+  address?: string;
   latitude?: number | null;
   longitude?: number | null;
   postalCode?: string;
@@ -299,6 +298,7 @@ export async function estimateValue(
       method: "POST",
       body: {
         listing_key: input.listingKey ?? undefined,
+        address: input.address || undefined,
         latitude: input.latitude ?? undefined,
         longitude: input.longitude ?? undefined,
         postal_code: input.postalCode,
