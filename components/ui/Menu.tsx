@@ -28,6 +28,7 @@ export function Menu({
   panelClassName,
   role = "menu",
   label,
+  openOnHover = false,
 }: {
   /** Render prop so the caller owns the trigger's look. */
   trigger: (props: {
@@ -47,14 +48,39 @@ export function Menu({
   role?: "menu" | "dialog";
   /** Accessible name for a dialog-role panel. */
   label?: string;
+  /** Open on pointer hover (desktop nav). Click still toggles for touch/keyboard. */
+  openOnHover?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelId = useId();
 
-  const close = useCallback(() => setOpen(false), []);
-  const toggle = useCallback(() => setOpen((value) => !value), []);
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const close = useCallback(() => {
+    clearCloseTimer();
+    setOpen(false);
+  }, [clearCloseTimer]);
+  const openMenu = useCallback(() => {
+    clearCloseTimer();
+    setOpen(true);
+  }, [clearCloseTimer]);
+  const toggle = useCallback(() => {
+    clearCloseTimer();
+    setOpen((value) => !value);
+  }, [clearCloseTimer]);
+  const scheduleClose = useCallback(() => {
+    if (!openOnHover) return;
+    clearCloseTimer();
+    closeTimer.current = setTimeout(() => setOpen(false), 120);
+  }, [clearCloseTimer, openOnHover]);
 
   useEffect(() => {
     if (!open) return;
@@ -77,8 +103,15 @@ export function Menu({
     };
   }, [open]);
 
+  useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+
   return (
-    <div className="relative" ref={rootRef}>
+    <div
+      className="relative"
+      ref={rootRef}
+      onMouseEnter={openOnHover ? openMenu : undefined}
+      onMouseLeave={openOnHover ? scheduleClose : undefined}
+    >
       {trigger({
         open,
         toggle,
@@ -96,18 +129,24 @@ export function Menu({
           role={role}
           aria-label={label}
           className={cn(
-            "absolute top-full z-50 mt-2 overflow-hidden rounded-surface border border-line bg-surface shadow-pop",
+            // Padding bridge keeps hover alive while the pointer moves into the panel.
+            "absolute top-full z-50 pt-2",
             align === "right" ? "right-0" : "left-0",
-            panelClassName ?? "w-60",
           )}
         >
-          {typeof children === "function" ? children(close) : children}
+          <div
+            className={cn(
+              "animate-fade-up overflow-hidden rounded-surface border border-line bg-surface shadow-pop",
+              panelClassName ?? "w-60",
+            )}
+          >
+            {typeof children === "function" ? children(close) : children}
+          </div>
         </div>
       )}
     </div>
   );
 }
-
 /** Row inside a `role="menu"` panel. Renders a link when `href` is set. */
 export function MenuItem({
   href,

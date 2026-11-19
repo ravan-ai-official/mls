@@ -203,8 +203,10 @@ export function Navbar({
 
   const linkClass = (active: boolean) =>
     cn(
-      "whitespace-nowrap text-[13px] font-medium transition-colors hover:text-gold xl:text-small",
-      active ? "text-gold" : "text-ink",
+      "relative inline-flex items-center whitespace-nowrap py-2 text-[13px] font-medium text-ink transition-colors xl:text-small",
+      "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:bg-gold after:transition-transform after:duration-200 after:ease-out",
+      "hover:text-gold hover:after:scale-x-100",
+      active && "text-gold after:scale-x-100",
     );
 
   return (
@@ -220,11 +222,11 @@ export function Navbar({
           <NavLinks
             links={primary}
             pathname={pathname}
-            listClassName="flex items-center gap-4 xl:gap-5"
+            listClassName="flex h-full items-center gap-5 xl:gap-6"
             linkClassName={linkClass}
             trailing={
               more.length > 0 ? (
-                <li>
+                <li className="flex h-full items-center">
                   <MoreNav links={more} pathname={pathname} />
                 </li>
               ) : null
@@ -406,14 +408,17 @@ function MoreNavList({
   return (
     <Menu
       align="left"
-      panelClassName="w-52"
+      openOnHover
+      panelClassName="w-56 py-1"
       trigger={({ open, buttonProps }) => (
         <button
           type="button"
           {...buttonProps}
           className={cn(
-            "inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium transition-colors hover:text-gold xl:text-small",
-            anyActive || open ? "text-gold" : "text-ink",
+            "relative inline-flex items-center gap-1 whitespace-nowrap py-2 text-[13px] font-medium text-ink transition-colors xl:text-small",
+            "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:bg-gold after:transition-transform after:duration-200 after:ease-out",
+            "hover:text-gold hover:after:scale-x-100",
+            (anyActive || open) && "text-gold after:scale-x-100",
           )}
         >
           More
@@ -431,7 +436,12 @@ function MoreNavList({
                 href={link.href}
                 LinkComponent={Link}
                 onSelect={close}
-                className={cn(active && "bg-surface-alt font-semibold text-gold")}
+                className={cn(
+                  "px-4 py-3 transition-colors",
+                  active
+                    ? "bg-gold-soft/60 font-semibold text-navy"
+                    : "hover:bg-surface-alt hover:text-navy",
+                )}
               >
                 {link.label}
               </MenuItem>
