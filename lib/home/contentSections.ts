@@ -2,11 +2,9 @@
  * Inline content from HomeAtlasUI/src/pages/HomePage.tsx L832-1227, ported
  * verbatim for the homepage's editorial / marketing sections.
  *
- * REFERENCE SAMPLE CONTENT. The neighbour-activity feed, news headlines and
- * guide blurbs have no backend source; per the product decision they render as
- * the reference shows them. The activity feed is not MLS® data, so nothing here
- * links to /property/<id>. Emoji icons from the reference are replaced by keys
- * that map to inline SVGs in components/home/sections/contentIcons.tsx.
+ * REFERENCE SAMPLE CONTENT for editorial sections. Neighbour activity cards
+ * come from the live `/api/home/neighbour-activity/` feed. Emoji icons from the
+ * reference are replaced by keys that map to inline SVGs in contentIcons.tsx.
  */
 
 /* NEIGHBOUR SELLING / RENTER ALERTS (reference L845-879) */
@@ -16,23 +14,6 @@ export const neighbourAlertPoints: string[] = [
   "Renters: know if your building or street is for sale",
   "Track your neighbourhood's price movement",
   "First-look at properties before they go live",
-];
-
-export type NeighbourEvent = "Just Listed" | "Price Drop" | "Open House" | "Just Sold";
-
-export interface NeighbourActivity {
-  address: string;
-  event: NeighbourEvent;
-  price: string;
-  daysAgo: string;
-  img: string;
-}
-
-export const neighbourActivity: NeighbourActivity[] = [
-  { address: "44 Elm Street", event: "Just Listed", price: "$1.18M", daysAgo: "Today", img: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400&h=250&fit=crop" },
-  { address: "91 Cedar Lane", event: "Price Drop", price: "$879K ↓", daysAgo: "2 days ago", img: "https://images.unsplash.com/photo-1605276373954-0c4a0dac5b12?w=400&h=250&fit=crop" },
-  { address: "18 Birchwood Ave", event: "Open House", price: "$1.42M", daysAgo: "This weekend", img: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=400&h=250&fit=crop" },
-  { address: "230 Oak Blvd", event: "Just Sold", price: "$1.07M", daysAgo: "3 days ago", img: "https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?w=400&h=250&fit=crop" },
 ];
 
 /* THINKING OF SELLING (reference L991) */

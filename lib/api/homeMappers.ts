@@ -448,3 +448,50 @@ export function formatDay(value: string | null | undefined): string {
     return formatDate(`${value}T12:00:00`);
   return formatDate(value);
 }
+
+/* ---------------------------------------------------- neighbour activity */
+
+export type NeighbourActivityEvent =
+  | "Just Listed"
+  | "Price Drop"
+  | "Open House"
+  | "Just Sold";
+
+export interface NeighbourActivityItem {
+  listingKey: string;
+  event: NeighbourActivityEvent;
+  address: string;
+  city: string;
+  listPrice: number | null;
+  occurredAt: string | null;
+  imageUrl: string | null;
+}
+
+const NEIGHBOUR_EVENTS = new Set<NeighbourActivityEvent>([
+  "Just Listed",
+  "Price Drop",
+  "Open House",
+  "Just Sold",
+]);
+
+export function mapNeighbourActivity(payload: unknown): NeighbourActivityItem[] {
+  return results(payload).flatMap((raw): NeighbourActivityItem[] => {
+    const r = record(raw);
+    const listingKey = str(r.listing_key);
+    const eventRaw = str(r.event);
+    if (!listingKey || !eventRaw || !NEIGHBOUR_EVENTS.has(eventRaw as NeighbourActivityEvent)) {
+      return [];
+    }
+    return [
+      {
+        listingKey,
+        event: eventRaw as NeighbourActivityEvent,
+        address: str(r.address) ?? listingKey,
+        city: str(r.city) ?? "",
+        listPrice: toNumber(r.list_price),
+        occurredAt: str(r.occurred_at),
+        imageUrl: safeUrl(r.image_url),
+      },
+    ];
+  });
+}

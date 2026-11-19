@@ -133,7 +133,12 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
   },
   incentives: { label: "Buyer incentives", summary: "Heading only. The programs themselves are edited under Incentives.", canHide: true },
   marketIntelligence: { label: "Market intelligence", summary: "Heading only. The snapshot figures stay live.", canHide: true },
-  neighbourAlerts: { label: "Neighbour alerts", summary: "Heading, bullets, and the WhatsApp message.", canHide: true },
+  neighbourAlerts: {
+    label: "Neighbour alerts",
+    summary:
+      "Heading, bullets, and WhatsApp message. Activity cards come from the live feed, preferring visitor search history and IP city.",
+    canHide: true,
+  },
   alertsCta: { label: "Smart alerts", summary: "Heading and the three alert labels. The form still saves real alerts.", canHide: true },
   thinkingOfSelling: { label: "Thinking of selling", summary: "The split call-to-action, buttons, and photo.", canHide: true },
   whyHomeAtlas: { label: "Why HomeAtlas", summary: "The advantage cards.", canHide: true },

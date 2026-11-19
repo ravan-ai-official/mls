@@ -138,7 +138,11 @@ function HomeBlock({ section }: { section: SiteSection }) {
         </Live>
       );
     case "neighbourAlerts":
-      return <NeighbourAlerts content={content} />;
+      return (
+        <Live fallback={null}>
+          <NeighbourAlerts content={content} />
+        </Live>
+      );
     case "alertsCta":
       return <AlertsCta content={content} />;
     case "thinkingOfSelling":

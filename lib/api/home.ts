@@ -14,11 +14,13 @@ import {
   mapIncentives,
   mapInvestorPicks,
   mapMarketSnapshot,
+  mapNeighbourActivity,
   mapPartners,
   mapSoldBelow,
   type Incentive,
   type InvestorPicksFeed,
   type MarketSnapshot,
+  type NeighbourActivityItem,
   type Partner,
   type PriceDropDeal,
   type SoldBelowRow,
@@ -87,6 +89,24 @@ export function getSoldBelowPurchase(
 
 export function getMarketSnapshot(): Promise<MarketSnapshot | null> {
   return get("market-snapshot/", FEED_REVALIDATE, mapMarketSnapshot);
+}
+
+export function getNeighbourActivity(
+  limit = 4,
+  options: { cities?: string[]; headers?: Record<string, string>; cache?: RequestCache } = {},
+): Promise<NeighbourActivityItem[] | null> {
+  const { cities, headers, cache } = options;
+  return get(
+    "neighbour-activity/",
+    cities?.length ? 120 : FEED_REVALIDATE,
+    mapNeighbourActivity,
+    {
+      limit,
+      cities: cities?.length ? cities.join(",") : undefined,
+    },
+    undefined,
+    { headers, cache },
+  );
 }
 
 export function getIncentives(): Promise<Incentive[] | null> {

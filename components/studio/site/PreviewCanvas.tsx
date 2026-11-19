@@ -6,7 +6,6 @@ import { QuickActions } from "@/components/home/sections/QuickActions";
 import { AlertsCta } from "@/components/home/AlertsCta";
 import { GtaMarketDeals } from "@/components/home/sections/GtaMarketDeals";
 import { HowItWorks } from "@/components/home/sections/HowItWorks";
-import { NeighbourAlerts } from "@/components/home/sections/NeighbourAlerts";
 import { ResourcesGuides } from "@/components/home/sections/ResourcesGuides";
 import { ThinkingOfSelling } from "@/components/home/sections/ThinkingOfSelling";
 import { TopRatedSchools } from "@/components/home/sections/TopRatedSchools";
@@ -107,7 +106,6 @@ function SectionPreview({ id, content }: { id: SectionId; content: Record<string
   if (id === "quickActions") return <QuickActions content={content} />;
   if (id === "marketDeals") return <GtaMarketDeals content={content} />;
   if (id === "schools") return <TopRatedSchools content={content} />;
-  if (id === "neighbourAlerts") return <NeighbourAlerts content={content} />;
   if (id === "alertsCta") return <AlertsCta content={content} />;
   if (id === "thinkingOfSelling") return <ThinkingOfSelling content={content} />;
   if (id === "whyHomeAtlas") return <WhyHomeAtlas content={content} />;
