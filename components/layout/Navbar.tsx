@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useId, useState } from "react";
+import { Suspense, useId, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 import { Logo } from "@/components/layout/Logo";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -37,6 +37,17 @@ const NAV_LINKS: NavLinkItem[] = [
 ];
 
 const CONTACT_HREF = "/contact";
+
+/** Always visible in the desktop rail — keeps one clean line. */
+const PRIMARY_PATHS = new Set(["/listings", "/preconstruction", "/sell"]);
+
+/** Paths that belong under the More menu on desktop. */
+const MORE_PATHS = new Set([
+  "/assignments",
+  "/market-trends",
+  "/communities",
+  "/blog",
+]);
 
 function isLinkActive(
   link: NavLinkItem,
@@ -77,6 +88,8 @@ interface NavLinksProps {
   linkClassName: (active: boolean) => string;
   /** Fired when a link is activated — used to dismiss the mobile drawer. */
   onNavigate?: () => void;
+  /** Optional trailing item (e.g. desktop More menu). */
+  trailing?: ReactNode;
 }
 
 function NavLinkList({
@@ -86,6 +99,7 @@ function NavLinkList({
   listClassName,
   linkClassName,
   onNavigate,
+  trailing,
 }: NavLinksProps & { params: URLSearchParams | null }) {
   return (
     <ul className={listClassName}>
@@ -104,6 +118,7 @@ function NavLinkList({
           </li>
         );
       })}
+      {trailing}
     </ul>
   );
 }
@@ -132,6 +147,28 @@ function withoutContactLink(links: NavLinkItem[]) {
   );
 }
 
+function pathOf(link: NavLinkItem) {
+  return link.href.split("?")[0];
+}
+
+function splitNavLinks(links: NavLinkItem[]) {
+  const primary: NavLinkItem[] = [];
+  const more: NavLinkItem[] = [];
+  for (const link of links) {
+    const path = pathOf(link);
+    if (PRIMARY_PATHS.has(path)) primary.push(link);
+    else if (MORE_PATHS.has(path)) more.push(link);
+    else more.push(link);
+  }
+  // Keep Sell after the browse links even if CMS order drifts.
+  primary.sort((a, b) => {
+    const rank = (path: string) =>
+      path === "/listings" ? 0 : path === "/preconstruction" ? 1 : path === "/sell" ? 2 : 3;
+    return rank(pathOf(a)) - rank(pathOf(b));
+  });
+  return { primary, more };
+}
+
 export function Navbar({
   links,
   ctaLabel = "Home Evaluation",
@@ -144,6 +181,7 @@ export function Navbar({
   const navLinks = withoutContactLink(
     withBlogLink(links?.length ? links : NAV_LINKS).map(decorate),
   );
+  const { primary, more } = splitNavLinks(navLinks);
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, openAuth, signOut } = useAuth();
@@ -163,39 +201,43 @@ export function Navbar({
     setMobileOpen(false);
   }
 
+  const linkClass = (active: boolean) =>
+    cn(
+      "whitespace-nowrap text-[13px] font-medium transition-colors hover:text-gold xl:text-small",
+      active ? "text-gold" : "text-ink",
+    );
+
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
-      <div className="container-page flex h-[72px] items-center justify-between gap-3 xl:h-20 xl:gap-4">
+      <div className="container-page flex h-[72px] items-center justify-between gap-4 lg:h-20">
         <Logo className="shrink-0" />
 
         {/*
-          Full primary rail only from xl up. Between lg and xl the link count
-          used to force a hidden horizontal scrollbar; the hamburger covers
-          that range instead so every label stays reachable without clipping.
+          Desktop rail: a short primary set + More dropdown so the bar stays
+          one line at lg+ without wrapping or a horizontal scrollbar.
         */}
-        <nav aria-label="Primary" className="hidden min-w-0 flex-1 justify-center xl:flex">
+        <nav aria-label="Primary" className="hidden min-w-0 flex-1 justify-center lg:flex">
           <NavLinks
-            links={navLinks}
+            links={primary}
             pathname={pathname}
-            listClassName="flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 2xl:gap-x-5"
-            linkClassName={(active) =>
-              cn(
-                "whitespace-nowrap text-[13px] font-medium transition-colors hover:text-gold 2xl:text-small",
-                active ? "text-gold" : "text-ink",
-              )
+            listClassName="flex items-center gap-4 xl:gap-5"
+            linkClassName={linkClass}
+            trailing={
+              more.length > 0 ? (
+                <li>
+                  <MoreNav links={more} pathname={pathname} />
+                </li>
+              ) : null
             }
           />
         </nav>
 
-        <div className="hidden shrink-0 items-center gap-2 xl:flex 2xl:gap-3">
+        <div className="hidden shrink-0 items-center gap-2 lg:flex xl:gap-3">
           <LinkButton
             href={CONTACT_HREF}
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className={cn(
-              "text-ink hover:bg-surface-alt hover:text-navy",
-              contactActive && "text-navy",
-            )}
+            className={cn(contactActive && "border-navy text-navy")}
           >
             Contact
           </LinkButton>
@@ -206,7 +248,8 @@ export function Navbar({
             className="border-gold/40 bg-gold-soft hover:bg-gold-soft/80"
           >
             <StarGlyph />
-            {ctaLabel}
+            <span className="hidden xl:inline">{ctaLabel}</span>
+            <span className="xl:hidden">Evaluate</span>
           </LinkButton>
 
           {/* Keyed by pathname: remounting on navigation closes an open panel,
@@ -223,14 +266,15 @@ export function Navbar({
             />
           ) : (
             <Button variant="primary" size="sm" onClick={() => openAuth("login")}>
-              Sign In / Register
+              <span className="hidden xl:inline">Sign In / Register</span>
+              <span className="xl:hidden">Sign In</span>
             </Button>
           )}
         </div>
 
         <button
           type="button"
-          className="rounded-control p-2 text-ink xl:hidden"
+          className="rounded-control p-2 text-ink lg:hidden"
           aria-expanded={mobileOpen}
           aria-controls={menuId}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
@@ -241,7 +285,7 @@ export function Navbar({
       </div>
 
       {mobileOpen && (
-        <div id={menuId} className="border-t border-line bg-surface xl:hidden">
+        <div id={menuId} className="border-t border-line bg-surface lg:hidden">
           <nav aria-label="Mobile" className="container-page py-2">
             <NavLinks
               links={navLinks}
@@ -335,6 +379,70 @@ export function Navbar({
   );
 }
 
+function MoreNav({ links, pathname }: { links: NavLinkItem[]; pathname: string }) {
+  return (
+    <Suspense fallback={<MoreNavList links={links} pathname={pathname} params={null} />}>
+      <MoreNavWithQuery links={links} pathname={pathname} />
+    </Suspense>
+  );
+}
+
+function MoreNavWithQuery({ links, pathname }: { links: NavLinkItem[]; pathname: string }) {
+  const params = useSearchParams();
+  return <MoreNavList links={links} pathname={pathname} params={params} />;
+}
+
+function MoreNavList({
+  links,
+  pathname,
+  params,
+}: {
+  links: NavLinkItem[];
+  pathname: string;
+  params: URLSearchParams | null;
+}) {
+  const anyActive = links.some((link) => isLinkActive(link, pathname, params));
+
+  return (
+    <Menu
+      align="left"
+      panelClassName="w-52"
+      trigger={({ open, buttonProps }) => (
+        <button
+          type="button"
+          {...buttonProps}
+          className={cn(
+            "inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium transition-colors hover:text-gold xl:text-small",
+            anyActive || open ? "text-gold" : "text-ink",
+          )}
+        >
+          More
+          <ChevronGlyph open={open} />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          {links.map((link) => {
+            const active = isLinkActive(link, pathname, params);
+            return (
+              <MenuItem
+                key={link.label}
+                href={link.href}
+                LinkComponent={Link}
+                onSelect={close}
+                className={cn(active && "bg-surface-alt font-semibold text-gold")}
+              >
+                {link.label}
+              </MenuItem>
+            );
+          })}
+        </>
+      )}
+    </Menu>
+  );
+}
+
 /** Account dropdown. Dismissal, Escape and focus return come from <Menu>. */
 function avatarInitials(name: string, email: string): string {
   const fromName = name
@@ -421,6 +529,27 @@ function StarGlyph() {
         d="M10 1L12.5 7H19L13.5 11L15.5 17.5L10 14L4.5 17.5L6.5 11L1 7H7.5L10 1Z"
         stroke="var(--color-gold)"
         strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronGlyph({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-hidden="true"
+      className={cn("transition-transform", open && "rotate-180")}
+    >
+      <path
+        d="M3 4.5L6 7.5L9 4.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
