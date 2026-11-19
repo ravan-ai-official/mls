@@ -389,7 +389,7 @@ export function validateChrome(document: unknown): FieldErrors {
     } else if (href) link(errors, `announcement.items.${index}.href`, href);
   });
   const nav = isRecord(document.nav) ? document.nav : {};
-  const links = count(errors, "nav.links", nav.links, 2, 10);
+  const links = count(errors, "nav.links", nav.links, 2, 12);
   links.forEach((item, index) => pair(errors, `nav.links.${index}`, item, 24));
   text(errors, "nav.ctaLabel", nav.ctaLabel, 28);
   link(errors, "nav.ctaHref", nav.ctaHref);

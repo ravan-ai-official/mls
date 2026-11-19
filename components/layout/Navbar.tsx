@@ -36,6 +36,8 @@ const NAV_LINKS: NavLinkItem[] = [
   { label: "Blog", href: "/blog" },
 ];
 
+const CONTACT_HREF = "/contact";
+
 function isLinkActive(
   link: NavLinkItem,
   pathname: string,
@@ -121,6 +123,15 @@ function withBlogLink(links: Array<{ label: string; href: string }>) {
   return hasBlog ? links : [...links, BLOG_LINK];
 }
 
+/** Drop Contact from the text-link rail when it is shown as its own button. */
+function withoutContactLink(links: NavLinkItem[]) {
+  return links.filter(
+    (link) =>
+      link.href.split("?")[0] !== CONTACT_HREF &&
+      link.label.trim().toLowerCase() !== "contact",
+  );
+}
+
 export function Navbar({
   links,
   ctaLabel = "Home Evaluation",
@@ -130,12 +141,15 @@ export function Navbar({
   ctaLabel?: string;
   ctaHref?: string;
 }) {
-  const navLinks = withBlogLink(links?.length ? links : NAV_LINKS).map(decorate);
+  const navLinks = withoutContactLink(
+    withBlogLink(links?.length ? links : NAV_LINKS).map(decorate),
+  );
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, openAuth, signOut } = useAuth();
   const { favorites } = useWatched();
   const menuId = useId();
+  const contactActive = pathname.startsWith(CONTACT_HREF);
 
   // Close the mobile menu when the path changes. Buy ↔ Rent stay on /listings,
   // so those links also call closeMobile() on click (pathname alone wouldn't).
@@ -151,24 +165,40 @@ export function Navbar({
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
-      <div className="container-page flex h-[72px] items-center justify-between gap-4 lg:h-20">
+      <div className="container-page flex h-[72px] items-center justify-between gap-3 xl:h-20 xl:gap-4">
         <Logo className="shrink-0" />
 
-        <nav aria-label="Primary" className="hidden min-w-0 flex-1 justify-center lg:flex">
+        {/*
+          Full primary rail only from xl up. Between lg and xl the link count
+          used to force a hidden horizontal scrollbar; the hamburger covers
+          that range instead so every label stays reachable without clipping.
+        */}
+        <nav aria-label="Primary" className="hidden min-w-0 flex-1 justify-center xl:flex">
           <NavLinks
             links={navLinks}
             pathname={pathname}
-            listClassName="flex max-w-full items-center gap-3 overflow-x-auto px-1 xl:gap-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            listClassName="flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 2xl:gap-x-5"
             linkClassName={(active) =>
               cn(
-                "shrink-0 whitespace-nowrap text-[13px] font-medium transition-colors hover:text-gold xl:text-small",
+                "whitespace-nowrap text-[13px] font-medium transition-colors hover:text-gold 2xl:text-small",
                 active ? "text-gold" : "text-ink",
               )
             }
           />
         </nav>
 
-        <div className="hidden shrink-0 items-center gap-3 lg:flex">
+        <div className="hidden shrink-0 items-center gap-2 xl:flex 2xl:gap-3">
+          <LinkButton
+            href={CONTACT_HREF}
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "text-ink hover:bg-surface-alt hover:text-navy",
+              contactActive && "text-navy",
+            )}
+          >
+            Contact
+          </LinkButton>
           <LinkButton
             href={ctaHref}
             variant="secondary"
@@ -200,7 +230,7 @@ export function Navbar({
 
         <button
           type="button"
-          className="rounded-control p-2 text-ink lg:hidden"
+          className="rounded-control p-2 text-ink xl:hidden"
           aria-expanded={mobileOpen}
           aria-controls={menuId}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
@@ -211,7 +241,7 @@ export function Navbar({
       </div>
 
       {mobileOpen && (
-        <div id={menuId} className="border-t border-line bg-surface lg:hidden">
+        <div id={menuId} className="border-t border-line bg-surface xl:hidden">
           <nav aria-label="Mobile" className="container-page py-2">
             <NavLinks
               links={navLinks}
@@ -225,6 +255,17 @@ export function Navbar({
                 )
               }
             />
+            <Link
+              href={CONTACT_HREF}
+              onClick={closeMobile}
+              aria-current={contactActive ? "page" : undefined}
+              className={cn(
+                "block border-b border-line-soft py-3.5 text-small font-medium transition-colors",
+                contactActive ? "text-gold" : "text-ink hover:text-gold",
+              )}
+            >
+              Contact
+            </Link>
             <Link
               href="/watched"
               onClick={closeMobile}
@@ -242,7 +283,16 @@ export function Navbar({
               </Link>
             )}
 
-            <div className="flex gap-3 py-4">
+            <div className="flex flex-col gap-3 py-4 sm:flex-row">
+              <LinkButton
+                href={CONTACT_HREF}
+                variant="secondary"
+                size="md"
+                className="flex-1"
+                onClick={closeMobile}
+              >
+                Contact
+              </LinkButton>
               <LinkButton
                 href={ctaHref}
                 variant="secondary"
