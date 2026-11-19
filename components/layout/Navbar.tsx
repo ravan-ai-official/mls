@@ -73,6 +73,8 @@ interface NavLinksProps {
   pathname: string;
   listClassName: string;
   linkClassName: (active: boolean) => string;
+  /** Fired when a link is activated — used to dismiss the mobile drawer. */
+  onNavigate?: () => void;
 }
 
 function NavLinkList({
@@ -81,6 +83,7 @@ function NavLinkList({
   params,
   listClassName,
   linkClassName,
+  onNavigate,
 }: NavLinksProps & { params: URLSearchParams | null }) {
   return (
     <ul className={listClassName}>
@@ -92,6 +95,7 @@ function NavLinkList({
               href={link.href}
               aria-current={active ? "page" : undefined}
               className={linkClassName(active)}
+              onClick={onNavigate}
             >
               {link.label}
             </Link>
@@ -133,11 +137,15 @@ export function Navbar({
   const { favorites } = useWatched();
   const menuId = useId();
 
-  // Close the mobile menu when the route changes. Adjusting state during render
-  // (rather than in an effect) avoids a flash of the open menu on the new page.
+  // Close the mobile menu when the path changes. Buy ↔ Rent stay on /listings,
+  // so those links also call closeMobile() on click (pathname alone wouldn't).
   const [lastPath, setLastPath] = useState(pathname);
   if (pathname !== lastPath) {
     setLastPath(pathname);
+    setMobileOpen(false);
+  }
+
+  function closeMobile() {
     setMobileOpen(false);
   }
 
@@ -208,6 +216,7 @@ export function Navbar({
             <NavLinks
               links={navLinks}
               pathname={pathname}
+              onNavigate={closeMobile}
               listClassName="flex flex-col"
               linkClassName={(active) =>
                 cn(
@@ -218,6 +227,7 @@ export function Navbar({
             />
             <Link
               href="/watched"
+              onClick={closeMobile}
               className="block border-b border-line-soft py-3.5 text-small font-medium text-ink hover:text-gold"
             >
               Watched{favorites.length > 0 ? ` (${favorites.length})` : ""}
@@ -225,6 +235,7 @@ export function Navbar({
             {user && (
               <Link
                 href="/account"
+                onClick={closeMobile}
                 className="block border-b border-line-soft py-3.5 text-small font-medium text-ink hover:text-gold"
               >
                 Account settings
@@ -237,11 +248,20 @@ export function Navbar({
                 variant="secondary"
                 size="md"
                 className="flex-1 border-gold/40 bg-gold-soft"
+                onClick={closeMobile}
               >
                 {ctaLabel}
               </LinkButton>
               {user ? (
-                <Button variant="primary" size="md" className="flex-1" onClick={signOut}>
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="flex-1"
+                  onClick={() => {
+                    closeMobile();
+                    signOut();
+                  }}
+                >
                   Sign out
                 </Button>
               ) : (
@@ -249,7 +269,10 @@ export function Navbar({
                   variant="primary"
                   size="md"
                   className="flex-1"
-                  onClick={() => openAuth("login")}
+                  onClick={() => {
+                    closeMobile();
+                    openAuth("login");
+                  }}
                 >
                   Sign In
                 </Button>
