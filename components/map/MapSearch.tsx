@@ -145,11 +145,20 @@ export function MapClickWatcher({ onClick }: { onClick: () => void }) {
   return null;
 }
 
-export function FlyTo({ target }: { target: [number, number] | null }) {
+export function FlyTo({
+  target,
+  zoom,
+}: {
+  target: [number, number] | null;
+  /** When set, used as the destination zoom; otherwise at least 14. */
+  zoom?: number | null;
+}) {
   const map = useMap();
   useEffect(() => {
-    if (target) map.flyTo(target, Math.max(map.getZoom(), 14), { duration: 0.6 });
-  }, [target, map]);
+    if (!target) return;
+    const nextZoom = zoom ?? Math.max(map.getZoom(), 14);
+    map.flyTo(target, nextZoom, { duration: 0.6 });
+  }, [target, zoom, map]);
   return null;
 }
 
@@ -190,20 +199,30 @@ export function MapSearch() {
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const listRef = useRef<HTMLUListElement>(null);
   const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
+  const [flyZoom, setFlyZoom] = useState<number | null>(null);
   // A place the visitor searched for wins over a late automatic locate,
   // which would otherwise pull the map back to where they are standing.
   const placeChosen = useRef(false);
+  /** Last city we already geocoded/flew for — avoids repeat flights. */
+  const cityFlown = useRef<string | null>(null);
   // Auto-centre only when the URL doesn't already say where to look.
   const userLocation = useUserLocation({
     autoCenter: !params.get("poly"),
     onLocated: (point, auto) => {
       if (auto && placeChosen.current) return;
+      setFlyZoom(null);
       setFlyTarget(point);
     },
   });
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   // Debounce viewport changes so a drag doesn't fire a request per frame.
   const debouncedViewport = useDebouncedValue(viewport, 350);
+
+  const flyToPlace = useCallback((point: [number, number], zoom?: number) => {
+    placeChosen.current = true;
+    setFlyZoom(zoom ?? null);
+    setFlyTarget(point);
+  }, []);
 
   /*
    * The URL is the source of truth, shared with /listings: the same filter
@@ -312,8 +331,7 @@ export function MapSearch() {
 
   const applySchool = useCallback(
     (school: SchoolSearchHit, km = DEFAULT_SCHOOL_RADIUS_KM) => {
-      placeChosen.current = true;
-      setFlyTarget([school.latitude, school.longitude]);
+      flyToPlace([school.latitude, school.longitude], 14);
       pushQuery({
         ...query,
         polygon: schoolSearchArea(school.latitude, school.longitude, km),
@@ -321,8 +339,63 @@ export function MapSearch() {
         schoolKm: km,
       });
     },
-    [pushQuery, query],
+    [flyToPlace, pushQuery, query],
   );
+
+  /** Place / city pick: fly there and keep listing filters aligned with the view. */
+  const applyPlace = useCallback(
+    (result: GeocodeResult) => {
+      const city = cityFromText(result.label);
+      rememberPlace(city);
+      if (city) cityFlown.current = city;
+      // Cities need a wider frame than a street pin.
+      flyToPlace([result.latitude, result.longitude], city ? 12 : 14);
+      pushQuery({
+        ...query,
+        // Known city → filter to it; unknown place → clear a stale city so the
+        // new bbox is not ANDed with e.g. Toronto after flying to Mississauga.
+        city: city ?? undefined,
+        polygon: undefined,
+        schoolLabel: undefined,
+        schoolKm: undefined,
+      });
+    },
+    [flyToPlace, pushQuery, query],
+  );
+
+  // Filters / listings "View on map" can set ?city= without a place search.
+  // Geocode once and fly so the viewport matches the city filter.
+  useEffect(() => {
+    const city = query.city?.trim();
+    if (!city) {
+      cityFlown.current = null;
+      return;
+    }
+    if (query.polygon?.length) return;
+    if (cityFlown.current?.toLowerCase() === city.toLowerCase()) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const q = `${city}, Ontario, Canada`;
+    void fetch(`/api/geocode?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return [];
+        return (await response.json()) as GeocodeResult[];
+      })
+      .then((places) => {
+        if (cancelled || !places[0]) return;
+        cityFlown.current = city;
+        flyToPlace([places[0].latitude, places[0].longitude], 12);
+      })
+      .catch(() => {
+        // Geocode soft-fails; the city filter still applies to the current bbox.
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [query.city, query.polygon, flyToPlace]);
 
   const mappable = useMemo(
     () => properties.filter((p) => p.latitude !== null && p.longitude !== null),
@@ -380,7 +453,7 @@ export function MapSearch() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <BoundsWatcher onChange={handleBounds} />
-          <FlyTo target={flyTarget} />
+          <FlyTo target={flyTarget} zoom={flyZoom} />
           {userLocation.position && (
             <CircleMarker
               center={userLocation.position}
@@ -403,7 +476,7 @@ export function MapSearch() {
                   interactive={!drawing.mode}
                   eventHandlers={{
                     // Clicking a cluster zooms toward it until markers appear.
-                    click: () => setFlyTarget([cell.latitude, cell.longitude]),
+                    click: () => flyToPlace([cell.latitude, cell.longitude]),
                   }}
                 />
               ))
@@ -423,14 +496,7 @@ export function MapSearch() {
               ))}
         </MapContainer>
 
-        <PlaceSearch
-          onSelect={(result) => {
-            placeChosen.current = true;
-            rememberPlace(cityFromText(result.label));
-            setFlyTarget([result.latitude, result.longitude]);
-          }}
-          onSelectSchool={applySchool}
-        />
+        <PlaceSearch onSelect={applyPlace} onSelectSchool={applySchool} />
 
         <MapControls
           drawMode={drawing.mode}
@@ -545,7 +611,10 @@ export function MapSearch() {
                   property.latitude !== null && property.longitude !== null
                     ? () => {
                         setSelectedId(property.id);
-                        setFlyTarget([property.latitude as number, property.longitude as number]);
+                        flyToPlace(
+                          [property.latitude as number, property.longitude as number],
+                          15,
+                        );
                       }
                     : null
                 }
