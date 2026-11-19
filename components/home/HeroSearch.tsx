@@ -90,8 +90,10 @@ const TABS = [
 ] as const;
 
 const panelTransition = {
-  duration: 0.38,
-  ease: [0.22, 1, 0.36, 1] as const,
+  type: "spring" as const,
+  stiffness: 320,
+  damping: 28,
+  mass: 0.85,
 };
 
 /**
@@ -117,7 +119,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
         <div
           role="tablist"
           aria-label="Search mode"
-          className="relative mb-5 grid grid-cols-2 gap-1 rounded-control bg-surface-alt p-1"
+          className="relative mb-5 grid grid-cols-2 gap-1 rounded-control bg-navy-tint p-1 ring-1 ring-navy/10"
         >
           {TABS.map((tab) => {
             const active = mode === tab.value;
@@ -129,19 +131,21 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
                 aria-selected={active}
                 onClick={() => selectMode(tab.value)}
                 className={cn(
-                  "relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-control text-small transition-colors",
-                  active ? "font-semibold text-ink" : "text-ink-muted hover:text-ink",
+                  "relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-control text-small font-semibold transition-colors",
+                  active ? "text-white" : "text-navy/75 hover:text-navy",
                 )}
               >
                 {active && (
                   <motion.span
                     layoutId="hero-search-tab-pill"
-                    className="absolute inset-0 rounded-control bg-surface shadow-sm"
+                    className="absolute inset-0 rounded-control bg-navy shadow-md"
                     transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
                   />
                 )}
                 <span className="relative z-10 flex items-center gap-1.5">
-                  {tab.value === "ai" && <SparkleIcon className="text-gold-deep" />}
+                  {tab.value === "ai" && (
+                    <SparkleIcon className={active ? "text-gold" : "text-gold-deep"} />
+                  )}
                   {tab.label}
                 </span>
               </button>
@@ -151,7 +155,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
 
         {/*
           Both panels share one grid cell so card height stays the max of the two —
-          switching tabs never resizes the form. Framer animates a soft drop/slide.
+          switching tabs never resizes the form. Framer drops the next panel in.
         */}
         <div className="relative grid overflow-hidden">
           <motion.div
@@ -161,7 +165,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
             animate={
               mode === "ai"
                 ? { opacity: 1, y: 0 }
-                : { opacity: 0, y: direction > 0 ? 16 : -16 }
+                : { opacity: 0, y: direction > 0 ? 28 : -28 }
             }
             transition={panelTransition}
             className={cn(
@@ -188,7 +192,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
             animate={
               mode === "filters"
                 ? { opacity: 1, y: 0 }
-                : { opacity: 0, y: direction > 0 ? -16 : 16 }
+                : { opacity: 0, y: direction > 0 ? -28 : 28 }
             }
             transition={panelTransition}
             className={cn(
@@ -266,88 +270,101 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div className="mb-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+      <div>
         <p className="text-small font-semibold text-ink">Search listings</p>
         <p className="text-caption text-ink-muted">
           Filter live MLS® data by location, price, beds and baths
         </p>
       </div>
 
-      <SearchInput
-        size="lg"
-        label="Search by city, neighbourhood, postal code or MLS® number"
-        value={query}
-        onValueChange={setQuery}
-        placeholder="City, neighbourhood, postal code (L7A) or MLS®"
-        className="mb-4"
-      />
+      <FieldBlock label="Location">
+        <SearchInput
+          size="lg"
+          label="Search by city, neighbourhood, postal code or MLS® number"
+          value={query}
+          onValueChange={setQuery}
+          placeholder="City, neighbourhood, postal code (L7A) or MLS®"
+        />
+      </FieldBlock>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <HeroSelect
-          label="Listing type"
-          value={intent}
-          onChange={(value) => {
-            if (!isHeroIntentValue(value)) return;
-            if ((value === "rent") !== (intent === "rent")) setPrice("");
-            setIntent(value);
-          }}
-        >
-          {intents.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </HeroSelect>
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        <FieldBlock label="Listing type">
+          <HeroSelect
+            label="Listing type"
+            value={intent}
+            onChange={(value) => {
+              if (!isHeroIntentValue(value)) return;
+              if ((value === "rent") !== (intent === "rent")) setPrice("");
+              setIntent(value);
+            }}
+          >
+            {intents.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </HeroSelect>
+        </FieldBlock>
 
-        <HeroSelect label="Property type" value={type} onChange={setType}>
-          <option value="">Property Type</option>
-          {propertyTypes.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </HeroSelect>
+        <FieldBlock label="Property type">
+          <HeroSelect label="Property type" value={type} onChange={setType}>
+            <option value="">Any type</option>
+            {propertyTypes.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </HeroSelect>
+        </FieldBlock>
+      </div>
 
+      <FieldBlock label="Price range">
         <HeroSelect label="Price range" value={price} onChange={setPrice}>
           {(intent === "rent" ? rentPrices : salePrices).map((item) => (
             <option key={`${item.value}-${item.label}`} value={item.value}>
-              {item.label}
+              {item.label || "Any price"}
             </option>
           ))}
         </HeroSelect>
+      </FieldBlock>
 
-        <HeroSelect label="Bedrooms" value={beds} onChange={setBeds}>
-          {bedOptions.map((item) => (
-            <option key={`${item.value}-${item.label}`} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </HeroSelect>
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        <FieldBlock label="Bedrooms">
+          <HeroSelect label="Bedrooms" value={beds} onChange={setBeds}>
+            {bedOptions.map((item) => (
+              <option key={`${item.value}-${item.label}`} value={item.value}>
+                {item.label || "Any"}
+              </option>
+            ))}
+          </HeroSelect>
+        </FieldBlock>
 
-        <HeroSelect label="Bathrooms" value={baths} onChange={setBaths}>
-          {bathOptions.map((item) => (
-            <option key={`${item.value}-${item.label}`} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </HeroSelect>
-
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            rememberPlace(cityFromText(query));
-            router.push(buildHref());
-          }}
-          className="h-11 justify-between rounded-control px-3.5 text-small font-normal"
-        >
-          More Filters
-          <Chevron />
-        </Button>
+        <FieldBlock label="Bathrooms">
+          <HeroSelect label="Bathrooms" value={baths} onChange={setBaths}>
+            {bathOptions.map((item) => (
+              <option key={`${item.value}-${item.label}`} value={item.value}>
+                {item.label || "Any"}
+              </option>
+            ))}
+          </HeroSelect>
+        </FieldBlock>
       </div>
 
-      <Button type="submit" variant="dark" size="lg" block>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          rememberPlace(cityFromText(query));
+          router.push(buildHref());
+        }}
+        className="h-11 w-full justify-between rounded-control px-3.5 text-small font-normal"
+      >
+        More Filters
+        <Chevron />
+      </Button>
+
+      <Button type="submit" variant="dark" size="lg" block className="mt-0.5">
         Search Properties
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
           <path
@@ -360,6 +377,15 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
         </svg>
       </Button>
     </form>
+  );
+}
+
+function FieldBlock({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy/70">{label}</p>
+      {children}
+    </div>
   );
 }
 
@@ -380,7 +406,7 @@ function HeroSelect({
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 w-full cursor-pointer appearance-none rounded-control border border-line bg-surface px-3.5 pr-8 text-small text-ink transition-colors hover:border-gold focus:border-navy focus:outline-none"
+        className="h-11 w-full cursor-pointer appearance-none rounded-control border border-line bg-surface px-3.5 pr-8 text-small text-ink transition-colors hover:border-navy/40 focus:border-navy focus:outline-none"
       >
         {children}
       </select>
