@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGroup, motion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode, type FormEvent } from "react";
 import { AiSearchBox, SparkleIcon } from "@/components/search/AiSearchBox";
@@ -115,7 +115,11 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
 
   return (
     <LayoutGroup id="hero-search">
-      <div className="w-full max-w-[540px] rounded-surface bg-surface p-3.5 shadow-pop sm:p-6 lg:p-7">
+      <motion.div
+        layout
+        transition={panelTransition}
+        className="w-full max-w-[540px] overflow-hidden rounded-surface bg-surface p-3.5 shadow-pop sm:p-6 lg:p-7"
+      >
         <div
           role="tablist"
           aria-label="Search mode"
@@ -153,57 +157,41 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
           })}
         </div>
 
-        {/*
-          Both panels share one grid cell so card height stays the max of the two —
-          switching tabs never resizes the form. Framer drops the next panel in.
-        */}
-        <div className="relative grid overflow-hidden">
+        {/* Height follows the active panel; only one mounts. Drop-in on switch. */}
+        <AnimatePresence mode="wait" initial={false} custom={direction}>
           <motion.div
+            key={mode}
             role="tabpanel"
-            aria-hidden={mode !== "ai"}
-            initial={false}
-            animate={
-              mode === "ai"
-                ? { opacity: 1, y: 0 }
-                : { opacity: 0, y: direction > 0 ? 28 : -28 }
-            }
+            custom={direction}
+            variants={{
+              enter: (dir: number) => ({ opacity: 0, y: dir > 0 ? -28 : 28 }),
+              center: { opacity: 1, y: 0 },
+              exit: (dir: number) => ({ opacity: 0, y: dir > 0 ? 20 : -20 }),
+            }}
+            initial="enter"
+            animate="center"
+            exit="exit"
             transition={panelTransition}
-            className={cn(
-              "col-start-1 row-start-1",
-              mode === "ai" ? "pointer-events-auto z-10" : "pointer-events-none z-0",
-            )}
           >
-            <div className="mb-3 sm:mb-4">
-              <p className="text-small font-semibold text-ink">Describe the home you want</p>
-              <p className="text-caption text-ink-muted">
-                Plain English works — we turn it into filters you can adjust
-              </p>
-            </div>
-            <AiSearchBox
-              variant="hero"
-              examples={tryPrompts.length > 0 ? tryPrompts : DEFAULT_TRY_PROMPTS}
-            />
-          </motion.div>
-
-          <motion.div
-            role="tabpanel"
-            aria-hidden={mode !== "filters"}
-            initial={false}
-            animate={
-              mode === "filters"
-                ? { opacity: 1, y: 0 }
-                : { opacity: 0, y: direction > 0 ? -28 : 28 }
-            }
-            transition={panelTransition}
-            className={cn(
-              "col-start-1 row-start-1",
-              mode === "filters" ? "pointer-events-auto z-10" : "pointer-events-none z-0",
+            {mode === "ai" ? (
+              <>
+                <div className="mb-3 sm:mb-4">
+                  <p className="text-small font-semibold text-ink">Describe the home you want</p>
+                  <p className="text-caption text-ink-muted">
+                    Plain English works — we turn it into filters you can adjust
+                  </p>
+                </div>
+                <AiSearchBox
+                  variant="hero"
+                  examples={tryPrompts.length > 0 ? tryPrompts : DEFAULT_TRY_PROMPTS}
+                />
+              </>
+            ) : (
+              <FilterSearch content={content} />
             )}
-          >
-            <FilterSearch content={content} />
           </motion.div>
-        </div>
-      </div>
+        </AnimatePresence>
+      </motion.div>
     </LayoutGroup>
   );
 }
