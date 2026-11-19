@@ -74,7 +74,7 @@ export function MarketFilterBar({
       aria-label="Filter the market view"
       className="sticky top-[72px] z-20 -mx-4 border-b border-line bg-surface/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-surface/85 sm:mx-0 sm:rounded-2xl sm:border sm:px-4 sm:py-3 lg:top-20"
     >
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         <FilterSelect
           label="City"
           value={shownCity}
