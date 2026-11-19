@@ -210,7 +210,13 @@ export function Navbar({
     );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
+    <header
+      className={cn(
+        "sticky top-0 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85",
+        // Above the assistant / scroll-to-top FABs so mobile CTAs stay tappable.
+        mobileOpen ? "z-[70]" : "z-50",
+      )}
+    >
       <div className="container-page flex h-[72px] items-center justify-between gap-4 lg:h-20">
         <Logo className="shrink-0" />
 
@@ -329,12 +335,12 @@ export function Navbar({
               </Link>
             )}
 
-            <div className="flex flex-col gap-3 py-4 sm:flex-row">
+            <div className="flex flex-col gap-2.5 py-4">
               <LinkButton
                 href={CONTACT_HREF}
                 variant="secondary"
                 size="md"
-                className="flex-1"
+                block
                 onClick={closeMobile}
               >
                 Contact
@@ -343,7 +349,8 @@ export function Navbar({
                 href={ctaHref}
                 variant="secondary"
                 size="md"
-                className="flex-1 border-gold/40 bg-gold-soft"
+                block
+                className="border-gold/40 bg-gold-soft"
                 onClick={closeMobile}
               >
                 {ctaLabel}
@@ -352,7 +359,7 @@ export function Navbar({
                 <Button
                   variant="primary"
                   size="md"
-                  className="flex-1"
+                  block
                   onClick={() => {
                     closeMobile();
                     signOut();
@@ -364,7 +371,7 @@ export function Navbar({
                 <Button
                   variant="primary"
                   size="md"
-                  className="flex-1"
+                  block
                   onClick={() => {
                     closeMobile();
                     openAuth("login");
