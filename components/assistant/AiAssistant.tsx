@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { WhatsappLink } from "@/components/providers/WhatsappProvider";
@@ -25,6 +26,9 @@ const SUGGESTIONS = [
   "Assignments for sale",
 ] as const;
 
+const spring = { type: "spring" as const, stiffness: 380, damping: 32, mass: 0.85 };
+const soft = { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const };
+
 /**
  * Floating site assistant. Answers come from the backend, which only sees
  * listings, pre-construction, assignments and this site's own pages.
@@ -41,12 +45,15 @@ export function AiAssistant() {
 
   useEffect(() => {
     if (!open) return;
-    inputRef.current?.focus();
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 220);
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -107,198 +114,259 @@ export function AiAssistant() {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-4 z-[60] flex flex-col items-end gap-3 sm:right-6">
-      {open && (
-        <section
-          role="dialog"
-          aria-labelledby={titleId}
-          className="pointer-events-auto flex h-[min(34rem,calc(100dvh-7.5rem))] w-[min(23.5rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-[0_24px_64px_-16px_rgba(21,35,56,0.45)] ring-1 ring-navy/10 animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-200"
-        >
-          <header className="relative overflow-hidden bg-gradient-to-br from-navy via-navy to-navy-soft px-4 pb-3.5 pt-3.5 text-white">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gold/20 blur-2xl"
-            />
-            <div className="relative flex items-start gap-3">
-              <span className="relative mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/20">
-                <AssistantMark className="h-5 w-5 text-gold" />
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 id={titleId} className="text-[15px] font-semibold tracking-tight">
-                  HomeAtlas assistant
-                </h2>
-                <p className="mt-0.5 text-[12px] text-white/75">
-                  Online · listings, projects & pages
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close assistant"
-                className="grid h-8 w-8 place-items-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white"
-              >
-                <CloseIcon className="h-4 w-4" />
-              </button>
-            </div>
-          </header>
-
-          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,#f8f7f4_0%,#ffffff_40%)] px-3.5 py-4">
-            {messages.length === 0 && (
-              <div className="space-y-4">
-                <div className="rounded-2xl rounded-tl-md border border-line bg-surface px-3.5 py-3 shadow-sm">
-                  <p className="text-[13px] leading-relaxed text-ink">
-                    Hi — ask where to find a listing, a pre-construction project,
-                    market trends, or an assignment.
-                  </p>
+    <LayoutGroup id="homeatlas-assistant">
+      <div className="pointer-events-none fixed bottom-6 right-4 z-[60] flex flex-col items-end gap-3 sm:right-6">
+        <AnimatePresence mode="popLayout" initial={false}>
+          {open ? (
+            <motion.section
+              key="assistant-panel"
+              layoutId="assistant-shell"
+              role="dialog"
+              aria-labelledby={titleId}
+              transition={spring}
+              initial={{ opacity: 0.92, borderRadius: 999 }}
+              animate={{ opacity: 1, borderRadius: 16 }}
+              exit={{ opacity: 0.92, borderRadius: 999 }}
+              className="pointer-events-auto flex h-[min(34rem,calc(100dvh-7.5rem))] w-[min(23.5rem,calc(100vw-1.5rem))] origin-bottom-right flex-col overflow-hidden border border-white/10 bg-surface shadow-[0_24px_64px_-16px_rgba(21,35,56,0.45)] ring-1 ring-navy/10"
+              style={{ borderRadius: 16 }}
+            >
+              <header className="relative overflow-hidden bg-gradient-to-br from-navy via-navy to-navy-soft px-4 pb-3.5 pt-3.5 text-white">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gold/20 blur-2xl"
+                />
+                <div className="relative flex items-start gap-3">
+                  <motion.span
+                    layoutId="assistant-mark"
+                    transition={spring}
+                    className="relative mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/20"
+                  >
+                    <AssistantMark className="h-5 w-5 text-gold" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400" />
+                  </motion.span>
+                  <motion.div
+                    className="min-w-0 flex-1"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ ...soft, delay: 0.08 }}
+                  >
+                    <h2 id={titleId} className="text-[15px] font-semibold tracking-tight">
+                      HomeAtlas assistant
+                    </h2>
+                    <p className="mt-0.5 text-[12px] text-white/75">
+                      Online · listings, projects & pages
+                    </p>
+                  </motion.div>
+                  <motion.button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    aria-label="Close assistant"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ ...soft, delay: 0.12 }}
+                    className="grid h-8 w-8 place-items-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <CloseIcon className="h-4 w-4" />
+                  </motion.button>
                 </div>
-                <div>
-                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
-                    Try asking
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {SUGGESTIONS.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        disabled={pending}
-                        onClick={() => void sendQuestion(suggestion)}
-                        className="rounded-full border border-line bg-surface px-3 py-1.5 text-left text-[12px] font-medium text-ink-soft shadow-sm transition hover:border-navy/30 hover:bg-navy-tint hover:text-navy disabled:opacity-50"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+              </header>
 
-            {messages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}`}
-                className={cn(
-                  "flex",
-                  message.role === "user" ? "justify-end" : "justify-start",
-                )}
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ ...soft, delay: 0.1 }}
+                className="flex min-h-0 flex-1 flex-col"
               >
                 <div
-                  className={cn(
-                    "max-w-[88%] px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm",
-                    message.role === "user"
-                      ? "rounded-2xl rounded-br-md bg-navy text-white"
-                      : "rounded-2xl rounded-bl-md border border-line bg-surface text-ink",
-                  )}
+                  ref={listRef}
+                  className="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,#f8f7f4_0%,#ffffff_40%)] px-3.5 py-4"
                 >
-                  <p className="whitespace-pre-wrap">{message.text}</p>
-                  {message.links && message.links.length > 0 && (
-                    <ul className="mt-2.5 space-y-1.5 border-t border-line/80 pt-2.5">
-                      {message.links.map((link) => (
-                        <li key={link.href}>
-                          <Link
-                            href={link.href}
-                            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-navy transition hover:text-navy-soft"
+                  {messages.length === 0 && (
+                    <div className="space-y-4">
+                      <div className="rounded-2xl rounded-tl-md border border-line bg-surface px-3.5 py-3 shadow-sm">
+                        <p className="text-[13px] leading-relaxed text-ink">
+                          Hi — ask where to find a listing, a pre-construction project,
+                          market trends, or an assignment.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+                          Try asking
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {SUGGESTIONS.map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              disabled={pending}
+                              onClick={() => void sendQuestion(suggestion)}
+                              className="rounded-full border border-line bg-surface px-3 py-1.5 text-left text-[12px] font-medium text-ink-soft shadow-sm transition hover:border-navy/30 hover:bg-navy-tint hover:text-navy disabled:opacity-50"
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {messages.map((message, index) => (
+                    <div
+                      key={`${message.role}-${index}`}
+                      className={cn(
+                        "flex",
+                        message.role === "user" ? "justify-end" : "justify-start",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "max-w-[88%] px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm",
+                          message.role === "user"
+                            ? "rounded-2xl rounded-br-md bg-navy text-white"
+                            : "rounded-2xl rounded-bl-md border border-line bg-surface text-ink",
+                        )}
+                      >
+                        <p className="whitespace-pre-wrap">{message.text}</p>
+                        {message.links && message.links.length > 0 && (
+                          <ul className="mt-2.5 space-y-1.5 border-t border-line/80 pt-2.5">
+                            {message.links.map((link) => (
+                              <li key={link.href}>
+                                <Link
+                                  href={link.href}
+                                  className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-navy transition hover:text-navy-soft"
+                                >
+                                  <span aria-hidden>→</span>
+                                  {link.label}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {message.handoff === "whatsapp" && (
+                          <WhatsappLink
+                            message="Hi, I was using the HomeAtlas assistant and would like to talk to someone."
+                            className="mt-2.5 inline-flex rounded-full bg-[#25d366]/10 px-3 py-1.5 text-[12px] font-semibold text-[#128c7e] transition hover:bg-[#25d366]/20"
                           >
-                            <span aria-hidden>→</span>
-                            {link.label}
+                            Continue on WhatsApp
+                          </WhatsappLink>
+                        )}
+                        {message.handoff === "contact" && (
+                          <Link
+                            href="/market-trends"
+                            className="mt-2.5 inline-flex rounded-full bg-navy-tint px-3 py-1.5 text-[12px] font-semibold text-navy transition hover:bg-navy/10"
+                          >
+                            Contact an agent
                           </Link>
-                        </li>
-                      ))}
-                    </ul>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {pending && (
+                    <div className="flex justify-start">
+                      <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-line bg-surface px-3.5 py-3 shadow-sm">
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle [animation-delay:-0.2s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle [animation-delay:-0.1s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle" />
+                        <span className="sr-only">Looking that up</span>
+                      </div>
+                    </div>
                   )}
-                  {message.handoff === "whatsapp" && (
-                    <WhatsappLink
-                      message="Hi, I was using the HomeAtlas assistant and would like to talk to someone."
-                      className="mt-2.5 inline-flex rounded-full bg-[#25d366]/10 px-3 py-1.5 text-[12px] font-semibold text-[#128c7e] transition hover:bg-[#25d366]/20"
+
+                  {error && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-negative/20 bg-negative-soft px-3 py-2 text-[12px] text-negative"
                     >
-                      Continue on WhatsApp
-                    </WhatsappLink>
-                  )}
-                  {message.handoff === "contact" && (
-                    <Link
-                      href="/market-trends"
-                      className="mt-2.5 inline-flex rounded-full bg-navy-tint px-3 py-1.5 text-[12px] font-semibold text-navy transition hover:bg-navy/10"
-                    >
-                      Contact an agent
-                    </Link>
+                      {error}
+                    </p>
                   )}
                 </div>
-              </div>
-            ))}
 
-            {pending && (
-              <div className="flex justify-start">
-                <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-line bg-surface px-3.5 py-3 shadow-sm">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle [animation-delay:-0.2s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle [animation-delay:-0.1s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle" />
-                  <span className="sr-only">Looking that up</span>
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <p
-                role="alert"
-                className="rounded-xl border border-negative/20 bg-negative-soft px-3 py-2 text-[12px] text-negative"
+                <form onSubmit={ask} className="border-t border-line bg-surface p-3">
+                  <label htmlFor="assistant-question" className="sr-only">
+                    Your question
+                  </label>
+                  <div className="flex items-end gap-2 rounded-2xl border border-line bg-surface-alt/80 p-1.5 shadow-inner transition focus-within:border-navy/40 focus-within:bg-surface focus-within:ring-2 focus-within:ring-navy/10">
+                    <textarea
+                      ref={inputRef}
+                      id="assistant-question"
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={onComposerKeyDown}
+                      rows={1}
+                      maxLength={500}
+                      placeholder="Ask about homes, projects…"
+                      className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2.5 py-2 text-[13px] text-ink outline-none placeholder:text-ink-subtle"
+                    />
+                    <button
+                      type="submit"
+                      disabled={pending || !draft.trim()}
+                      aria-label="Send message"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-navy text-white transition hover:bg-navy-deep disabled:cursor-not-allowed disabled:bg-navy/35"
+                    >
+                      {pending ? (
+                        <SpinnerIcon className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <SendIcon className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="mt-2 px-1 text-[10px] text-ink-subtle">
+                    Enter to send · Shift+Enter for a new line
+                  </p>
+                </form>
+              </motion.div>
+            </motion.section>
+          ) : (
+            <motion.button
+              key="assistant-launcher"
+              type="button"
+              layoutId="assistant-shell"
+              transition={spring}
+              onClick={() => setOpen(true)}
+              aria-expanded={false}
+              aria-label="Ask HomeAtlas"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="pointer-events-auto group inline-flex items-center gap-2.5 overflow-hidden rounded-full bg-navy py-2 pl-2 pr-4 text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] hover:bg-navy-deep"
+              style={{ borderRadius: 999 }}
+            >
+              <motion.span
+                layoutId="assistant-mark"
+                transition={spring}
+                className="grid h-9 w-9 place-items-center rounded-full bg-white/10 ring-1 ring-white/15"
               >
-                {error}
-              </p>
-            )}
-          </div>
+                <AssistantMark className="h-[18px] w-[18px] text-gold" />
+              </motion.span>
+              <span className="text-[13px] font-semibold tracking-tight">Ask HomeAtlas</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
 
-          <form
-            onSubmit={ask}
-            className="border-t border-line bg-surface p-3"
-          >
-            <label htmlFor="assistant-question" className="sr-only">
-              Your question
-            </label>
-            <div className="flex items-end gap-2 rounded-2xl border border-line bg-surface-alt/80 p-1.5 shadow-inner transition focus-within:border-navy/40 focus-within:bg-surface focus-within:ring-2 focus-within:ring-navy/10">
-              <textarea
-                ref={inputRef}
-                id="assistant-question"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={onComposerKeyDown}
-                rows={1}
-                maxLength={500}
-                placeholder="Ask about homes, projects…"
-                className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2.5 py-2 text-[13px] text-ink outline-none placeholder:text-ink-subtle"
-              />
-              <button
-                type="submit"
-                disabled={pending || !draft.trim()}
-                aria-label="Send message"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-navy text-white transition hover:bg-navy-deep disabled:cursor-not-allowed disabled:bg-navy/35"
-              >
-                {pending ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <SendIcon className="h-4 w-4" />}
-              </button>
-            </div>
-            <p className="mt-2 px-1 text-[10px] text-ink-subtle">
-              Enter to send · Shift+Enter for a new line
-            </p>
-          </form>
-        </section>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-label={open ? "Hide assistant" : "Ask HomeAtlas"}
-        className={cn(
-          "pointer-events-auto group inline-flex items-center gap-2.5 rounded-full bg-navy pl-2 pr-4 py-2 text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] transition hover:bg-navy-deep hover:shadow-[0_16px_40px_-8px_rgba(21,35,56,0.65)]",
-          open && "pr-3",
-        )}
-      >
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 ring-1 ring-white/15 transition group-hover:bg-white/15">
-          {open ? <CloseIcon className="h-4 w-4" /> : <AssistantMark className="h-[18px] w-[18px] text-gold" />}
-        </span>
-        <span className="text-[13px] font-semibold tracking-tight">
-          {open ? "Close" : "Ask HomeAtlas"}
-        </span>
-      </button>
-    </div>
+        <AnimatePresence>
+          {open && (
+            <motion.button
+              key="assistant-close-fab"
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close assistant"
+              initial={{ opacity: 0, y: 10, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.92 }}
+              transition={soft}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] hover:bg-navy-deep"
+            >
+              <CloseIcon className="h-4 w-4" />
+              Close
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+    </LayoutGroup>
   );
 }
 
