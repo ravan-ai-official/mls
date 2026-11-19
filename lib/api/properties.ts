@@ -240,10 +240,9 @@ export async function searchProperties(
  * GET properties/facets/ — counts per status, sub-type and price bucket for the
  * current filter set (API_GAPS G2). Powers the listings status tabs.
  *
- * The backend deliberately ignores `search` and `polygon` here so facet counts
- * stay consistent with the paginated query, so we don't send them either.
- * A facet strip is decoration: a failure returns null and the tabs hide rather
- * than taking down the results grid.
+ * Sends the same scoping filters as the listings query (including `search`)
+ * so tab counts match the result total. Polygon is still omitted — expensive
+ * and rare on this strip. A failure returns null; tabs stay without counts.
  */
 export async function getPropertyFacets(
   query: ListingQuery = {},
@@ -260,6 +259,7 @@ export async function getPropertyFacets(
       revalidate: 300,
       ...options,
       params: {
+        search: query.search,
         city: query.city,
         status: query.status,
         transaction_type: query.transaction,
