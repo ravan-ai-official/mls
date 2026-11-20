@@ -99,7 +99,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
       <div
         role="tablist"
         aria-label="Search mode"
-        className="mb-3.5 grid grid-cols-2 gap-1 rounded-control bg-navy-tint p-1 ring-1 ring-navy/10 sm:mb-5"
+        className="mb-3.5 grid grid-cols-2 gap-0.5 rounded-control bg-navy-tint p-0.5 ring-1 ring-navy/10 sm:mb-5"
       >
         {(
           [
@@ -116,7 +116,7 @@ export function HeroSearch({ content }: { content?: Record<string, unknown> } = 
               aria-selected={active}
               onClick={() => setMode(tab.value)}
               className={cn(
-                "flex h-9 items-center justify-center gap-1.5 rounded-control text-small font-semibold transition-colors",
+                "flex h-8 items-center justify-center gap-1 rounded-control px-2 text-caption font-semibold transition-colors",
                 active
                   ? "bg-navy text-white shadow-md"
                   : "text-navy/75 hover:text-navy",
