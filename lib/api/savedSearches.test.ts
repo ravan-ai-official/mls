@@ -26,6 +26,19 @@ describe("saved search filters codec", () => {
     expect(filters).not.toHaveProperty("offset");
   });
 
+  it("keeps text search and city filters strict so empty matches stay empty", () => {
+    expect(toSavedFilters(parseListingSearch("q=brampton&status=Active"))).toMatchObject({
+      search: "brampton",
+      status_group: "active",
+      allow_fallback: "false",
+    });
+    expect(toSavedFilters(parseListingSearch("city=Brampton&status=Active"))).toMatchObject({
+      city: "Brampton",
+      status_group: "active",
+      allow_fallback: "false",
+    });
+  });
+
   it("sends status tabs as a strict status_group", () => {
     expect(toSavedFilters(parseListingSearch("status=Sold"))).toMatchObject({
       status_group: "sold",

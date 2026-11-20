@@ -86,16 +86,19 @@ function applyClientFilters(items: PropertySummary[], query: ListingQuery): Prop
  */
 export function toBackendParams(query: ListingQuery, limit?: number, offset?: number) {
   // The backend's fallback pipeline relaxes city, then tries nearby cities,
-  // then returns the WHOLE catalogue when nothing matches. For a postal code
-  // or an open-house search that is actively wrong — "L7A" with no homes must
-  // read as zero, not as a page of Toronto listings that look like matches.
-  // Status tabs select a GROUP ("Sold" also matches "Closed"/"Leased"). Sold
-  // and De-listed are strict too: this feed has almost none, and the fallback
-  // would otherwise answer an empty Sold tab with every active listing.
+  // then returns the WHOLE catalogue when nothing matches. For a postal code,
+  // typed search, city, or an open-house query that is actively wrong —
+  // "brampton" with zero For Sale matches must read as empty, not as a page of
+  // unrelated Toronto rentals. Status tabs select a GROUP ("Sold" also matches
+  // "Closed"/"Leased"). Sold and De-listed are strict too: this feed has almost
+  // none, and the fallback would otherwise answer an empty Sold tab with every
+  // active listing.
   const group = backendStatusGroup(query.status);
   // Keyword pages (power of sale, distress) must read as empty, not relaxed.
   const strict = Boolean(
-    query.postalCodes?.length ||
+    query.search?.trim() ||
+      query.city?.trim() ||
+      query.postalCodes?.length ||
       query.openHouse ||
       query.keywords?.length ||
       query.buildingType ||

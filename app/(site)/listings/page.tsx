@@ -11,6 +11,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState, ErrorState, PropertyGridSkeleton } from "@/components/ui/States";
 import { getPropertyFacets, searchProperties } from "@/lib/api/properties";
 import { ApiError } from "@/lib/api/client";
+import { matchKnownCity } from "@/lib/constants/cities";
 import type { ListingQuery, PropertyFacets } from "@/lib/types/domain";
 import { backendStatusGroup, STATUS_TABS, statusGroup } from "@/lib/utils/status";
 import {
@@ -73,9 +74,17 @@ export default async function ListingsPage({ searchParams }: PageProps<"/listing
  * The page's query: the URL's, defaulting to For Sale. Buy, Rent and "Clear
  * filters" land on homes you can actually act on, and junk feed statuses stay
  * out unless a status is asked for by name.
+ *
+ * A bare city typed into `q=` (e.g. "brampton") is promoted to `city=` so the
+ * backend uses city matching and tab counts stay honest.
  */
 function listingQuery(params: Record<string, string | string[] | undefined>): ListingQuery {
-  const query = parseListingParams(params);
+  const parsed = parseListingParams(params);
+  const cityFromSearch =
+    !parsed.city && parsed.search ? matchKnownCity(parsed.search) : null;
+  const query = cityFromSearch
+    ? { ...parsed, city: cityFromSearch, search: undefined }
+    : parsed;
   return query.status || query.openHouse ? query : { ...query, status: "Active" };
 }
 
@@ -201,19 +210,30 @@ async function Results({
   }
 
   if (result.items.length === 0) {
+    const rent = query.transaction === "rent";
+    const place = query.city || query.search;
+    const activeEmpty = backendStatusGroup(query.status) === "active" && Boolean(place);
     return (
       <EmptyState
-        title="No homes match these filters"
+        title={
+          activeEmpty
+            ? rent
+              ? `No homes for lease${place ? ` matching “${place}”` : ""}`
+              : `No homes for sale${place ? ` matching “${place}”` : ""}`
+            : "No homes match these filters"
+        }
         description={
-          hasActiveFilters(query)
-            ? "Try widening your price range or clearing a filter."
-            : "There are no listings in the catalogue right now."
+          activeEmpty
+            ? "Try Sold or De-listed above, or clear the search to browse the full catalogue."
+            : hasActiveFilters(query)
+              ? "Try widening your price range or clearing a filter."
+              : "There are no listings in the catalogue right now."
         }
         action={
           hasActiveFilters(query)
             ? {
                 label: "Clear filters",
-                href: query.transaction === "rent" ? "/listings?tx=rent" : "/listings",
+                href: rent ? "/listings?tx=rent" : "/listings",
               }
             : undefined
         }

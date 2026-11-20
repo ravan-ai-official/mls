@@ -39,6 +39,7 @@ import { SEARCH_PROPERTY_TYPES, LISTING_SORTS, RELEVANCE_SORT } from "@/lib/type
 import type { ListingQuery } from "@/lib/types/domain";
 import { formatNumber, formatPrice } from "@/lib/utils/format";
 import { formatPostal, looksLikePostal, parsePostalList } from "@/lib/utils/postal";
+import { matchKnownCity } from "@/lib/constants/cities";
 import { rememberPlace } from "@/lib/personalize/places";
 import { parseListingSearch } from "@/lib/utils/searchParams";
 import { STATUS_TABS } from "@/lib/utils/status";
@@ -209,6 +210,14 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
     if (term && looksLikePostal(term)) {
       const codes = parsePostalList(`${params.get("postal") ?? ""},${term}`).codes;
       update({ postal: codes.join(","), q: null, keywords: null });
+      return;
+    }
+    // A known city belongs on `city=` (city_match_q) so tab counts and results
+    // stay aligned — free-text `q=brampton` used to fall back to the whole catalogue.
+    const city = matchKnownCity(term);
+    if (city) {
+      rememberPlace(city);
+      update({ city, q: null, keywords: null });
       return;
     }
     // Amenity / deal phrases belong on description `keywords`, not address `q`.

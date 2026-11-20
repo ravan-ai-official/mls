@@ -15,6 +15,7 @@ import {
   type HeroOption,
 } from "@/lib/site/heroFilters";
 import { listOf } from "@/lib/site/read";
+import { matchKnownCity } from "@/lib/constants/cities";
 import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { looksLikePostal, parsePostalList } from "@/lib/utils/postal";
 import { cn } from "@/lib/utils/cn";
@@ -190,7 +191,11 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
 
     const term = query.trim();
     if (term && looksLikePostal(term)) params.set("postal", parsePostalList(term).codes.join(","));
-    else if (term) params.set("q", term);
+    else if (term) {
+      const city = matchKnownCity(term);
+      if (city) params.set("city", city);
+      else params.set("q", term);
+    }
     if (active.status) params.set("status", active.status);
     if (active.tx) params.set("tx", active.tx);
     if (type) params.set("type", type);
