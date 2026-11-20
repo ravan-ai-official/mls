@@ -14,7 +14,7 @@
  * back to the windowed client-side match (disclosed in the UI as "About N").
  */
 
-import { apiFetch, type RequestOptions } from "@/lib/api/client";
+import { ApiError, apiFetch, type RequestOptions } from "@/lib/api/client";
 import { mapPropertyDetail, mapPropertySummary, mapPropertyTypeFacet, matchesUiType } from "@/lib/api/mappers";
 import { backendStatusGroup, type BackendStatusGroup } from "@/lib/utils/status";
 import type {
@@ -62,9 +62,8 @@ function effectivePriceMin(query: ListingQuery): number | undefined {
 export const SORT_TO_ORDERBY: Record<ListingSort, string> = {
   // Backend ranks by similarity to `semantic` (AI search's "Best match").
   relevance: "relevance",
-  // Prefer entry date over modification_timestamp: active + sale +
-  // `-modification_timestamp` intermittently returns count=0 on the feed
-  // (facets still show hundreds), which emptied the For Sale tab.
+  // Kept for explicit saved-search round-trips; default "newest" omits
+  // orderby in toBackendParams (sorted active queries timeout or empty).
   newest: "-original_entry_timestamp",
   "price-asc": "list_price",
   "price-desc": "-list_price",
@@ -92,6 +91,13 @@ export function toBackendParams(query: ListingQuery, limit?: number, offset?: nu
   // match must render the empty state — substitute listings are always wrong.
   // Status tabs select a GROUP ("Sold" also matches "Closed"/"Leased").
   const group = backendStatusGroup(query.status);
+  const sortKey =
+    query.sort === "relevance" && !query.semantic ? "newest" : (query.sort ?? "newest");
+  // Omit default "newest" — sorted active+sale queries are intermittent and
+  // often exceed the client timeout from Vercel, while the backend default is
+  // fast and returns the full active set.
+  const orderby =
+    sortKey === "newest" ? undefined : SORT_TO_ORDERBY[sortKey];
   return {
     limit,
     offset,
@@ -101,7 +107,7 @@ export function toBackendParams(query: ListingQuery, limit?: number, offset?: nu
     status_group: group ?? undefined,
     transaction_type: query.transaction,
     has_lease: query.hasLease ? "true" : undefined,
-    orderby: SORT_TO_ORDERBY[query.sort === "relevance" && !query.semantic ? "newest" : (query.sort ?? "newest")],
+    orderby,
     semantic: query.semantic,
     // Server-side since G1 — exact counts, no window cap.
     price_min: effectivePriceMin(query),
@@ -152,6 +158,52 @@ export interface ListingsResult extends Paginated<PropertySummary> {
   truncated: boolean;
 }
 
+/** Listings filter often needs >15s from Vercel when the feed is under load. */
+const LISTINGS_TIMEOUT_MS = 25_000;
+
+type FilterParams = ReturnType<typeof toBackendParams>;
+
+/**
+ * Fetch one filter page. On timeout / empty active+orderby responses, retry
+ * once without orderby so the For Sale tab still renders.
+ */
+async function fetchListingsPage(
+  params: FilterParams,
+  opts: RequestOptions,
+): Promise<BackendListResponse<BackendPropertySummary>> {
+  const request = (next: FilterParams, extra: RequestOptions = {}) =>
+    apiFetch<BackendListResponse<BackendPropertySummary>>(`${MLS}/properties/filter/`, {
+      ...opts,
+      timeoutMs: LISTINGS_TIMEOUT_MS,
+      ...extra,
+      params: next,
+    });
+
+  try {
+    const data = await request(params);
+    if (
+      (data.count ?? 0) === 0 &&
+      (data.results?.length ?? 0) === 0 &&
+      params.status_group === "active" &&
+      params.orderby
+    ) {
+      const { orderby: _ignored, ...withoutOrder } = params;
+      return request(withoutOrder, { cache: "no-store" });
+    }
+    return data;
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.status === 504 &&
+      params.orderby
+    ) {
+      const { orderby: _ignored, ...withoutOrder } = params;
+      return request(withoutOrder, { cache: "no-store" });
+    }
+    throw error;
+  }
+}
+
 export async function searchProperties(
   query: ListingQuery = {},
   options: RequestOptions = {},
@@ -164,25 +216,7 @@ export async function searchProperties(
 
   if (!needsClientFiltering(query)) {
     const params = toBackendParams(query, pageSize, offset);
-    let data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
-      `${MLS}/properties/filter/`,
-      { ...opts, params },
-    );
-    // Feed bug: some orderby values (historically `-modification_timestamp`)
-    // return count=0 for active sale even when facets show hundreds. Retry
-    // once without orderby / ISR so a bad empty isn't sticky-cached.
-    if (
-      (data.count ?? 0) === 0 &&
-      (data.results?.length ?? 0) === 0 &&
-      backendStatusGroup(query.status) === "active" &&
-      params.orderby
-    ) {
-      const { orderby: _ignored, ...withoutOrder } = params;
-      data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
-        `${MLS}/properties/filter/`,
-        { ...opts, cache: "no-store", params: withoutOrder },
-      );
-    }
+    const data = await fetchListingsPage(params, opts);
     return {
       items: (data.results ?? []).map(mapPropertySummary),
       total: data.count ?? 0,
@@ -195,16 +229,13 @@ export async function searchProperties(
 
   // Type filter only: every OTHER filter still narrows the query server-side
   // first, so the window we scan is already as small as the backend can make it.
-  const data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
-    `${MLS}/properties/filter/`,
-    { ...opts, params: toBackendParams(query, MAX_PAGE_SIZE, 0) },
-  );
+  const data = await fetchListingsPage(toBackendParams(query, MAX_PAGE_SIZE, 0), opts);
 
   const first = (data.results ?? []).map(mapPropertySummary);
   const available = Math.min(data.count ?? 0, CLIENT_FILTER_WINDOW);
 
   // Fetch the remaining window pages CONCURRENTLY. Serially these were three
-  // round-trips stacked inside one render, which blew the client's 15s timeout
+  // round-trips stacked inside one render, which blew the client's timeout
   // and failed the page outright — a parallel fan-out costs one round-trip.
   const offsets: number[] = [];
   for (let at = first.length; at < available; at += MAX_PAGE_SIZE) {
@@ -213,10 +244,7 @@ export async function searchProperties(
 
   const pages = await Promise.all(
     offsets.map((at) =>
-      apiFetch<BackendListResponse<BackendPropertySummary>>(
-        `${MLS}/properties/filter/`,
-        { ...opts, params: toBackendParams(query, MAX_PAGE_SIZE, at) },
-      )
+      fetchListingsPage(toBackendParams(query, MAX_PAGE_SIZE, at), opts)
         .then((page) => (page.results ?? []).map(mapPropertySummary))
         // One slow page must not fail the whole grid; it only narrows the
         // window, which `truncated` already discloses.
