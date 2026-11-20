@@ -179,6 +179,8 @@ async function fetchListingsPage(
       params: next,
     });
 
+  const withoutOrderby = { ...params, orderby: undefined };
+
   try {
     const data = await request(params);
     if (
@@ -187,8 +189,7 @@ async function fetchListingsPage(
       params.status_group === "active" &&
       params.orderby
     ) {
-      const { orderby: _ignored, ...withoutOrder } = params;
-      return request(withoutOrder, { cache: "no-store" });
+      return request(withoutOrderby, { cache: "no-store" });
     }
     return data;
   } catch (error) {
@@ -197,8 +198,7 @@ async function fetchListingsPage(
       error.status === 504 &&
       params.orderby
     ) {
-      const { orderby: _ignored, ...withoutOrder } = params;
-      return request(withoutOrder, { cache: "no-store" });
+      return request(withoutOrderby, { cache: "no-store" });
     }
     throw error;
   }
