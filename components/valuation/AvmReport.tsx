@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { AvmDetails, ValuationComp, ValuationResult } from "@/lib/api/valuation";
 import { cn } from "@/lib/utils/cn";
-import { EMPTY, formatNumber, formatPrice } from "@/lib/utils/format";
+import { EMPTY, formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
 
 /** WOWA targets at least five sold comps beside the subject. */
 export const AVM_COMP_COLUMNS = 5;
@@ -186,13 +186,53 @@ export function AvmReport({ result }: { result: ValuationResult }) {
   return (
     <div className="space-y-6 lg:space-y-8">
       <section className="rounded-surface border border-line bg-surface p-5 sm:p-6 lg:p-8">
-        <h3 className="text-h3 text-navy">AVM details</h3>
-        <dl className="mt-4 grid gap-px overflow-hidden rounded-control border border-line bg-line text-small sm:grid-cols-2 lg:grid-cols-4">
-          <Detail label="Real Time Market Value (AVM)" value={formatPrice(result.market)} />
-          <Detail label="Confidence Rating" value={<Stars count={result.confidenceStars} />} />
-          <Detail label="AVM Valuation Date (yyyy-mm-dd)" value={dash(result.valuationDate)} />
-          <Detail label="AVM Range" value={`${formatPrice(result.low)} – ${formatPrice(result.high)}`} />
-        </dl>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-h3 text-navy">How to read this estimate</h3>
+            <p className="mt-1 max-w-2xl text-caption text-ink-muted">
+              Four plain-language numbers from the automated valuation model
+              (AVM). This is a market guide, not a formal appraisal.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <InsightCard
+            label="Estimated market value"
+            value={formatPrice(result.market)}
+            hint="Best single-number estimate from nearby solds and local trends."
+          />
+          <InsightCard
+            label="Likely selling range"
+            value={`${formatPrice(result.low)} – ${formatPrice(result.high)}`}
+            hint="Where a sale is most likely if the market stays similar."
+          />
+          <InsightCard
+            label="Confidence"
+            value={
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <Stars count={result.confidenceStars} />
+                <span className="text-small font-medium text-ink">
+                  {confidenceLabel(result)}
+                </span>
+              </span>
+            }
+            hint={confidenceHint(result)}
+          />
+          <InsightCard
+            label="Estimate as of"
+            value={formatDate(result.valuationDate)}
+            hint="Date this model ran. Refresh later for a newer reading."
+          />
+        </div>
+
+        {(result.quickSaleLow > 0 || result.quickSaleHigh > 0) && (
+          <p className="mt-4 rounded-control border border-line bg-surface-alt/60 px-4 py-3 text-caption text-ink-muted">
+            <span className="font-semibold text-ink">Faster-sale band: </span>
+            {formatPrice(result.quickSaleLow)} – {formatPrice(result.quickSaleHigh)}. A
+            quicker close often means pricing toward the lower end of the range.
+          </p>
+        )}
       </section>
 
       {(hedonic.length > 0 || aiAdj.length > 0) && (
@@ -321,19 +361,50 @@ export function AvmReport({ result }: { result: ValuationResult }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: ReactNode }) {
+function InsightCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: ReactNode;
+  hint: string;
+}) {
   return (
-    <div className="flex items-center justify-between gap-4 bg-surface px-4 py-3">
-      <dt className="font-medium text-ink">{label}</dt>
-      <dd className="text-right text-ink-soft">{value}</dd>
+    <div className="rounded-control border border-line bg-surface-alt/40 px-4 py-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[1.2px] text-ink-muted">{label}</p>
+      <div className="mt-2 text-[1.15rem] font-semibold leading-snug text-ink sm:text-h3">{value}</div>
+      <p className="mt-2 text-caption leading-relaxed text-ink-muted">{hint}</p>
     </div>
   );
+}
+
+function confidenceLabel(result: ValuationResult): string {
+  if (result.sparse) return "Low";
+  if (result.confidence) return result.confidence;
+  if (result.confidenceStars >= 4) return "High";
+  if (result.confidenceStars >= 3) return "Medium";
+  if (result.confidenceStars >= 1) return "Low";
+  return "Limited";
+}
+
+function confidenceHint(result: ValuationResult): string {
+  if (result.sparse) {
+    return "Fewer than five nearby solds matched, so treat the number as indicative only.";
+  }
+  if (result.confidenceStars >= 4) {
+    return "Strong local sold evidence. Still confirm with an agent before pricing.";
+  }
+  if (result.confidenceStars >= 3) {
+    return "Decent sold coverage nearby. Useful as a guide, not a final list price.";
+  }
+  return "Thin sold evidence nearby. Ask an agent for a firmer CMA.";
 }
 
 function Stars({ count }: { count: number }) {
   const filled = Math.max(0, Math.min(5, Math.round(count)));
   return (
-    <span role="img" aria-label={`${filled} out of 5`} className="tracking-wider text-gold">
+    <span role="img" aria-label={`${filled} out of 5 stars`} className="tracking-wider text-gold">
       {"★".repeat(filled)}
       <span className="text-line">{"★".repeat(5 - filled)}</span>
     </span>

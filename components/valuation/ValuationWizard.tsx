@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { AvmReport } from "@/components/valuation/AvmReport";
+import { SoldTrendChart } from "@/components/valuation/SoldTrendChart";
 import { Stepper } from "@/components/ui/Stepper";
 import { Field, Input, NumericInput } from "@/components/ui/Field";
 import { Badge, Eyebrow } from "@/components/ui/Badge";
@@ -407,13 +408,9 @@ function ResultCard({
       : result.trendPct12m !== 0
         ? "12-month sold trend"
         : "30-day trend";
-  const spark = result.trendSeries.filter((p) => p.medianSoldPrice != null);
-  const sparkMax = Math.max(...spark.map((p) => p.medianSoldPrice ?? 0), 1);
-  const sparkMin = Math.min(...spark.map((p) => p.medianSoldPrice ?? 0), sparkMax);
-
   return (
     <div className="space-y-8">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <div className="rounded-surface border border-line bg-surface p-6 shadow-card sm:p-8 lg:p-10">
           <Eyebrow>Estimated value</Eyebrow>
           <p className="mt-4 text-display text-ink sm:text-[3.25rem] sm:leading-none">
@@ -456,44 +453,14 @@ function ResultCard({
         <div className="rounded-surface border border-line bg-surface p-6 shadow-card sm:p-8">
           <h3 className="text-h3 text-ink">Local sold trend</h3>
           <p className="mt-1 text-caption text-ink-muted">
-            Median sold price nearby
-            {trendPct !== 0 ? ` · ${trendLabel} ${formatPercent(trendPct)}` : ""}.
+            Median sold price for similar homes nearby. Use the chart to see how
+            that median moved month by month.
           </p>
-          {spark.length >= 2 ? (
-            <div className="mt-6" aria-hidden="true">
-              <svg
-                viewBox={`0 0 ${Math.max(spark.length - 1, 1) * 40} 120`}
-                className="h-40 w-full text-navy"
-                preserveAspectRatio="none"
-              >
-                <polyline
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                  points={spark
-                    .map((point, index) => {
-                      const yRange = Math.max(sparkMax - sparkMin, 1);
-                      const y = 100 - ((point.medianSoldPrice! - sparkMin) / yRange) * 80;
-                      return `${index * 40},${y}`;
-                    })
-                    .join(" ")}
-                />
-              </svg>
-              <div className="mt-3 flex justify-between text-caption text-ink-subtle">
-                <span>{spark[0]?.month}</span>
-                <span>{spark[spark.length - 1]?.month}</span>
-              </div>
-              <p className="mt-2 text-small text-ink-soft">
-                Latest median {formatPrice(spark[spark.length - 1]?.medianSoldPrice ?? null)}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-8 text-small text-ink-muted">
-              Not enough sold-trend months to chart this neighbourhood yet.
-            </p>
-          )}
+          <SoldTrendChart
+            points={result.trendSeries}
+            trendPct={trendPct}
+            trendLabel={trendLabel}
+          />
         </div>
       </div>
 
