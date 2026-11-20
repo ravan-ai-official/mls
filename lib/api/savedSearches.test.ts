@@ -45,12 +45,15 @@ describe("saved search filters codec", () => {
       allow_fallback: "false",
     });
     const active = toSavedFilters(parseListingSearch("status=Active"));
-    expect(active).toMatchObject({ status_group: "active" });
+    expect(active).toMatchObject({
+      status_group: "active",
+      allow_fallback: "false",
+    });
     expect(active).not.toHaveProperty("status");
-    expect(active).not.toHaveProperty("allow_fallback");
     // A raw feed word is still an exact status filter.
     expect(toSavedFilters(parseListingSearch("status=Terminated"))).toMatchObject({
       status: "Terminated",
+      allow_fallback: "false",
     });
   });
 

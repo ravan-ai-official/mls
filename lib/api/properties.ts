@@ -85,31 +85,10 @@ function applyClientFilters(items: PropertySummary[], query: ListingQuery): Prop
  * exactly this, minus paging) reuse it rather than re-deriving the mapping.
  */
 export function toBackendParams(query: ListingQuery, limit?: number, offset?: number) {
-  // The backend's fallback pipeline relaxes city, then tries nearby cities,
-  // then returns the WHOLE catalogue when nothing matches. For a postal code,
-  // typed search, city, or an open-house query that is actively wrong —
-  // "brampton" with zero For Sale matches must read as empty, not as a page of
-  // unrelated Toronto rentals. Status tabs select a GROUP ("Sold" also matches
-  // "Closed"/"Leased"). Sold and De-listed are strict too: this feed has almost
-  // none, and the fallback would otherwise answer an empty Sold tab with every
-  // active listing.
+  // Never ask the backend for relaxed / nearby / catalogue fallbacks. An empty
+  // match must render the empty state — substitute listings are always wrong.
+  // Status tabs select a GROUP ("Sold" also matches "Closed"/"Leased").
   const group = backendStatusGroup(query.status);
-  // Keyword pages (power of sale, distress) must read as empty, not relaxed.
-  const strict = Boolean(
-    query.search?.trim() ||
-      query.city?.trim() ||
-      query.postalCodes?.length ||
-      query.openHouse ||
-      query.keywords?.length ||
-      query.buildingType ||
-      query.ownership ||
-      query.yearBuiltMax ||
-      query.storiesMax ||
-      query.feeMin ||
-      query.feeMax ||
-      query.listedSince ||
-      (group && group !== "active"),
-  );
   return {
     limit,
     offset,
@@ -156,7 +135,7 @@ export function toBackendParams(query: ListingQuery, limit?: number, offset?: nu
     // Backend normalises spaces/case; FSAs prefix-match, full codes are exact.
     postal_code: query.postalCodes?.length ? query.postalCodes.join(",") : undefined,
     has_open_house: query.openHouse ? "1" : undefined,
-    allow_fallback: strict ? "false" : undefined,
+    allow_fallback: "false",
   };
 }
 
