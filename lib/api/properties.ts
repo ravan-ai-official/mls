@@ -62,7 +62,10 @@ function effectivePriceMin(query: ListingQuery): number | undefined {
 export const SORT_TO_ORDERBY: Record<ListingSort, string> = {
   // Backend ranks by similarity to `semantic` (AI search's "Best match").
   relevance: "relevance",
-  newest: "-modification_timestamp",
+  // Prefer entry date over modification_timestamp: active + sale +
+  // `-modification_timestamp` intermittently returns count=0 on the feed
+  // (facets still show hundreds), which emptied the For Sale tab.
+  newest: "-original_entry_timestamp",
   "price-asc": "list_price",
   "price-desc": "-list_price",
   "beds-desc": "-bedrooms_total",
@@ -160,10 +163,26 @@ export async function searchProperties(
   const opts: RequestOptions = { revalidate: 60, ...options };
 
   if (!needsClientFiltering(query)) {
-    const data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
+    const params = toBackendParams(query, pageSize, offset);
+    let data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
       `${MLS}/properties/filter/`,
-      { ...opts, params: toBackendParams(query, pageSize, offset) },
+      { ...opts, params },
     );
+    // Feed bug: some orderby values (historically `-modification_timestamp`)
+    // return count=0 for active sale even when facets show hundreds. Retry
+    // once without orderby / ISR so a bad empty isn't sticky-cached.
+    if (
+      (data.count ?? 0) === 0 &&
+      (data.results?.length ?? 0) === 0 &&
+      backendStatusGroup(query.status) === "active" &&
+      params.orderby
+    ) {
+      const { orderby: _ignored, ...withoutOrder } = params;
+      data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
+        `${MLS}/properties/filter/`,
+        { ...opts, cache: "no-store", params: withoutOrder },
+      );
+    }
     return {
       items: (data.results ?? []).map(mapPropertySummary),
       total: data.count ?? 0,

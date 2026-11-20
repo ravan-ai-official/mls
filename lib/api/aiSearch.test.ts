@@ -71,7 +71,7 @@ describe("ai URL param", () => {
 
   it("falls back to newest when relevance has nothing to rank by", () => {
     expect(parseListingParams({ sort: "relevance" }).sort).toBe("newest");
-    expect(toBackendParams({ sort: "relevance" }).orderby).toBe("-modification_timestamp");
+    expect(toBackendParams({ sort: "relevance" }).orderby).toBe("-original_entry_timestamp");
   });
 
   it("sends semantic + relevance to the backend", () => {
