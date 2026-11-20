@@ -57,7 +57,10 @@ async function get<T>(
 const CONTENT_TAGS = ["home-content"];
 
 export function getInvestorPicks(limit = 3): Promise<InvestorPicksFeed | null> {
-  return get("investor-picks/", FEED_REVALIDATE, mapInvestorPicks, { limit });
+  // Cold rank can score hundreds of sale rows against rental comps.
+  return get("investor-picks/", FEED_REVALIDATE, mapInvestorPicks, { limit }, undefined, {
+    timeoutMs: 15_000,
+  });
 }
 
 export function getMarketDeals(limit = 4): Promise<PriceDropDeal[] | null> {

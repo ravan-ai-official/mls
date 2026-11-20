@@ -16,7 +16,8 @@ import { formatPrice } from "@/lib/utils/format";
  * disclosed next to the figures.
  *
  * When the feed is down or empty the section is omitted: yield figures are
- * only ever shown for real listings, never as sample numbers.
+ * only ever shown for real listings, never as sample numbers. Ranking is live
+ * from `/api/home/investor-picks/` (studio pins first, then highest cap rate).
  */
 
 const DEFAULT_BASIS =
