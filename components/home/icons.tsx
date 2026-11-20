@@ -40,37 +40,6 @@ function makeIcon(viewBox: string, paths: string[], displayName: string) {
   return Icon;
 }
 
-/**
- * Flaticon filled glyphs tinted via CSS mask so they pick up `currentColor`
- * (same gold default as the stroke set). Sources:
- * - Condo: https://www.flaticon.com/free-icon/residential_10365223
- * - Townhome: https://www.flaticon.com/free-icon/house_16225234
- */
-function makeMaskedIcon(src: string, displayName: string) {
-  function Icon({ size = 24, className }: IconProps) {
-    return (
-      <span
-        aria-hidden="true"
-        className={cn("inline-block shrink-0 bg-current text-gold", className)}
-        style={{
-          width: size,
-          height: size,
-          WebkitMaskImage: `url(${src})`,
-          maskImage: `url(${src})`,
-          WebkitMaskSize: "contain",
-          maskSize: "contain",
-          WebkitMaskRepeat: "no-repeat",
-          maskRepeat: "no-repeat",
-          WebkitMaskPosition: "center",
-          maskPosition: "center",
-        }}
-      />
-    );
-  }
-  Icon.displayName = displayName;
-  return Icon;
-}
-
 const P = {
   houseDoor:
     "M13 20.0005V12.0005C13 11.4486 12.5519 11.0005 12 11.0005H8C7.44808 11.0005 7 11.4486 7 12.0005V20.0005",
@@ -114,8 +83,42 @@ export const IconPrecon = makeIcon(
   "IconPrecon",
 );
 export const IconSell = makeIcon("0 0 20 20", [P.chartAxis, P.chartLine], "IconSell");
-export const IconCondo = makeMaskedIcon("/icons/property-types/condo.png", "IconCondo");
-export const IconTownhome = makeMaskedIcon("/icons/property-types/townhome.png", "IconTownhome");
+/**
+ * Condo / residential — Flaticon residential_10365223 (house + tall building).
+ * https://www.flaticon.com/free-icon/residential_10365223
+ */
+export const IconCondo = makeIcon(
+  "0 0 24 24",
+  [
+    "M1.5 11L6.5 6L11.5 11V20.5H1.5V11Z",
+    "M5 20.5V15.5H8V20.5",
+    "M4 13H5.25M7.75 13H9",
+    "M12 9L17 3.5L22 9V20.5H12V9Z",
+    "M15.5 20.5V15.5H18.5V20.5",
+    "M14 11.5H15.25M16.75 11.5H18M14 14H15.25M16.75 14H18",
+    "M1 20.5H23",
+  ],
+  "IconCondo",
+);
+/**
+ * Townhomes — Flaticon house_16225234 (row of three gabled units).
+ * https://www.flaticon.com/free-icon/house_16225234
+ */
+export const IconTownhome = makeIcon(
+  "0 0 24 24",
+  [
+    "M1.5 10.5L5.5 5L9.5 10.5V20.5H1.5V10.5Z",
+    "M9.5 10.5L12.5 5.5L15.5 10.5V20.5H9.5V10.5Z",
+    "M15.5 10.5L19.5 5L22.5 10.5V20.5H15.5V10.5Z",
+    "M4.5 20.5V15.5H6.5V20.5",
+    "M11.5 20.5V15.5H13.5V20.5",
+    "M18.5 20.5V15.5H20.5V20.5",
+    "M3.5 12.5H5M6 12.5H7.5",
+    "M11 12.5H12M13 12.5H14.5",
+    "M17.5 12.5H19M20 12.5H21.5",
+  ],
+  "IconTownhome",
+);
 /** Two joined houses — Semi-Detached tile. */
 export const IconSemi = makeIcon(
   "0 0 24 22",

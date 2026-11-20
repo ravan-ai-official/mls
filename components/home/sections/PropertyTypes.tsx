@@ -21,54 +21,55 @@ import { formatNumber } from "@/lib/utils/format";
  * $2M+ for Luxury, active leases for Rentals).
  */
 const TILES: Array<{
+  icon: string;
   label: string;
   href: string;
   Icon: ComponentType<{ className?: string }>;
   uiType: UiPropertyType;
 }> = [
-  { label: "Detached", href: "/listings?type=Detached", Icon: IconDetached, uiType: "Detached" },
   {
+    icon: "detached",
+    label: "Detached",
+    href: "/listings?type=Detached",
+    Icon: IconDetached,
+    uiType: "Detached",
+  },
+  {
+    icon: "semi",
     label: "Semi-Detached",
     href: "/listings?type=Semi-Detached",
     Icon: IconSemi,
     uiType: "Semi-Detached",
   },
-  { label: "Townhomes", href: "/listings?type=Townhome", Icon: IconTownhome, uiType: "Townhome" },
-  { label: "Luxury", href: "/listings?priceMin=2000000", Icon: IconLuxury, uiType: "Luxury" },
-  { label: "Condos", href: "/listings?type=Condo", Icon: IconCondo, uiType: "Condo" },
-  { label: "Rentals", href: "/listings?tx=rent", Icon: IconRental, uiType: "Rental" },
+  {
+    icon: "townhome",
+    label: "Townhomes",
+    href: "/listings?type=Townhome",
+    Icon: IconTownhome,
+    uiType: "Townhome",
+  },
+  {
+    icon: "luxury",
+    label: "Luxury",
+    href: "/listings?priceMin=2000000",
+    Icon: IconLuxury,
+    uiType: "Luxury",
+  },
+  {
+    icon: "condo",
+    label: "Condos",
+    href: "/listings?type=Condo",
+    Icon: IconCondo,
+    uiType: "Condo",
+  },
+  {
+    icon: "rental",
+    label: "Rentals",
+    href: "/listings?tx=rent",
+    Icon: IconRental,
+    uiType: "Rental",
+  },
 ];
-
-const ICONS: Record<string, ComponentType<{ className?: string }>> = {
-  detached: IconDetached,
-  condo: IconCondo,
-  townhome: IconTownhome,
-  luxury: IconLuxury,
-  semi: IconSemi,
-  // Legacy CMS value — treat as Semi-Detached.
-  openHouse: IconSemi,
-  rental: IconRental,
-};
-
-const UI_TYPES: Record<string, UiPropertyType | undefined> = {
-  detached: "Detached",
-  condo: "Condo",
-  townhome: "Townhome",
-  luxury: "Luxury",
-  semi: "Semi-Detached",
-  openHouse: "Semi-Detached",
-  rental: "Rental",
-};
-
-const DEFAULT_HREFS: Record<string, string> = {
-  detached: "/listings?type=Detached",
-  condo: "/listings?type=Condo",
-  townhome: "/listings?type=Townhome",
-  luxury: "/listings?priceMin=2000000",
-  semi: "/listings?type=Semi-Detached",
-  openHouse: "/listings?type=Semi-Detached",
-  rental: "/listings?tx=rent",
-};
 
 export async function PropertyTypes({ content }: { content?: Record<string, unknown> }) {
   const facets = await safeFetch(getPropertyTypes(), [], "home:property-types");
@@ -78,25 +79,25 @@ export async function PropertyTypes({ content }: { content?: Record<string, unkn
     counts.set(facet.uiType, (counts.get(facet.uiType) ?? 0) + facet.count);
   }
 
+  // Canonical TILES order wins over saved CMS item order (studio may still
+  // have Detached → Condos → …). CMS can still override labels/hrefs.
   const custom = Array.isArray(content?.items) ? content.items : [];
-  const tiles = custom.length
-    ? custom.map((item) => {
-        const row =
-          item && typeof item === "object"
-            ? (item as { icon?: string; label?: string; href?: string })
-            : {};
-        const icon = row.icon || "detached";
-        const legacyOpenHouse = icon === "openHouse";
-        return {
-          label: legacyOpenHouse ? "Semi-Detached" : row.label || "Homes",
-          href: legacyOpenHouse
-            ? DEFAULT_HREFS.semi
-            : row.href || DEFAULT_HREFS[icon] || "/listings",
-          Icon: ICONS[icon] ?? IconDetached,
-          uiType: UI_TYPES[icon],
-        };
-      })
-    : TILES;
+  const customByIcon = new Map<string, { label?: string; href?: string }>();
+  for (const item of custom) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { icon?: string; label?: string; href?: string };
+    const icon = row.icon === "openHouse" ? "semi" : row.icon;
+    if (icon) customByIcon.set(icon, row);
+  }
+
+  const tiles = TILES.map((tile) => {
+    const override = customByIcon.get(tile.icon);
+    return {
+      ...tile,
+      label: override?.label || tile.label,
+      href: override?.href || tile.href,
+    };
+  });
 
   return (
     <Section
