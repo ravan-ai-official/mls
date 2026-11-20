@@ -34,7 +34,10 @@ export const HOME_TYPE_DISTRIBUTION = [
   { name: "Condo apartment", homeType: "condo" },
 ] as const;
 
-/** Cities the trends page offers. The backend matches `city` case-insensitively. */
+/**
+ * Fallback cities when `/market/cities/` is unreachable. Prefer
+ * `getMarketCities()` on Market Insights so the dropdown tracks live inventory.
+ */
 export const MARKET_CITIES = [
   "Toronto",
   "Mississauga",
@@ -45,6 +48,34 @@ export const MARKET_CITIES = [
   "Burlington",
   "Hamilton",
 ] as const;
+
+export interface MarketCity {
+  name: string;
+  activeCount: number;
+  listingCount: number;
+}
+
+/** Ontario cities present in the MLS feed, ordered by active inventory. */
+export async function getMarketCities(
+  options: RequestOptions & { limit?: number } = {},
+): Promise<string[]> {
+  const { limit = 24, ...rest } = options;
+  try {
+    const data = await apiFetch<{
+      cities?: Array<{ name?: string; active_count?: number; listing_count?: number }>;
+    }>(`${MLS}/market/cities/`, {
+      revalidate: 1800,
+      ...rest,
+      params: { limit },
+    });
+    const names = (data.cities ?? [])
+      .map((row) => (typeof row.name === "string" ? row.name.trim() : ""))
+      .filter(Boolean);
+    return names.length > 0 ? names : [...MARKET_CITIES];
+  } catch {
+    return [...MARKET_CITIES];
+  }
+}
 
 export interface TrendPoint {
   month: string;

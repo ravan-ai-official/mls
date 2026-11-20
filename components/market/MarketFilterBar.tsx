@@ -7,7 +7,6 @@ import {
 } from "@/components/navigation/PendingNavigation";
 import { Select } from "@/components/ui/Field";
 import {
-  MARKET_CITIES,
   MARKET_RANGES,
   SOLD_PROPERTY_TYPES,
   type SoldCommunity,
@@ -22,6 +21,7 @@ import {
  */
 export function MarketFilterBar({
   city,
+  cities,
   community,
   type,
   rangeKey,
@@ -29,6 +29,8 @@ export function MarketFilterBar({
   hrefFor,
 }: {
   city: string;
+  /** Live city list from `/market/cities/` (fallback set if the API is down). */
+  cities: string[];
   community: string | null;
   type: string | null;
   rangeKey: string;
@@ -38,11 +40,12 @@ export function MarketFilterBar({
 }) {
   const { navigate, target } = usePendingNavigation();
   const pending = usePendingSearchParams();
+  const cityOptions = cities.length > 0 ? cities : [city];
 
   // While a navigation is in flight, read the destination URL so selects flip
   // immediately (including when a param is cleared). Otherwise use server props.
   const shownCity = target
-    ? (MARKET_CITIES.find((option) => option.toLowerCase() === pending.get("city")?.toLowerCase()) ?? city)
+    ? (cityOptions.find((option) => option.toLowerCase() === pending.get("city")?.toLowerCase()) ?? city)
     : city;
   const shownCommunity = target ? pending.get("community") : community;
   const shownType = target
@@ -80,7 +83,7 @@ export function MarketFilterBar({
           value={shownCity}
           onChange={(value) => go(`city:${value}`)}
         >
-          {MARKET_CITIES.map((option) => (
+          {cityOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>

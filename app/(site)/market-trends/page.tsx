@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils/cn";
 import {
   getBulkCatalogStats,
   getHomeTypeDistribution,
+  getMarketCities,
   getMarketTrends,
   getSoldTrends,
   MARKET_CITIES,
@@ -33,7 +34,7 @@ export const metadata: Metadata = {
 export const revalidate = 1800;
 
 type Filters = {
-  city: (typeof MARKET_CITIES)[number];
+  city: string;
   range: (typeof MARKET_RANGES)[number];
   type: SoldPropertyType | null;
   community: string | null;
@@ -90,8 +91,15 @@ const loadTrends = cache((city: string, months: number) =>
  */
 export default async function MarketTrendsPage({ searchParams }: PageProps<"/market-trends">) {
   const params = await searchParams;
+  const marketCities = await getMarketCities();
+  const requested = first(params.city)?.trim() ?? "";
+  const city =
+    marketCities.find((name) => name.toLowerCase() === requested.toLowerCase()) ??
+    (requested.length >= 2 && requested.length <= 60 ? requested : null) ??
+    marketCities[0] ??
+    MARKET_CITIES[0];
   const filters: Filters = {
-    city: MARKET_CITIES.find((c) => c.toLowerCase() === first(params.city)?.toLowerCase()) ?? MARKET_CITIES[0],
+    city,
     range: MARKET_RANGES.find((r) => r.key === first(params.range)) ?? MARKET_RANGES[0],
     type: SOLD_PROPERTY_TYPES.find((t) => t.key === first(params.type))?.key ?? null,
     community: first(params.community)?.trim().slice(0, 120) || null,
@@ -132,7 +140,7 @@ export default async function MarketTrendsPage({ searchParams }: PageProps<"/mar
 
       <div className="container-page space-y-8 py-12">
         <Suspense key={`board-${filterKey}`} fallback={<BoardSkeleton />}>
-          <MarketBoard filters={filters} />
+          <MarketBoard filters={filters} cities={marketCities} />
         </Suspense>
       </div>
     </PendingNavigationProvider>
@@ -193,22 +201,24 @@ async function HeaderKpis({ filters }: { filters: Filters }) {
   );
 }
 
-async function MarketBoard({ filters }: { filters: Filters }) {
+async function MarketBoard({ filters, cities: cityOptions }: { filters: Filters; cities: string[] }) {
   const { city, range, type, community } = filters;
   const filtered = Boolean(type || community);
+  // Heatmap stays readable: cap to the top cities by inventory.
+  const heatmapNames = (cityOptions.length > 0 ? cityOptions : [...MARKET_CITIES]).slice(0, 12);
   // 12m covers Jan→now for the YTD heatmap; selected-city charts still use `range`.
   const [trends, citySold, viewSold, cities, heatmapSold, homeTypes] = await Promise.all([
     loadTrends(city, range.months),
     loadSold(city, range.months, "", ""),
     filtered ? loadSold(city, range.months, community ?? "", type ?? "") : Promise.resolve(null),
-    getBulkCatalogStats({ cities: [...MARKET_CITIES] }).catch(() => [] as CityCatalogStat[]),
-    Promise.all(MARKET_CITIES.map((name) => loadSold(name, 12, "", ""))),
+    getBulkCatalogStats({ cities: heatmapNames }).catch(() => [] as CityCatalogStat[]),
+    Promise.all(heatmapNames.map((name) => loadSold(name, 12, "", ""))),
     getHomeTypeDistribution(city, { community }).catch(
       () => [] as Array<{ name: string; count: number }>,
     ),
   ]);
   const sold = viewSold ?? citySold;
-  const heatmapCities = buildHeatmapCities(cities, heatmapSold);
+  const heatmapCities = buildHeatmapCities(heatmapNames, cities, heatmapSold);
 
   if (!trends && sold.unavailable && cities.length === 0) {
     return <ErrorState description={`We couldn't load market data for ${city}.`} />;
@@ -224,7 +234,8 @@ async function MarketBoard({ filters }: { filters: Filters }) {
       : citySold.communities;
 
   const hrefFor: Record<string, string> = {};
-  for (const option of MARKET_CITIES) hrefFor[`city:${option}`] = trendsHref(filters, { city: option });
+  for (const option of cityOptions) hrefFor[`city:${option}`] = trendsHref(filters, { city: option });
+  if (!hrefFor[`city:${city}`]) hrefFor[`city:${city}`] = trendsHref(filters, { city });
   hrefFor["community:"] = trendsHref(filters, { community: null });
   for (const option of communities) hrefFor[`community:${option.name}`] = trendsHref(filters, { community: option.name });
   if (community) hrefFor[`community:${community}`] ??= trendsHref(filters, { community });
@@ -248,6 +259,7 @@ async function MarketBoard({ filters }: { filters: Filters }) {
     <div className="space-y-8">
       <MarketFilterBar
         city={city}
+        cities={cityOptions}
         community={community}
         type={type}
         rangeKey={range.key}
@@ -453,21 +465,25 @@ function ytdSoldMonths(months: SoldTrends["months"], now = new Date()) {
 
 /** One heatmap tile: YTD sold figures + current active listings for heat colour. */
 type HeatmapCity = {
-  city: (typeof MARKET_CITIES)[number];
+  city: string;
   activeCount: number;
   medianPrice: number | null;
   /** Null when the sold feed was unavailable for this city. */
   soldCountYtd: number | null;
 };
 
-function buildHeatmapCities(catalog: CityCatalogStat[], soldByCity: SoldTrends[]): HeatmapCity[] {
+function buildHeatmapCities(
+  cityNames: string[],
+  catalog: CityCatalogStat[],
+  soldByCity: SoldTrends[],
+): HeatmapCity[] {
   const activeByCity = new Map(
     catalog.map((row) => [row.city.toLowerCase(), row] as const),
   );
   const listFallback = (city: string) =>
     activeByCity.get(city.toLowerCase())?.medianListPrice ?? null;
 
-  return MARKET_CITIES.map((name, index) => {
+  return cityNames.map((name, index) => {
     const sold = soldByCity[index];
     const catalogRow = activeByCity.get(name.toLowerCase());
     const activeCount = catalogRow?.activeCount ?? 0;
