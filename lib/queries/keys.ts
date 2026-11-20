@@ -96,8 +96,24 @@ export const qk = {
     highReturnAll: ["me", userId, "studio", "high-return"] as const,
     editorial: (resource: string) => ["me", userId, "studio", "editorial", resource] as const,
     /** Under "me" only because sold data is sign-in gated: sign-out drops it. */
-    recentSales: (city: string, days: number, page: number) =>
-      ["me", userId, "market", "recent-sales", normText(city), days, page] as const,
+    recentSales: (
+      city: string,
+      days: number,
+      page: number,
+      filters: { propertyType?: string; bedsMin?: number; bathsMin?: number } = {},
+    ) =>
+      [
+        "me",
+        userId,
+        "market",
+        "recent-sales",
+        normText(city),
+        days,
+        page,
+        normText(filters.propertyType ?? ""),
+        filters.bedsMin ?? null,
+        filters.bathsMin ?? null,
+      ] as const,
   }),
 };
 

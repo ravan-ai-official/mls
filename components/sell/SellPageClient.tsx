@@ -9,9 +9,17 @@ import { properties as sampleProperties, formatFullPrice } from "@/lib/home/samp
 import { useSubmitInquiry } from "@/lib/queries/inquiries";
 import { useRecentSales } from "@/lib/queries/market";
 import { formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
+import { propertyPath } from "@/lib/seo/urls";
 import { cn } from "@/lib/utils/cn";
 
 const SAMPLE_SOLD = sampleProperties.filter((p) => p.status === "sold").slice(0, 6);
+
+function minBedsOrBaths(raw: string): number | undefined {
+  const cleaned = raw.replace("+", "").trim();
+  if (!cleaned) return undefined;
+  const parsed = Number.parseInt(cleaned, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
 
 const inputClass =
   "w-full rounded-lg border border-line bg-surface px-4 py-3 text-small text-ink placeholder:text-ink-subtle transition focus:outline-none focus:ring-2 focus:ring-navy";
@@ -123,8 +131,9 @@ function SampleSoldCard({ property }: { property: (typeof SAMPLE_SOLD)[number] }
 function LiveSoldCard({ sale }: { sale: RecentSale }) {
   const over = sale.overUnderAskingPct;
   const isOverAsk = over === null || over >= 0;
-  return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-card">
+  const href = sale.listingKey ? propertyPath(sale.listingKey) : null;
+  const body = (
+    <>
       <div className="mb-3 flex items-start justify-between gap-2">
         {sale.closeDate ? (
           <span className="rounded bg-navy px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -144,7 +153,7 @@ function LiveSoldCard({ sale }: { sale: RecentSale }) {
           </span>
         ) : null}
       </div>
-      <p className="text-small font-semibold leading-tight text-ink">{sale.address}</p>
+      <p className="text-small font-semibold leading-tight text-ink group-hover:text-navy">{sale.address}</p>
       <p className="mb-3 text-caption text-ink-muted">{sale.city}</p>
       <div className="mb-3 flex items-center justify-between">
         <div>
@@ -164,7 +173,19 @@ function LiveSoldCard({ sale }: { sale: RecentSale }) {
         {sale.daysOnMarket !== null ? <span>{formatNumber(sale.daysOnMarket)} DOM</span> : null}
         <span className="ml-auto text-[10px] text-ink-subtle">{sale.propertyType ?? ""}</span>
       </div>
-    </div>
+    </>
+  );
+
+  const className =
+    "group block overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy";
+
+  if (!href) {
+    return <div className={className}>{body}</div>;
+  }
+  return (
+    <Link href={href} className={className}>
+      {body}
+    </Link>
   );
 }
 
@@ -214,7 +235,15 @@ export function SellPageClient() {
   const assignmentRef = useRef<HTMLElement>(null);
 
   const compsCity = useMemo(() => cityFromAddress(address || formAddress), [address, formAddress]);
-  const salesQuery = useRecentSales(compsCity, 90, 1);
+  const compsFilters = useMemo(
+    () => ({
+      propertyType: propertyType || undefined,
+      bedsMin: minBedsOrBaths(beds),
+      bathsMin: minBedsOrBaths(baths),
+    }),
+    [propertyType, beds, baths],
+  );
+  const salesQuery = useRecentSales(compsCity, 90, 1, compsFilters);
   const liveSales = (salesQuery.data?.results ?? []).slice(0, 6);
 
   useEffect(() => {
@@ -546,8 +575,11 @@ export function SellPageClient() {
               ) : liveSales.length === 0 ? (
                 <div className="rounded-2xl border border-line bg-surface p-10 text-center shadow-card">
                   <p className="text-small text-ink-muted">
-                    No closed sales found for {compsCity} in the last 90 days. Try a nearby city in your
-                    address, or{" "}
+                    No closed sales found for {compsCity}
+                    {propertyType ? ` · ${propertyType}` : ""}
+                    {beds ? ` · ${beds}+ beds` : ""}
+                    {baths ? ` · ${baths}+ baths` : ""} in the last 90 days. Widen a filter, try a nearby
+                    city, or{" "}
                     <Link href="/recently-sold" className="font-semibold text-navy underline">
                       browse recently sold
                     </Link>
@@ -555,7 +587,12 @@ export function SellPageClient() {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                <div
+                  className={cn(
+                    "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3",
+                    salesQuery.isPlaceholderData && "opacity-60 transition-opacity",
+                  )}
+                >
                   {liveSales.map((sale) => (
                     <LiveSoldCard key={sale.listingKey} sale={sale} />
                   ))}

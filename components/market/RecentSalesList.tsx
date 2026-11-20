@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import type { RecentSale } from "@/lib/api/market";
 import { useRecentSales } from "@/lib/queries/market";
+import { propertyPath } from "@/lib/seo/urls";
 import { EMPTY, formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
 
 /**
@@ -75,8 +77,16 @@ export function RecentSalesList({ city, days, page }: { city: string; days: numb
           </thead>
           <tbody className="divide-y divide-line bg-surface">
             {data.results.map((sale) => (
-              <tr key={sale.listingKey}>
-                <td className="px-4 py-3 text-ink">{shortAddress(sale)}</td>
+              <tr key={sale.listingKey} className="hover:bg-surface-alt/60">
+                <td className="px-4 py-3 text-ink">
+                  {sale.listingKey ? (
+                    <Link href={propertyPath(sale.listingKey)} className="font-medium hover:text-navy hover:underline">
+                      {shortAddress(sale)}
+                    </Link>
+                  ) : (
+                    shortAddress(sale)
+                  )}
+                </td>
                 <td className="px-4 py-3 text-ink-muted">{sale.propertyType ?? EMPTY}</td>
                 <td className="px-4 py-3 text-ink-muted">{bedsBaths(sale)}</td>
                 <td className="px-4 py-3 text-right font-semibold text-ink">{formatPrice(sale.closePrice)}</td>
@@ -90,20 +100,36 @@ export function RecentSalesList({ city, days, page }: { city: string; days: numb
       </div>
 
       <ul className="mt-4 space-y-3 md:hidden">
-        {data.results.map((sale) => (
-          <li key={sale.listingKey} className="rounded-surface border border-line bg-surface p-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-small font-medium text-ink">{shortAddress(sale)}</p>
-              <AskingDelta sale={sale} />
-            </div>
-            <p className="mt-1 text-h3 text-ink">{formatPrice(sale.closePrice)}</p>
-            <p className="mt-1 text-caption text-ink-muted">
-              {[sale.propertyType, bedsBaths(sale), `Sold ${formatDate(sale.closeDate)}`]
-                .filter((part) => part && part !== EMPTY)
-                .join(" · ")}
-            </p>
-          </li>
-        ))}
+        {data.results.map((sale) => {
+          const card = (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-small font-medium text-ink">{shortAddress(sale)}</p>
+                <AskingDelta sale={sale} />
+              </div>
+              <p className="mt-1 text-h3 text-ink">{formatPrice(sale.closePrice)}</p>
+              <p className="mt-1 text-caption text-ink-muted">
+                {[sale.propertyType, bedsBaths(sale), `Sold ${formatDate(sale.closeDate)}`]
+                  .filter((part) => part && part !== EMPTY)
+                  .join(" · ")}
+              </p>
+            </>
+          );
+          return (
+            <li key={sale.listingKey}>
+              {sale.listingKey ? (
+                <Link
+                  href={propertyPath(sale.listingKey)}
+                  className="block rounded-surface border border-line bg-surface p-4 transition-shadow hover:shadow-card-hover"
+                >
+                  {card}
+                </Link>
+              ) : (
+                <div className="rounded-surface border border-line bg-surface p-4">{card}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       {totalPages > 1 && (

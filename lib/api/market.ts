@@ -529,9 +529,19 @@ export interface RecentSalesPage {
  * `market/recent-sales/` — closed sales from the TRREB feed. Signed-in only
  * (TRREB VOW rules), so it always needs the user's token.
  */
+export interface RecentSalesQuery {
+  city: string;
+  days: number;
+  page: number;
+  /** Detached / Semi-Detached / Townhome / Condo / Luxury (or sold-type keys). */
+  propertyType?: string;
+  bedsMin?: number;
+  bathsMin?: number;
+}
+
 export async function getRecentSales(
   token: string,
-  query: { city: string; days: number; page: number },
+  query: RecentSalesQuery,
 ): Promise<RecentSalesPage> {
   const data = await apiFetch<{
     city: string;
@@ -544,7 +554,14 @@ export async function getRecentSales(
   }>(`${MLS}/market/recent-sales/`, {
     token,
     timeoutMs: 25_000,
-    params: { city: query.city, days: query.days, page: query.page },
+    params: {
+      city: query.city,
+      days: query.days,
+      page: query.page,
+      property_type: query.propertyType || undefined,
+      beds_min: query.bedsMin ?? undefined,
+      baths_min: query.bathsMin ?? undefined,
+    },
   });
   return {
     city: data.city,
