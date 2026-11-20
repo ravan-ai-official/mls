@@ -113,7 +113,7 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
   propertyTypes: {
     label: "Property types",
     summary:
-      "The six type tiles (Detached, Condos, Townhomes, Luxury, Semi-Detached, Rentals) and their links. Counts stay live.",
+      "The six type tiles (Detached, Semi-Detached, Townhomes, Luxury, Condos, Rentals) and their links. Counts stay live.",
     canHide: true,
   },
   newPrecon: { label: "New preconstruction", summary: "Heading only. Projects come from the pre-construction list.", canHide: true },

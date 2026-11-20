@@ -504,10 +504,10 @@ export const preconstructionProjects: PreconstructionProject[] = [
 
 export const propertyTypes: Array<{ type: PropertyType; icon: string }> = [
   { type: "Detached", icon: "house" },
-  { type: "Condo", icon: "building" },
+  { type: "Semi-Detached", icon: "semi" },
   { type: "Townhome", icon: "townhome" },
   { type: "Luxury", icon: "luxury" },
-  { type: "Semi-Detached", icon: "semi" },
+  { type: "Condo", icon: "building" },
   { type: "Rental", icon: "rental" },
 ];
 

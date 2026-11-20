@@ -27,15 +27,15 @@ const TILES: Array<{
   uiType: UiPropertyType;
 }> = [
   { label: "Detached", href: "/listings?type=Detached", Icon: IconDetached, uiType: "Detached" },
-  { label: "Condos", href: "/listings?type=Condo", Icon: IconCondo, uiType: "Condo" },
-  { label: "Townhomes", href: "/listings?type=Townhome", Icon: IconTownhome, uiType: "Townhome" },
-  { label: "Luxury", href: "/listings?priceMin=2000000", Icon: IconLuxury, uiType: "Luxury" },
   {
     label: "Semi-Detached",
     href: "/listings?type=Semi-Detached",
     Icon: IconSemi,
     uiType: "Semi-Detached",
   },
+  { label: "Townhomes", href: "/listings?type=Townhome", Icon: IconTownhome, uiType: "Townhome" },
+  { label: "Luxury", href: "/listings?priceMin=2000000", Icon: IconLuxury, uiType: "Luxury" },
+  { label: "Condos", href: "/listings?type=Condo", Icon: IconCondo, uiType: "Condo" },
   { label: "Rentals", href: "/listings?tx=rent", Icon: IconRental, uiType: "Rental" },
 ];
 

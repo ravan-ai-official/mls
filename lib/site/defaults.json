@@ -135,9 +135,9 @@
               "href": "/listings?type=Detached"
             },
             {
-              "icon": "condo",
-              "label": "Condos",
-              "href": "/listings?type=Condo"
+              "icon": "semi",
+              "label": "Semi-Detached",
+              "href": "/listings?type=Semi-Detached"
             },
             {
               "icon": "townhome",
@@ -150,9 +150,9 @@
               "href": "/listings?priceMin=2000000"
             },
             {
-              "icon": "semi",
-              "label": "Semi-Detached",
-              "href": "/listings?type=Semi-Detached"
+              "icon": "condo",
+              "label": "Condos",
+              "href": "/listings?type=Condo"
             },
             {
               "icon": "rental",
