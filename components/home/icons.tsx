@@ -40,6 +40,37 @@ function makeIcon(viewBox: string, paths: string[], displayName: string) {
   return Icon;
 }
 
+/**
+ * Flaticon filled glyphs tinted via CSS mask so they pick up `currentColor`
+ * (same gold default as the stroke set). Sources:
+ * - Condo: https://www.flaticon.com/free-icon/residential_10365223
+ * - Townhome: https://www.flaticon.com/free-icon/house_16225234
+ */
+function makeMaskedIcon(src: string, displayName: string) {
+  function Icon({ size = 24, className }: IconProps) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn("inline-block shrink-0 bg-current text-gold", className)}
+        style={{
+          width: size,
+          height: size,
+          WebkitMaskImage: `url(${src})`,
+          maskImage: `url(${src})`,
+          WebkitMaskSize: "contain",
+          maskSize: "contain",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+          WebkitMaskPosition: "center",
+          maskPosition: "center",
+        }}
+      />
+    );
+  }
+  Icon.displayName = displayName;
+  return Icon;
+}
+
 const P = {
   houseDoor:
     "M13 20.0005V12.0005C13 11.4486 12.5519 11.0005 12 11.0005H8C7.44808 11.0005 7 11.4486 7 12.0005V20.0005",
@@ -56,12 +87,6 @@ const P = {
   preconTower: "M5 19V3C5 1.89617 5.89617 1 7 1H15C16.1038 1 17 1.89617 17 3V19",
   chartAxis: "M1 1V17C1 18.1038 1.89617 19 3 19H19",
   chartLine: "M17 7L12 12L8 8L5 11",
-  condoWindows:
-    "M9 9H9.01M9 13H9.01M9 5H9.01M13 9H13.01M13 13H13.01M13 5H13.01M5 9H5.01M5 13H5.01M5 5H5.01M6 21V18C6 17.4481 6.44808 17 7 17H11C11.5519 17 12 17.4481 12 18V21",
-  condoBody:
-    "M3 1H15C16.1038 1 17 1.89617 17 3V19C17 20.1038 16.1038 21 15 21H3C1.89617 21 1 20.1038 1 19V3C1 1.89617 1.89617 1 3 1V1",
-  townhome:
-    "M10 18V11M11.119 2.205C11.6747 1.93234 12.3253 1.93234 12.881 2.205L20.721 6.051C20.9301 6.15344 21.0408 6.38664 20.988 6.6134C20.9352 6.84017 20.7328 7.00047 20.5 7H3.5C3.26736 7 3.06545 6.83955 3.01291 6.61292C2.96038 6.38629 3.07109 6.15336 3.28 6.051L10 18M14 18V11M18 18V11M3 22H21M6 18V11",
   gemFacets:
     "M9.50033 1.00026L7.00033 7.00026L11.0003 20.0003L15.0003 7.00026L12.5003 1.00026",
   gemOutline:
@@ -89,8 +114,8 @@ export const IconPrecon = makeIcon(
   "IconPrecon",
 );
 export const IconSell = makeIcon("0 0 20 20", [P.chartAxis, P.chartLine], "IconSell");
-export const IconCondo = makeIcon("0 0 18 22", [P.condoWindows, P.condoBody], "IconCondo");
-export const IconTownhome = makeIcon("0 0 24 24", [P.townhome], "IconTownhome");
+export const IconCondo = makeMaskedIcon("/icons/property-types/condo.png", "IconCondo");
+export const IconTownhome = makeMaskedIcon("/icons/property-types/townhome.png", "IconTownhome");
 /** Two joined houses — Semi-Detached tile. */
 export const IconSemi = makeIcon(
   "0 0 24 22",
