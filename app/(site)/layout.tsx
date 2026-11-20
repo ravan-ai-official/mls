@@ -6,7 +6,7 @@ import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import { getChromeDocument } from "@/lib/site/load";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { PhoneVerifyModal } from "@/components/auth/PhoneVerifyModal";
-import { AiAssistant } from "@/components/assistant/AiAssistant";
+import { AiAssistantLazy } from "@/components/assistant/AiAssistantLazy";
 import { CompareTray } from "@/components/property/CompareTray";
 
 /** Chrome-wrapped pages. The map search route uses its own full-bleed layout. */
@@ -24,7 +24,7 @@ export default async function SiteLayout({ children }: { children: ReactNode }) 
       <PhoneVerifyModal />
       {/* Mounted at layout level so a compare selection survives navigation. */}
       <CompareTray />
-      <AiAssistant />
+      <AiAssistantLazy />
       <ScrollToTop />
     </>
   );

@@ -88,7 +88,10 @@ function listingQuery(params: Record<string, string | string[] | undefined>): Li
   return query.status || query.openHouse ? query : { ...query, status: "Active" };
 }
 
-/** Filters read the URL directly; the count comes from the same query. */
+/**
+ * Filters + status tabs. Count comes from facets for the active tab so this
+ * slot never duplicates the results grid's `searchProperties` round-trip.
+ */
 async function FiltersSlot({
   params,
 }: {
@@ -99,15 +102,22 @@ async function FiltersSlot({
   // Facets are scoped to everything EXCEPT status, so each tab shows how many
   // homes switching to it would return — a count that changed with the active
   // tab would be useless for deciding whether to click.
-  const [result, facets] = await Promise.all([
-    searchProperties(query).catch(() => null),
-    getPropertyFacets({ ...query, status: undefined, openHouse: undefined }),
-  ]);
+  const facets = await getPropertyFacets({
+    ...query,
+    status: undefined,
+    openHouse: undefined,
+  });
+  const group = backendStatusGroup(query.status);
+  const resultCount = query.openHouse
+    ? (facets?.openHouse ?? 0)
+    : group
+      ? (facets?.statusGroup?.[group] ?? 0)
+      : (facets?.statusGroup?.active ?? 0);
 
   return (
     <>
       <AiSearchNotice />
-      <ListingFilters resultCount={result?.total ?? 0} />
+      <ListingFilters resultCount={resultCount} />
       <div className="mt-3 sm:mt-4">
         <ListingStatusTabs facets={facets} query={query} />
       </div>

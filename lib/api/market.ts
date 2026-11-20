@@ -15,6 +15,7 @@
  * `stats/platform/` (G13) carries the only sourced platform-wide figures.
  */
 
+import { cache } from "react";
 import { apiFetch, type RequestOptions } from "@/lib/api/client";
 import type { BackendCatalogStats } from "@/lib/types/backend";
 import type { CityCatalogStat, PlatformStats } from "@/lib/types/domain";
@@ -56,16 +57,14 @@ export interface MarketCity {
 }
 
 /** Ontario cities present in the MLS feed, ordered by active inventory. */
-export async function getMarketCities(
-  options: RequestOptions & { limit?: number } = {},
+export const getMarketCities = cache(async function getMarketCities(
+  limit = 24,
 ): Promise<string[]> {
-  const { limit = 24, ...rest } = options;
   try {
     const data = await apiFetch<{
       cities?: Array<{ name?: string; active_count?: number; listing_count?: number }>;
     }>(`${MLS}/market/cities/`, {
       revalidate: 1800,
-      ...rest,
       params: { limit },
     });
     const names = (data.cities ?? [])
@@ -75,7 +74,7 @@ export async function getMarketCities(
   } catch {
     return [...MARKET_CITIES];
   }
-}
+});
 
 export interface TrendPoint {
   month: string;

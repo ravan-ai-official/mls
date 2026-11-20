@@ -29,8 +29,8 @@ export const MAP_PAGE_SIZE = 100;
  */
 export const MAP_MAX_ROWS = 1000;
 
-const MAP_STALE_TIME = 60_000;
-const MAP_GC_TIME = 5 * 60_000;
+const MAP_STALE_TIME = 3 * 60_000;
+const MAP_GC_TIME = 30 * 60_000;
 
 export interface MapListings {
   items: PropertySummary[];

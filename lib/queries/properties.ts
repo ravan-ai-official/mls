@@ -1,9 +1,51 @@
 "use client";
 
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  queryOptions,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { PropertyDetail } from "@/lib/types/domain";
+import type { ListingsResult } from "@/lib/api/properties";
 import { fetchJson } from "@/lib/queries/fetcher";
 import { qk } from "@/lib/queries/keys";
+
+const LISTINGS_STALE_TIME = 3 * 60_000;
+
+/** Stable cache key from a listings URL (or relative search string). */
+export function listingsSearchKey(search: string | URLSearchParams): string {
+  const params = new URLSearchParams(
+    typeof search === "string"
+      ? search.startsWith("?")
+        ? search.slice(1)
+        : search
+      : search,
+  );
+  params.sort();
+  return params.toString();
+}
+
+/** Shared options for prefetch / useQuery against `/api/properties/search`. */
+export function listingsSearchQuery(search: string | URLSearchParams) {
+  const filters = listingsSearchKey(search);
+  return queryOptions({
+    queryKey: qk.properties.search(filters),
+    queryFn: ({ signal }) =>
+      fetchJson<ListingsResult>(
+        `/api/properties/search${filters ? `?${filters}` : ""}`,
+        { signal, fallback: "Could not load listings." },
+      ),
+    staleTime: LISTINGS_STALE_TIME,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Client listings search; keeps the previous page painted while filters change. */
+export function useListingsSearch(search: string | URLSearchParams, enabled = true) {
+  return useQuery({ ...listingsSearchQuery(search), enabled });
+}
 
 /**
  * Client-side query hooks.

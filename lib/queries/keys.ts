@@ -53,6 +53,8 @@ export const qk = {
     all: ["properties"] as const,
     byId: (id: string) => ["properties", "byId", id] as const,
     byIds: (ids: string[]) => ["properties", "byIds", [...ids].sort()] as const,
+    /** Normalised listings query string (sorted) so equivalent filters share a cache entry. */
+    search: (filters: string) => ["properties", "search", filters] as const,
   },
   map: {
     listings: (view: MapViewKey) => ["map", "listings", view] as const,

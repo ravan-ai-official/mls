@@ -24,8 +24,7 @@ const inter = Inter({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getSeoDocument();
-  const connections = await getPublicConnections();
+  const [seo, connections] = await Promise.all([getSeoDocument(), getPublicConnections()]);
   const title = seo?.title || "HomeAtlas — GTA Real Estate Intelligence";
   const description =
     seo?.description ||
@@ -90,10 +89,12 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  // Resolved server-side so the first paint already reflects the session.
-  const user = await getCurrentUser();
-  const connections = await getPublicConnections();
-  const whatsappNumber = await getWhatsappNumber();
+  // Parallel so chrome/session never serializes three round-trips on every page.
+  const [user, connections, whatsappNumber] = await Promise.all([
+    getCurrentUser(),
+    getPublicConnections(),
+    getWhatsappNumber(),
+  ]);
 
   return (
     <html lang="en-CA" className={cn("h-full", inter.variable, "font-sans", geist.variable)}>

@@ -155,11 +155,14 @@ export async function searchProperties(
 ): Promise<ListingsResult> {
   const pageSize = Math.min(query.limit ?? 12, MAX_PAGE_SIZE);
   const offset = query.offset ?? 0;
+  // Feed-backed search is safe to ISR briefly; callers that need fresh data
+  // (personalization, auth) pass cache: "no-store" or their own revalidate.
+  const opts: RequestOptions = { revalidate: 60, ...options };
 
   if (!needsClientFiltering(query)) {
     const data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
       `${MLS}/properties/filter/`,
-      { ...options, params: toBackendParams(query, pageSize, offset) },
+      { ...opts, params: toBackendParams(query, pageSize, offset) },
     );
     return {
       items: (data.results ?? []).map(mapPropertySummary),
@@ -175,7 +178,7 @@ export async function searchProperties(
   // first, so the window we scan is already as small as the backend can make it.
   const data = await apiFetch<BackendListResponse<BackendPropertySummary>>(
     `${MLS}/properties/filter/`,
-    { ...options, params: toBackendParams(query, MAX_PAGE_SIZE, 0) },
+    { ...opts, params: toBackendParams(query, MAX_PAGE_SIZE, 0) },
   );
 
   const first = (data.results ?? []).map(mapPropertySummary);
@@ -193,7 +196,7 @@ export async function searchProperties(
     offsets.map((at) =>
       apiFetch<BackendListResponse<BackendPropertySummary>>(
         `${MLS}/properties/filter/`,
-        { ...options, params: toBackendParams(query, MAX_PAGE_SIZE, at) },
+        { ...opts, params: toBackendParams(query, MAX_PAGE_SIZE, at) },
       )
         .then((page) => (page.results ?? []).map(mapPropertySummary))
         // One slow page must not fail the whole grid; it only narrows the

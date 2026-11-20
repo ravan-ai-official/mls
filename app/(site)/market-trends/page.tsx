@@ -206,19 +206,18 @@ async function MarketBoard({ filters, cities: cityOptions }: { filters: Filters;
   const filtered = Boolean(type || community);
   // Heatmap stays readable: cap to the top cities by inventory.
   const heatmapNames = (cityOptions.length > 0 ? cityOptions : [...MARKET_CITIES]).slice(0, 12);
-  // 12m covers Jan→now for the YTD heatmap; selected-city charts still use `range`.
-  const [trends, citySold, viewSold, cities, heatmapSold, homeTypes] = await Promise.all([
+  // One bulk catalog call (active + 90d sold) replaces N parallel AMPRE sold-trends
+  // round-trips that previously dominated Market Insights load time.
+  const [trends, citySold, viewSold, cities] = await Promise.all([
     loadTrends(city, range.months),
     loadSold(city, range.months, "", ""),
     filtered ? loadSold(city, range.months, community ?? "", type ?? "") : Promise.resolve(null),
-    getBulkCatalogStats({ cities: heatmapNames }).catch(() => [] as CityCatalogStat[]),
-    Promise.all(heatmapNames.map((name) => loadSold(name, 12, "", ""))),
-    getHomeTypeDistribution(city, { community }).catch(
-      () => [] as Array<{ name: string; count: number }>,
+    getBulkCatalogStats({ cities: heatmapNames, includeSold: true }).catch(
+      () => [] as CityCatalogStat[],
     ),
   ]);
   const sold = viewSold ?? citySold;
-  const heatmapCities = buildHeatmapCities(heatmapNames, cities, heatmapSold);
+  const heatmapCities = buildHeatmapCities(heatmapNames, cities);
 
   if (!trends && sold.unavailable && cities.length === 0) {
     return <ErrorState description={`We couldn't load market data for ${city}.`} />;
@@ -366,17 +365,9 @@ async function MarketBoard({ filters, cities: cityOptions }: { filters: Filters;
           </div>
         </div>
 
-        {homeTypes.length > 0 && (
-          <section className="rounded-2xl border border-line bg-surface p-6">
-            <h2 className="mb-1 text-[18px] font-semibold text-ink">Property type distribution</h2>
-            <p className="mb-5 text-[13px] text-ink-muted">
-              Active listings in {community ? `${community}, ${city}` : city} by home type —
-              Detached, Semi-detached, Freehold townhouse, Condo townhouse, Condo apartment and
-              Other.
-            </p>
-            <PropertyTypeDistribution rows={homeTypes} />
-          </section>
-        )}
+        <Suspense fallback={<Skeleton className="h-72" />}>
+          <HomeTypeSection city={city} community={community} />
+        </Suspense>
 
         {reports.length > 0 && (
           <section className="rounded-2xl border border-line bg-surface p-6">
@@ -450,62 +441,51 @@ function periodSpanLabel(months: SoldTrends["months"]): string | null {
   return firstLabel === lastLabel ? firstLabel : `${firstLabel} – ${lastLabel}`;
 }
 
-function medianOf(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
-}
-
-/** Calendar year-to-date rows from a sold-trends series (updates as months land). */
-function ytdSoldMonths(months: SoldTrends["months"], now = new Date()) {
-  const start = `${now.getFullYear()}-01`;
-  return months.filter((month) => monthKey(month.month) >= start && month.unitsSold > 0);
-}
-
-/** One heatmap tile: YTD sold figures + current active listings for heat colour. */
+/** One heatmap tile: 90d sold figures + current active listings for heat colour. */
 type HeatmapCity = {
   city: string;
   activeCount: number;
   medianPrice: number | null;
-  /** Null when the sold feed was unavailable for this city. */
+  /** Null when the sold summary was unavailable for this city. */
   soldCountYtd: number | null;
 };
 
-function buildHeatmapCities(
-  cityNames: string[],
-  catalog: CityCatalogStat[],
-  soldByCity: SoldTrends[],
-): HeatmapCity[] {
-  const activeByCity = new Map(
-    catalog.map((row) => [row.city.toLowerCase(), row] as const),
-  );
-  const listFallback = (city: string) =>
-    activeByCity.get(city.toLowerCase())?.medianListPrice ?? null;
+function buildHeatmapCities(cityNames: string[], catalog: CityCatalogStat[]): HeatmapCity[] {
+  const byCity = new Map(catalog.map((row) => [row.city.toLowerCase(), row] as const));
 
-  return cityNames.map((name, index) => {
-    const sold = soldByCity[index];
-    const catalogRow = activeByCity.get(name.toLowerCase());
-    const activeCount = catalogRow?.activeCount ?? 0;
-    if (!sold || sold.unavailable) {
-      return {
-        city: name,
-        activeCount,
-        medianPrice: listFallback(name),
-        soldCountYtd: null,
-      };
-    }
-    const ytd = ytdSoldMonths(sold.months);
-    const prices = ytd
-      .map((month) => month.medianSoldPrice)
-      .filter((price): price is number => price !== null);
+  return cityNames.map((name) => {
+    const row = byCity.get(name.toLowerCase());
     return {
       city: name,
-      activeCount,
-      medianPrice: medianOf(prices) ?? listFallback(name),
-      soldCountYtd: ytd.reduce((sum, month) => sum + month.unitsSold, 0),
+      activeCount: row?.activeCount ?? 0,
+      medianPrice: row?.medianSoldPrice90d ?? row?.medianListPrice ?? null,
+      soldCountYtd: row?.soldCount90d ?? null,
     };
   });
+}
+
+async function HomeTypeSection({
+  city,
+  community,
+}: {
+  city: string;
+  community: string | null;
+}) {
+  const homeTypes = await getHomeTypeDistribution(city, { community }).catch(
+    () => [] as Array<{ name: string; count: number }>,
+  );
+  if (homeTypes.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-6">
+      <h2 className="mb-1 text-[18px] font-semibold text-ink">Property type distribution</h2>
+      <p className="mb-5 text-[13px] text-ink-muted">
+        Active listings in {community ? `${community}, ${city}` : city} by home type —
+        Detached, Semi-detached, Freehold townhouse, Condo townhouse, Condo apartment and Other.
+      </p>
+      <PropertyTypeDistribution rows={homeTypes} />
+    </section>
+  );
 }
 
 function Heatmap({
@@ -554,8 +534,8 @@ function Heatmap({
       </div>
       <p className="mb-5 text-[13px] text-ink-muted">
         {showHeat
-          ? "Median price year to date (YTD). Colour is how many homes sold this year compared with what is listed."
-          : "Median price year to date (YTD). Sold totals are unavailable, so there is no heat reading."}
+          ? "Median sold price (last 90 days). Colour is how many homes sold in that window compared with what is listed."
+          : "Median price from recent sales. Sold totals are unavailable, so there is no heat reading."}
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {scored.map(({ row, absorption }) => {
@@ -579,7 +559,7 @@ function Heatmap({
               <span className="text-[11px] opacity-80">
                 {row.soldCountYtd === null
                   ? `${formatNumber(row.activeCount)} listed`
-                  : `${formatNumber(row.soldCountYtd)} sales · YTD`}
+                  : `${formatNumber(row.soldCountYtd)} sales · 90d`}
               </span>
               {showHeat && (
                 <span className={cn("mt-1 rounded-full px-2 py-0.5 text-center text-[10px] font-semibold", heat === "cool" || heat === "very" ? "bg-ink/10" : "bg-white/30")}>

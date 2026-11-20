@@ -31,15 +31,15 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Listing data changes on a feed cadence, not per-second. A minute
-            // of freshness kills the duplicate refetch when two components ask
-            // for the same key, and when the user navigates back to a page.
-            staleTime: 60_000,
-            gcTime: 5 * 60_000,
+            // MLS / market data moves on a feed cadence. Keep client caches
+            // warm across navigations so back/forward and shared keys feel instant.
+            staleTime: 3 * 60_000,
+            gcTime: 30 * 60_000,
             // Network / 5xx once; never 4xx — a 401 or 404 won't change on retry.
             retry: shouldRetry,
             // The window regaining focus is not a signal that MLS data moved.
             refetchOnWindowFocus: false,
+            refetchOnReconnect: false,
           },
           mutations: {
             // Writes are never retried automatically: a timed-out POST may

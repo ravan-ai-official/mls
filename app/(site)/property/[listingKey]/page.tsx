@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { Gallery } from "@/components/property/Gallery";
 import { InquiryForm } from "@/components/property/InquiryForm";
@@ -100,14 +100,15 @@ function peerQuery(
  * boundary shows "something went wrong" — telling a user the home does not
  * exist when the API is merely unreachable would be wrong.
  */
-async function load(listingKey: string): Promise<PropertyDetail | null> {
+/** Shared across generateMetadata + page so the detail is fetched once per request. */
+const load = cache(async (listingKey: string): Promise<PropertyDetail | null> => {
   try {
     return await getProperty(decodeURIComponent(listingKey));
   } catch (error) {
     if (error instanceof ApiError && error.isNotFound) return null;
     throw error;
   }
-}
+});
 
 export async function generateMetadata({
   params,
@@ -545,12 +546,11 @@ function LocationUnavailable({ title, detail }: { title: string; detail: string 
 }
 
 async function SimilarHomes({ property }: { property: PropertyDetail }) {
-  let similar = await safeFetch(getSimilarProperties(property.id), [], "property:similar");
-  similar = similar.filter((item) => item.id !== property.id);
-
-  // Fill the rail with tight peers (type / beds / price / nearby), not random city stock.
-  if (similar.length < 3) {
-    const found = await safeFetch(
+  // Run recommendation + peer search together so a slow similar API never
+  // serializes an extra listings round-trip behind it.
+  const [recommended, peers] = await Promise.all([
+    safeFetch(getSimilarProperties(property.id), [], "property:similar"),
+    safeFetch(
       searchProperties(
         peerQuery(property, {
           status: "Active",
@@ -560,8 +560,12 @@ async function SimilarHomes({ property }: { property: PropertyDetail }) {
       ),
       EMPTY_LISTINGS,
       "property:similar-peers",
-    );
-    const extra = found.items.filter(
+    ),
+  ]);
+
+  let similar = recommended.filter((item) => item.id !== property.id);
+  if (similar.length < 3) {
+    const extra = peers.items.filter(
       (item) =>
         item.id !== property.id &&
         !similar.some((row) => row.id === item.id) &&

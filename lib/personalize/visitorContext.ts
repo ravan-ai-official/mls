@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import { cache } from "react";
 import {
   canonicalizePlace,
   parsePlacesCookie,
@@ -15,8 +16,9 @@ export interface VisitorPersonalization {
 /**
  * SSR visitor context for homepage rails. Uses the ha_places cookie and
  * platform IP-city headers — never browser geolocation.
+ * Cached per request so every homepage rail shares one cookie/header read.
  */
-export async function getVisitorPersonalization(): Promise<VisitorPersonalization> {
+export const getVisitorPersonalization = cache(async function getVisitorPersonalization(): Promise<VisitorPersonalization> {
   const jar = await cookies();
   const hdrs = await headers();
   const fromHistory = parsePlacesCookie(jar.get(PLACES_COOKIE)?.value);
@@ -41,4 +43,4 @@ export async function getVisitorPersonalization(): Promise<VisitorPersonalizatio
   if (agent) forward["User-Agent"] = agent.slice(0, 512);
 
   return { cities: cities.slice(0, 5), headers: forward };
-}
+});
