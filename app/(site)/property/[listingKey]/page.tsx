@@ -399,6 +399,20 @@ export default async function PropertyPage({
                       <Suspense fallback={null}>
                         <DemandPanel listingKey={property.id} />
                       </Suspense>
+                      {hasLocation ? (
+                        <Suspense fallback={<SectionSkeleton label="Loading climate risk" />}>
+                          <ClimateRiskPanel
+                            latitude={property.latitude ?? 0}
+                            longitude={property.longitude ?? 0}
+                          />
+                        </Suspense>
+                      ) : (
+                        <ClimateRisk
+                          risks={[]}
+                          unavailable
+                          emptyMessage="This listing has no map coordinates yet, so climate projections cannot be calculated."
+                        />
+                      )}
                       {property.description && (
                         <section>
                           <h2 className="mb-3 text-[18px] font-semibold text-ink">Description</h2>
@@ -449,14 +463,6 @@ export default async function PropertyPage({
                           </div>
                         </section>
                       )}
-                      {hasLocation ? (
-                        <Suspense fallback={<SectionSkeleton label="Loading climate risk" />}>
-                          <ClimateRiskPanel
-                            latitude={property.latitude ?? 0}
-                            longitude={property.longitude ?? 0}
-                          />
-                        </Suspense>
-                      ) : null}
                       <PropertyNote listingKey={property.id} />
                     </div>
                   ),
@@ -663,7 +669,9 @@ async function ClimateRiskPanel({
     null,
     "property:climate-risk",
   );
-  if (!payload?.risks?.length) return null;
+  if (!payload?.risks?.length) {
+    return <ClimateRisk risks={[]} unavailable />;
+  }
   return <ClimateRisk risks={payload.risks} source={payload.source} />;
 }
 

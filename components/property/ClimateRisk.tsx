@@ -25,11 +25,16 @@ function toneFor(risk: string, level: RiskLevel): string {
 export function ClimateRisk({
   risks,
   source,
+  unavailable,
+  emptyMessage,
 }: {
   risks: ClimateRiskItem[];
   source?: string;
+  /** When projections could not be loaded for this coordinate. */
+  unavailable?: boolean;
+  emptyMessage?: string;
 }) {
-  if (!risks.length) return null;
+  if (!risks.length && !unavailable) return null;
 
   const items: DisplayRisk[] = risks.map((item) => ({
     ...item,
@@ -42,24 +47,33 @@ export function ClimateRisk({
       <p className="mb-4 text-small text-ink-muted">
         Projected hazards for this property by 2050
       </p>
-      <div className="space-y-3">
-        {items.map((item) => (
-          <div key={item.risk} className="rounded-control bg-surface-alt p-4">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="text-small font-semibold text-ink">{item.risk}</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-caption font-semibold ${item.tone}`}
-              >
-                {item.level}
-              </span>
+      {unavailable || items.length === 0 ? (
+        <p className="rounded-control bg-surface-alt p-4 text-caption text-ink-muted">
+          {emptyMessage ??
+            "Climate projections are temporarily unavailable for this location. Try again shortly."}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.risk} className="rounded-control bg-surface-alt p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <span className="text-small font-semibold text-ink">{item.risk}</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-caption font-semibold ${item.tone}`}
+                >
+                  {item.level}
+                </span>
+              </div>
+              <p className="text-caption text-ink-muted">{item.desc}</p>
             </div>
-            <p className="text-caption text-ink-muted">{item.desc}</p>
-          </div>
-        ))}
-      </div>
-      <p className="mt-3 text-caption text-ink-subtle">
-        Source: {source ?? "Open-Meteo CMIP6"}
-      </p>
+          ))}
+        </div>
+      )}
+      {!unavailable && items.length > 0 && (
+        <p className="mt-3 text-caption text-ink-subtle">
+          Source: {source ?? "Open-Meteo CMIP6"}
+        </p>
+      )}
     </section>
   );
 }
