@@ -108,7 +108,12 @@ export function getNeighbourActivity(
       cities: cities?.length ? cities.join(",") : undefined,
     },
     undefined,
-    { headers, cache },
+    {
+      headers,
+      cache,
+      // Mixed activity queries several status streams; give the feed room.
+      timeoutMs: 12_000,
+    },
   );
 }
 

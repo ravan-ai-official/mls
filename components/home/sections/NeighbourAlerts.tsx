@@ -28,6 +28,7 @@ export async function NeighbourAlerts({ content }: { content?: Record<string, un
   const title = textOf(content, "title", "When Your Neighbours\nAre Selling");
   const bullets = listOf<string>(content, "bullets", neighbourAlertPoints);
   const visitor = await getVisitorPersonalization();
+  // Ask for a full 2×2 preview; the API backfills from sold / drops / OH / listed.
   const items = await getNeighbourActivity(4, {
     cities: visitor.cities,
     headers: visitor.headers,
@@ -95,16 +96,21 @@ export async function NeighbourAlerts({ content }: { content?: Record<string, un
 }
 
 function LiveActivity({ items }: { items: NeighbourActivityItem[] }) {
+  const gridClass =
+    items.length === 1
+      ? "grid grid-cols-1 gap-3 sm:gap-4"
+      : "grid grid-cols-2 gap-3 sm:gap-4";
+
   return (
     <>
-      <ul className="grid grid-cols-2 gap-3 sm:gap-4" aria-label="Recent activity near you">
+      <ul className={gridClass} aria-label="Recent activity near you">
         {items.map((item) => (
           <li key={`${item.event}-${item.listingKey}`}>
             <Link
               href={`/property/${encodeURIComponent(item.listingKey)}`}
               className="block overflow-hidden rounded-control border border-line bg-surface transition-shadow hover:shadow-card-hover"
             >
-              <div className="relative h-24 overflow-hidden bg-surface-alt">
+              <div className="relative h-24 overflow-hidden bg-surface-alt sm:h-28">
                 {item.imageUrl ? (
                   <SafeImage
                     src={item.imageUrl}
