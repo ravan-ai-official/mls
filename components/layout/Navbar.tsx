@@ -39,11 +39,15 @@ const NAV_LINKS: NavLinkItem[] = [
 const CONTACT_HREF = "/contact";
 
 /** Always visible in the desktop rail — keeps one clean line. */
-const PRIMARY_PATHS = new Set(["/listings", "/preconstruction", "/sell"]);
+const PRIMARY_PATHS = new Set([
+  "/listings",
+  "/preconstruction",
+  "/assignments",
+  "/sell",
+]);
 
 /** Paths that belong under the More menu on desktop. */
 const MORE_PATHS = new Set([
-  "/assignments",
   "/market-trends",
   "/communities",
   "/blog",
