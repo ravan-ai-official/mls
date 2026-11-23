@@ -450,18 +450,21 @@ function ResultCard({
           )}
         </div>
 
-        <div className="rounded-surface border border-line bg-surface p-6 shadow-card sm:p-8">
-          <h3 className="text-h3 text-ink">Local sold trend</h3>
-          <p className="mt-1 text-caption text-ink-muted">
-            Median sold price for similar homes nearby. Use the chart to see how
-            that median moved month by month.
-          </p>
-          <SoldTrendChart
-            points={result.trendSeries}
-            trendPct={trendPct}
-            trendLabel={trendLabel}
-          />
-        </div>
+        {result.trendSeries.filter((point) => point.medianSoldPrice != null && point.month)
+          .length >= 2 && (
+          <div className="rounded-surface border border-line bg-surface p-6 shadow-card sm:p-8">
+            <h3 className="text-h3 text-ink">Local sold trend</h3>
+            <p className="mt-1 text-caption text-ink-muted">
+              Median sold price for similar homes nearby. Use the chart to see how
+              that median moved month by month.
+            </p>
+            <SoldTrendChart
+              points={result.trendSeries}
+              trendPct={trendPct}
+              trendLabel={trendLabel}
+            />
+          </div>
+        )}
       </div>
 
       <AvmReport result={result} />

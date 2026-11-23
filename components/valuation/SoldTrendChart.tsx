@@ -52,13 +52,8 @@ export function SoldTrendChart({
   const [active, setActive] = useState<number | null>(null);
 
   const spark = points.filter((point) => point.medianSoldPrice != null && point.month);
-  if (spark.length < 2) {
-    return (
-      <p className="mt-6 text-small text-ink-muted">
-        Not enough sold-trend months to chart this neighbourhood yet.
-      </p>
-    );
-  }
+  // Caller hides the whole "Local sold trend" card when there is nothing to chart.
+  if (spark.length < 2) return null;
 
   const width = 560;
   const height = 240;
