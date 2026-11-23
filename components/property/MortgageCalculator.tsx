@@ -17,14 +17,25 @@ import { formatPrice } from "@/lib/utils/format";
  */
 const DEFAULT_RATE = 4.79;
 const DEFAULT_YEARS = 25;
+const YEARS_MIN = 1;
+const YEARS_MAX = 30;
+
+function clampYears(raw: string): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || raw.trim() === "") return DEFAULT_YEARS;
+  return Math.min(YEARS_MAX, Math.max(YEARS_MIN, Math.round(parsed)));
+}
 
 export function MortgageCalculator({
   price,
-  annualTax = null,
   suggestedRent = null,
 }: {
   price: number | null;
-  /** Annual property tax from the listing, when the feed has it. */
+  /**
+   * @deprecated Ignored — cash-flow "Others" starts at 0 so the user enters
+   * any extra annual costs themselves. Kept optional so existing call sites
+   * still type-check.
+   */
   annualTax?: number | null;
   /** Median asking rent of nearby rentals, used as the starting rental income. */
   suggestedRent?: number | null;
@@ -32,13 +43,18 @@ export function MortgageCalculator({
   const [homePrice, setHomePrice] = useState(price ?? 0);
   const [downPct, setDownPct] = useState(20);
   const [rentIncome, setRentIncome] = useState(suggestedRent ?? 0);
-  const [taxAnnual, setTaxAnnual] = useState(annualTax ?? 0);
+  // "Others" = optional annual costs (insurance, condo extras, …). Always 0
+  // until the visitor types a value — not seeded from listing property tax.
+  const [othersAnnual, setOthersAnnual] = useState(0);
   const [maintenance, setMaintenance] = useState(150);
   // Held as a string: a numeric state cannot represent the intermediate
   // "5." a user types on the way to "5.25".
   const [rateText, setRateText] = useState(String(DEFAULT_RATE));
   const rate = Number(rateText) || 0;
-  const [years, setYears] = useState(DEFAULT_YEARS);
+  // Same for amortization — clamping on every keystroke turned "20" into "30"
+  // when typed over an existing value (e.g. "230" → min 30).
+  const [yearsText, setYearsText] = useState(String(DEFAULT_YEARS));
+  const years = clampYears(yearsText);
 
   const { monthly, totalInterest } = useMemo(() => {
     const loan = Math.max(0, homePrice * (1 - downPct / 100));
@@ -61,8 +77,8 @@ export function MortgageCalculator({
     };
   }, [homePrice, downPct, rate, years]);
 
-  const taxMonthly = Math.round(taxAnnual / 12);
-  const cashFlow = Math.round(rentIncome - monthly - taxMonthly - maintenance);
+  const othersMonthly = Math.round(othersAnnual / 12);
+  const cashFlow = Math.round(rentIncome - monthly - othersMonthly - maintenance);
   const flowPct = Math.min(Math.abs(cashFlow) / 500, 1);
 
   return (
@@ -87,12 +103,11 @@ export function MortgageCalculator({
           <Field label="Amortization (years)" htmlFor="mc-years">
             <NumericInput
               id="mc-years"
-              min={1}
-              max={30}
-              value={years}
-              onChange={(event) =>
-                setYears(Math.min(30, Math.max(1, Number(event.target.value) || 1)))
-              }
+              min={YEARS_MIN}
+              max={YEARS_MAX}
+              value={yearsText}
+              onChange={(event) => setYearsText(event.target.value)}
+              onBlur={() => setYearsText(String(clampYears(yearsText)))}
             />
           </Field>
           <div className="rounded-xl bg-surface-alt p-4">
@@ -111,7 +126,7 @@ export function MortgageCalculator({
           <h3 className="mb-4 text-[14px] font-semibold text-ink">Cash Flow Analysis</h3>
           <div className="space-y-2.5 text-[13px]">
             <FlowRow label="Mortgage Payment" value={-Math.round(monthly)} />
-            <FlowRow label="Property Tax" value={-taxMonthly} />
+            <FlowRow label="Others" value={-othersMonthly} />
             <FlowRow label="Maintenance" value={-maintenance} />
             <FlowRow label="Rental Income" value={Math.round(rentIncome)} />
             <div className="flex justify-between border-t border-line pt-3">
@@ -122,7 +137,7 @@ export function MortgageCalculator({
             </div>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <MoneyField id="mc-tax" label="Annual tax" prefix="$" value={taxAnnual} onChange={setTaxAnnual} />
+            <MoneyField id="mc-others" label="Others" prefix="$" value={othersAnnual} onChange={setOthersAnnual} />
             <MoneyField id="mc-maint" label="Maintenance / mo" prefix="$" value={maintenance} onChange={setMaintenance} />
           </div>
           <div className="mt-5 flex items-center justify-center">
@@ -150,8 +165,8 @@ export function MortgageCalculator({
         </div>
       </div>
       <p className="mt-4 text-[11px] text-ink-subtle">
-        Payment uses semi-annual compounding. Tax starts from this listing when the feed includes it.
-        Total interest on the loan is {formatPrice(totalInterest)}.
+        Payment uses semi-annual compounding. Others covers any extra annual costs you enter
+        (default $0). Total interest on the loan is {formatPrice(totalInterest)}.
       </p>
     </section>
   );
@@ -174,6 +189,9 @@ function MoneyField({
   suffix?: string;
   max?: number;
 }) {
+  // Draft string so clearing / multi-digit typing is not clamped mid-keystroke.
+  const [text, setText] = useState(value === 0 ? "" : String(value));
+
   return (
     <div>
       <label htmlFor={id} className="mb-1 block text-[12px] text-ink-muted">
@@ -183,11 +201,21 @@ function MoneyField({
         {prefix && <span className="text-ink-muted">{prefix}</span>}
         <input
           id={id}
-          type="number"
-          min={0}
-          max={max}
-          value={value || ""}
-          onChange={(event) => onChange(Math.min(max, Math.max(0, Number(event.target.value) || 0)))}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={text}
+          onChange={(event) => {
+            const clean = event.target.value.replace(/[^0-9]/g, "");
+            setText(clean);
+            const next = clean === "" ? 0 : Number(clean);
+            onChange(Math.min(max, Math.max(0, Number.isFinite(next) ? next : 0)));
+          }}
+          onBlur={() => {
+            const next = text === "" ? 0 : Math.min(max, Math.max(0, Number(text) || 0));
+            setText(next === 0 ? "" : String(next));
+            onChange(next);
+          }}
           className="w-full bg-transparent text-[14px] text-ink outline-none"
         />
         {suffix && <span className="text-ink-muted">{suffix}</span>}
@@ -207,4 +235,3 @@ function FlowRow({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-
