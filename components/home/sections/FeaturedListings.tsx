@@ -18,12 +18,13 @@ const FEATURED_LIMIT = 12;
 type FeaturedPayload = {
   listings: PropertySummary[];
   description: string;
-  viewAllHref: string;
 };
 
 /**
  * Featured MLS rail. Fetches in the browser via `/api/mls/…` so Network shows
  * JSON. Admin pins lead; remaining slots follow last-search cookies when set.
+ * "View all" always opens the unfiltered listings catalogue — search history
+ * only shapes which cards appear in this rail.
  */
 export function FeaturedListings({ content }: { content?: Record<string, unknown> }) {
   const { data, isPending } = useMlsQuery<FeaturedPayload>(
@@ -64,16 +65,11 @@ export function FeaturedListings({ content }: { content?: Record<string, unknown
         if (automatic) description = "The newest homes on the market.";
       }
 
-      return {
-        listings,
-        description,
-        viewAllHref: visitor.hasSearchHistory ? visitor.listingsHref : "/listings",
-      };
+      return { listings, description };
     },
     {
       listings: [],
       description: textOf(content, "description", "Hand-picked homes from the HomeAtlas team."),
-      viewAllHref: "/listings",
     },
   );
 
@@ -90,7 +86,6 @@ export function FeaturedListings({ content }: { content?: Record<string, unknown
 
   const listings = data?.listings ?? [];
   const description = data?.description ?? "";
-  const viewAllHref = data?.viewAllHref ?? "/listings";
 
   return (
     <Section
@@ -99,7 +94,7 @@ export function FeaturedListings({ content }: { content?: Record<string, unknown
       description={description}
       action={{
         label: "View all",
-        href: viewAllHref,
+        href: "/listings",
       }}
     >
       {listings.length === 0 ? (
