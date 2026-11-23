@@ -3,7 +3,14 @@ import { NextResponse } from "next/server";
 import { API_BASE_URL } from "@/lib/api/client";
 import { ACCESS_COOKIE } from "@/lib/auth/session";
 
-const HOP_BY_HOP = new Set([
+/**
+ * Headers that must not be copied from upstream onto the browser response.
+ * Hop-by-hop are illegal to forward; content-length / content-encoding are
+ * wrong once undici has already decoded the body (and Vercel may recompress).
+ * Forwarding a stale Content-Length makes Chromium abort with "Failed to fetch"
+ * on larger payloads like properties/filter — facets (tiny) still worked.
+ */
+const DROP_RESPONSE_HEADERS = new Set([
   "connection",
   "keep-alive",
   "proxy-authenticate",
@@ -14,6 +21,13 @@ const HOP_BY_HOP = new Set([
   "upgrade",
   "host",
   "content-length",
+  "content-encoding",
+  "content-md5",
+  // Platform / framing headers — not meaningful to the browser via our proxy.
+  "alt-svc",
+  "server",
+  "via",
+  "date",
 ]);
 
 /**
@@ -63,18 +77,24 @@ export async function proxyUpstream(
       headers,
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: "no-store",
-      // Follow any residual upstream redirects so the browser never sees 308.
       redirect: "follow",
       signal: controller.signal,
     });
 
+    // Buffer so we never advertise an upstream Content-Length that no longer
+    // matches the bytes we send (decoded / recompressed).
+    const body = await upstreamRes.arrayBuffer();
+
     const outHeaders = new Headers();
     upstreamRes.headers.forEach((value, key) => {
-      if (!HOP_BY_HOP.has(key.toLowerCase())) outHeaders.set(key, value);
+      if (!DROP_RESPONSE_HEADERS.has(key.toLowerCase())) outHeaders.set(key, value);
     });
+    if (!outHeaders.has("content-type")) {
+      outHeaders.set("Content-Type", "application/json");
+    }
     outHeaders.set("Cache-Control", "private, no-store");
 
-    return new NextResponse(upstreamRes.body, {
+    return new NextResponse(body, {
       status: upstreamRes.status,
       statusText: upstreamRes.statusText,
       headers: outHeaders,
