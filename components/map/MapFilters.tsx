@@ -43,8 +43,6 @@ const BED_OPTIONS = [1, 2, 3, 4, 5];
 const BATH_OPTIONS = [1, 2, 3, 4];
 const GARAGE_OPTIONS = [1, 2, 3];
 const FLOOR_OPTIONS = [1, 2, 3];
-const KITCHEN_OPTIONS = [1, 2, 3];
-const DOM_OPTIONS = [7, 14, 30, 60, 90];
 const YEAR_OPTIONS = [2020, 2010, 2000, 1990, 1980];
 const BASEMENT_OPTIONS: Array<{ value: "" | NonNullable<ListingQuery["basement"]>; label: string }> = [
   { value: "", label: "Any" },
@@ -70,9 +68,6 @@ interface Draft {
   floors: string;
   basement: string;
   yearBuiltMin: string;
-  domMax: string;
-  familyRoom: boolean;
-  kitchens: string;
   status: string;
   openHouse: boolean;
 }
@@ -91,9 +86,6 @@ const EMPTY_DRAFT: Draft = {
   floors: "",
   basement: "",
   yearBuiltMin: "",
-  domMax: "",
-  familyRoom: false,
-  kitchens: "",
   status: "",
   openHouse: false,
 };
@@ -120,9 +112,6 @@ function draftFromQuery(query: ListingQuery): Draft {
     floors: str(query.storiesMin),
     basement: query.basement ?? "",
     yearBuiltMin: str(query.yearBuiltMin),
-    domMax: str(query.domMax),
-    familyRoom: Boolean(query.familyRoom),
-    kitchens: str(query.kitchensMin),
     status: query.status ?? "",
     openHouse: Boolean(query.openHouse),
   };
@@ -156,9 +145,6 @@ function countSheetFilters(query: ListingQuery): number {
     query.storiesMin,
     query.basement,
     query.yearBuiltMin,
-    query.domMax,
-    query.familyRoom,
-    query.kitchensMin,
     query.status,
     query.openHouse,
     query.polygon?.length,
@@ -201,9 +187,6 @@ export function MapFilters({
     query.storiesMin,
     query.basement,
     query.yearBuiltMin,
-    query.domMax,
-    query.familyRoom,
-    query.kitchensMin,
     query.status,
     query.openHouse,
   ].join("|");
@@ -289,9 +272,6 @@ export function MapFilters({
       storiesMin: num(draft.floors),
       basement: (draft.basement || undefined) as ListingQuery["basement"] | undefined,
       yearBuiltMin: num(draft.yearBuiltMin),
-      domMax: num(draft.domMax),
-      familyRoom: draft.familyRoom || undefined,
-      kitchensMin: num(draft.kitchens),
       status: draft.status || undefined,
       openHouse: draft.openHouse || undefined,
     });
@@ -620,40 +600,6 @@ function FilterFields({
         </div>
       </div>
 
-      <ChipField
-        label="Days on market"
-        value={draft.domMax}
-        options={DOM_OPTIONS}
-        suffix=" or fewer"
-        onChange={(domMax) => setDraft((d) => ({ ...d, domMax }))}
-      />
-
-      <div className="space-y-1.5">
-        <span className="block text-small font-medium text-ink">Family room</span>
-        <div className="flex flex-wrap gap-2">
-          <ChipToggle
-            active={!draft.familyRoom}
-            onClick={() => setDraft((d) => ({ ...d, familyRoom: false }))}
-          >
-            Any
-          </ChipToggle>
-          <ChipToggle
-            active={draft.familyRoom}
-            onClick={() => setDraft((d) => ({ ...d, familyRoom: !d.familyRoom }))}
-          >
-            Has family room
-          </ChipToggle>
-        </div>
-      </div>
-
-      <ChipField
-        label="Number of kitchens"
-        value={draft.kitchens}
-        options={KITCHEN_OPTIONS}
-        suffix="+"
-        onChange={(kitchens) => setDraft((d) => ({ ...d, kitchens }))}
-      />
-
       <div className="space-y-1.5">
         <span className="block text-small font-medium text-ink">Listing status</span>
         <div className="flex flex-wrap gap-2">
@@ -777,9 +723,6 @@ function appliedPills(query: ListingQuery, onChange: OnQueryChange): ReactNode[]
     add("basement", labels[query.basement], { basement: undefined });
   }
   if (query.yearBuiltMin) add("year", `Built ${query.yearBuiltMin}+`, { yearBuiltMin: undefined });
-  if (query.domMax) add("dom", `≤${query.domMax} days on market`, { domMax: undefined });
-  if (query.familyRoom) add("familyRoom", "Family room", { familyRoom: undefined });
-  if (query.kitchensMin) add("kitchens", `${query.kitchensMin}+ kitchens`, { kitchensMin: undefined });
   if (query.status) add("status", statusLabel(query.status, rent), { status: undefined });
   if (query.openHouse) add("openHouse", "Open house", { openHouse: undefined });
   if (query.polygon?.length) {

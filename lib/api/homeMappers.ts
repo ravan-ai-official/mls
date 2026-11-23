@@ -204,7 +204,7 @@ export function dealHref(
   if (deal.listingKey)
     return `/property/${encodeURIComponent(deal.listingKey)}`;
   const q = deal.address || deal.mlsNumber;
-  return `/listings?q=${encodeURIComponent(q)}`;
+  return `/listings?search=${encodeURIComponent(q)}`;
 }
 
 /* -------------------------------------------------- sold below purchase */

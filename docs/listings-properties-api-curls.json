@@ -1,0 +1,332 @@
+{
+  "base_url": "https://api.estate-4u.com",
+  "prefix": "/api/mls",
+  "notes": [
+    "Replace LISTING_KEY with a real listing_key (e.g. W1234567).",
+    "Replace $TOKEN with a Bearer access token for authenticated endpoints.",
+    "transaction_type=sale is for-sale; transaction_type=rent is lease.",
+    "status_group=active|sold|de-listed groups feed statuses."
+  ],
+  "apis": [
+    {
+      "id": "properties-filter-forsale",
+      "name": "Filter listings (for sale)",
+      "method": "GET",
+      "path": "/api/mls/properties/filter/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/filter/' --data-urlencode 'transaction_type=sale' --data-urlencode 'status_group=active' --data-urlencode 'limit=12' --data-urlencode 'offset=0' -H 'Accept: application/json'"
+    },
+    {
+      "id": "properties-filter-rent",
+      "name": "Filter listings (rent)",
+      "method": "GET",
+      "path": "/api/mls/properties/filter/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/filter/' --data-urlencode 'transaction_type=rent' --data-urlencode 'status_group=active' --data-urlencode 'limit=12' --data-urlencode 'offset=0' -H 'Accept: application/json'"
+    },
+    {
+      "id": "properties-filter-with-filters",
+      "name": "Filter listings (city, beds, price, home type)",
+      "method": "GET",
+      "path": "/api/mls/properties/filter/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/filter/' --data-urlencode 'transaction_type=sale' --data-urlencode 'status_group=active' --data-urlencode 'city=Toronto' --data-urlencode 'beds_min=3' --data-urlencode 'baths_min=2' --data-urlencode 'price_min=500000' --data-urlencode 'price_max=1200000' --data-urlencode 'home_type=detached' --data-urlencode 'limit=24' --data-urlencode 'offset=0' -H 'Accept: application/json'"
+    },
+    {
+      "id": "properties-facets",
+      "name": "Listing facets (counts)",
+      "method": "GET",
+      "path": "/api/mls/properties/facets/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/facets/' --data-urlencode 'transaction_type=sale' --data-urlencode 'city=Toronto' -H 'Accept: application/json'"
+    },
+    {
+      "id": "properties-list",
+      "name": "Fetch properties (legacy list)",
+      "method": "GET",
+      "path": "/api/mls/properties/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/properties/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "property-detail",
+      "name": "Property detail",
+      "method": "GET",
+      "path": "/api/mls/properties/{listing_key}/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/properties/LISTING_KEY/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "property-compare",
+      "name": "Compare properties",
+      "method": "GET",
+      "path": "/api/mls/properties/compare/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/compare/' --data-urlencode 'listing_key=LISTING_KEY_1' --data-urlencode 'listing_key=LISTING_KEY_2' -H 'Accept: application/json'"
+    },
+    {
+      "id": "property-recommendations",
+      "name": "Property recommendations",
+      "method": "GET",
+      "path": "/api/mls/properties/{listing_key}/recommendations/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/properties/LISTING_KEY/recommendations/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "property-comparables",
+      "name": "Property comparables (sale/sold/rent)",
+      "method": "GET",
+      "path": "/api/mls/properties/{listing_key}/comparables/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/LISTING_KEY/comparables/' --data-urlencode 'limit=4' -H 'Accept: application/json'"
+    },
+    {
+      "id": "property-snapshots",
+      "name": "Property price/status snapshots",
+      "method": "GET",
+      "path": "/api/mls/properties/{listing_key}/snapshots/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/properties/LISTING_KEY/snapshots/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "property-types",
+      "name": "Property types",
+      "method": "GET",
+      "path": "/api/mls/properties/property-types/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/properties/property-types/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "featured-properties",
+      "name": "Featured properties (homepage rail)",
+      "method": "GET",
+      "path": "/api/mls/properties/featured-properties/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/featured-properties/' --data-urlencode 'limit=12' -H 'Accept: application/json'"
+    },
+    {
+      "id": "featured-properties-history",
+      "name": "Featured properties (with search history)",
+      "method": "GET",
+      "path": "/api/mls/properties/featured-properties/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/featured-properties/' --data-urlencode 'limit=12' --data-urlencode 'cities=Oakville,Mississauga' --data-urlencode 'beds_min=3' --data-urlencode 'price_min=500000' --data-urlencode 'price_max=1500000' -H 'Accept: application/json'"
+    },
+    {
+      "id": "exclusive-properties",
+      "name": "Exclusive properties",
+      "method": "GET",
+      "path": "/api/mls/properties/exclusive-properties/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/exclusive-properties/' --data-urlencode 'limit=8' --data-urlencode 'offset=0' -H 'Accept: application/json'"
+    },
+    {
+      "id": "newly-listed-properties",
+      "name": "Newly listed properties",
+      "method": "GET",
+      "path": "/api/mls/properties/newly-listed-properties/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/newly-listed-properties/' --data-urlencode 'limit=8' -H 'Accept: application/json'"
+    },
+    {
+      "id": "community-properties",
+      "name": "Community properties",
+      "method": "GET",
+      "path": "/api/mls/properties/community-properties/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/community-properties/' --data-urlencode 'city=Toronto' --data-urlencode 'limit=12' -H 'Accept: application/json'"
+    },
+    {
+      "id": "lease-properties",
+      "name": "Lease properties",
+      "method": "GET",
+      "path": "/api/mls/properties/lease-properties/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/lease-properties/' --data-urlencode 'limit=12' -H 'Accept: application/json'"
+    },
+    {
+      "id": "open-houses",
+      "name": "Open houses",
+      "method": "GET",
+      "path": "/api/mls/properties/open-houses/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/open-houses/' --data-urlencode 'limit=8' -H 'Accept: application/json'"
+    },
+    {
+      "id": "map-aggregates",
+      "name": "Map aggregates (clusters)",
+      "method": "GET",
+      "path": "/api/mls/properties/map-aggregates/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/properties/map-aggregates/' --data-urlencode 'lat_min=43.6' --data-urlencode 'lat_max=43.8' --data-urlencode 'lng_min=-79.5' --data-urlencode 'lng_max=-79.2' --data-urlencode 'zoom=11' -H 'Accept: application/json'"
+    },
+    {
+      "id": "ai-summary",
+      "name": "Listing AI summary",
+      "method": "POST",
+      "path": "/api/mls/properties/ai-summary/",
+      "auth": false,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/properties/ai-summary/' -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{\"listing_key\":\"LISTING_KEY\"}'"
+    },
+    {
+      "id": "recommendations-track",
+      "name": "Track recommendation click",
+      "method": "POST",
+      "path": "/api/mls/properties/recommendations/track/",
+      "auth": false,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/properties/recommendations/track/' -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{\"listing_key\":\"LISTING_KEY\",\"source\":\"similar\"}'"
+    },
+    {
+      "id": "sitemap-keys",
+      "name": "Sitemap listing keys",
+      "method": "GET",
+      "path": "/api/mls/properties/sitemap-keys/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/properties/sitemap-keys/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "listing-sync-status",
+      "name": "Listing sync status",
+      "method": "GET",
+      "path": "/api/mls/listing-sync-status/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/listing-sync-status/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "catalog-stats",
+      "name": "Catalog stats",
+      "method": "GET",
+      "path": "/api/mls/catalog-stats/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/catalog-stats/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "catalog-stats-bulk",
+      "name": "Catalog stats bulk (cities)",
+      "method": "GET",
+      "path": "/api/mls/catalog-stats/bulk/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/catalog-stats/bulk/' --data-urlencode 'cities=Toronto,Mississauga,Brampton' -H 'Accept: application/json'"
+    },
+    {
+      "id": "listing-views",
+      "name": "Listing view beacon",
+      "method": "POST",
+      "path": "/api/mls/listing-views/",
+      "auth": false,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/listing-views/' -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{\"listing_key\":\"LISTING_KEY\"}'"
+    },
+    {
+      "id": "listing-engagement",
+      "name": "Listing engagement",
+      "method": "GET",
+      "path": "/api/mls/listing-engagement/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/listing-engagement/' --data-urlencode 'listing_key=LISTING_KEY' -H 'Accept: application/json'"
+    },
+    {
+      "id": "market-recent-sales",
+      "name": "Market recent sales (auth)",
+      "method": "GET",
+      "path": "/api/mls/market/recent-sales/",
+      "auth": true,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/market/recent-sales/' --data-urlencode 'city=Brampton' --data-urlencode 'days=30' --data-urlencode 'page=1' -H 'Accept: application/json' -H 'Authorization: Bearer $TOKEN'"
+    },
+    {
+      "id": "market-sold-trends",
+      "name": "Market sold trends",
+      "method": "GET",
+      "path": "/api/mls/market/sold-trends/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/market/sold-trends/' --data-urlencode 'city=Toronto' -H 'Accept: application/json'"
+    },
+    {
+      "id": "market-cities",
+      "name": "Market cities",
+      "method": "GET",
+      "path": "/api/mls/market/cities/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/market/cities/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "trends",
+      "name": "Listing trends",
+      "method": "GET",
+      "path": "/api/mls/trends/",
+      "auth": false,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/trends/' -H 'Accept: application/json'"
+    },
+    {
+      "id": "watched-overview",
+      "name": "Watched overview (favorites/history/toured/areas)",
+      "method": "GET",
+      "path": "/api/mls/watched/",
+      "auth": true,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/watched/' -H 'Accept: application/json' -H 'Authorization: Bearer $TOKEN'"
+    },
+    {
+      "id": "watched-favorite-toggle",
+      "name": "Toggle favorite",
+      "method": "POST",
+      "path": "/api/mls/watched/favorites/toggle/",
+      "auth": true,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/watched/favorites/toggle/' -H 'Accept: application/json' -H 'Content-Type: application/json' -H 'Authorization: Bearer $TOKEN' -d '{\"listing_key\":\"LISTING_KEY\"}'"
+    },
+    {
+      "id": "watched-history-add",
+      "name": "Add to history",
+      "method": "POST",
+      "path": "/api/mls/watched/history/add/",
+      "auth": true,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/watched/history/add/' -H 'Accept: application/json' -H 'Content-Type: application/json' -H 'Authorization: Bearer $TOKEN' -d '{\"listing_key\":\"LISTING_KEY\"}'"
+    },
+    {
+      "id": "watched-toured-toggle",
+      "name": "Toggle toured",
+      "method": "POST",
+      "path": "/api/mls/watched/toured/toggle/",
+      "auth": true,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/watched/toured/toggle/' -H 'Accept: application/json' -H 'Content-Type: application/json' -H 'Authorization: Bearer $TOKEN' -d '{\"listing_key\":\"LISTING_KEY\"}'"
+    },
+    {
+      "id": "property-notes-get",
+      "name": "Get property notes",
+      "method": "GET",
+      "path": "/api/mls/property-notes/",
+      "auth": true,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/property-notes/' --data-urlencode 'listing_key=LISTING_KEY' -H 'Accept: application/json' -H 'Authorization: Bearer $TOKEN'"
+    },
+    {
+      "id": "property-notes-save",
+      "name": "Save property note",
+      "method": "POST",
+      "path": "/api/mls/property-notes/",
+      "auth": true,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/property-notes/' -H 'Accept: application/json' -H 'Content-Type: application/json' -H 'Authorization: Bearer $TOKEN' -d '{\"listing_key\":\"LISTING_KEY\",\"body\":\"Tour notes\"}'"
+    },
+    {
+      "id": "listing-submissions-list",
+      "name": "Listing submissions (seller drafts)",
+      "method": "GET",
+      "path": "/api/mls/listing-submissions/",
+      "auth": true,
+      "curl": "curl -sS 'https://api.estate-4u.com/api/mls/listing-submissions/' -H 'Accept: application/json' -H 'Authorization: Bearer $TOKEN'"
+    },
+    {
+      "id": "geocode",
+      "name": "Geocode places (map search)",
+      "method": "GET",
+      "path": "/api/mls/locations/geocode/",
+      "auth": false,
+      "curl": "curl -sS -G 'https://api.estate-4u.com/api/mls/locations/geocode/' --data-urlencode 'q=Toronto, Ontario' -H 'Accept: application/json'"
+    },
+    {
+      "id": "ai-search-parse",
+      "name": "AI search parse",
+      "method": "POST",
+      "path": "/api/mls/ai-search/parse/",
+      "auth": false,
+      "curl": "curl -sS -X POST 'https://api.estate-4u.com/api/mls/ai-search/parse/' -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{\"query\":\"3 bed detached under 1.2M in Oakville\"}'"
+    }
+  ]
+}

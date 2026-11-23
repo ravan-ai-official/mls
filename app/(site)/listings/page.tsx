@@ -191,7 +191,7 @@ function tabLabel(group: string, fallback: string, rent: boolean): string {
  * open house, so each tab says what clicking it would return; zero is shown
  * rather than hiding the tab, since "Sold 0" is an answer too.
  *
- * "Open house" is a sibling tab rather than a status: it sets `openHouse=1`
+ * "Open house" is a sibling tab rather than a status: it sets `has_open_house=1`
  * and clears status, and picking a status clears it, so the strip always
  * describes exactly one slice. If facets fail the tabs stay, without counts.
  */
@@ -300,7 +300,7 @@ async function Results({
           hasActiveFilters(query)
             ? {
                 label: "Clear filters",
-                href: rent ? "/listings?tx=rent" : "/listings",
+                href: rent ? "/listings?transaction_type=rent" : "/listings",
               }
             : undefined
         }

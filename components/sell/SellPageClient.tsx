@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils/cn";
 function soldCardHref(sale: RecentSale): string {
   if (sale.listingKey) return propertyPath(sale.listingKey);
   const params = new URLSearchParams({ status: "Sold" });
-  if (sale.address) params.set("q", sale.address);
+  if (sale.address) params.set("search", sale.address);
   else if (sale.city) params.set("city", sale.city);
   return `/listings?${params}`;
 }

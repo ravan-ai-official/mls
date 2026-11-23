@@ -192,23 +192,33 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
     const active = INTENT_QUERY[intent] ?? INTENT_QUERY.buy;
 
     const term = query.trim();
-    if (term && looksLikePostal(term)) params.set("postal", parsePostalList(term).codes.join(","));
-    else if (term) {
+    if (term && looksLikePostal(term)) {
+      params.set("postal_code", parsePostalList(term).codes.join(","));
+    } else if (term) {
       const city = matchKnownCity(term);
       if (city) params.set("city", city);
-      else params.set("q", term);
+      else params.set("search", term);
     }
     if (active.status) params.set("status", active.status);
-    if (active.tx) params.set("tx", active.tx);
-    if (type) params.set("type", type);
+    if (active.tx) params.set("transaction_type", active.tx);
+    if (type) {
+      const homeType: Record<string, string> = {
+        Detached: "detached",
+        "Semi-Detached": "semi",
+        Townhome: "townhouse",
+        Condo: "condo",
+      };
+      if (homeType[type]) params.set("home_type", homeType[type]);
+      else params.set("type", type);
+    }
 
     if (price) {
       const [min, max] = price.split("-");
-      if (min) params.set("priceMin", min);
-      if (max) params.set("priceMax", max);
+      if (min) params.set("price_min", min);
+      if (max) params.set("price_max", max);
     }
-    if (beds) params.set("beds", beds);
-    if (baths) params.set("baths", baths);
+    if (beds) params.set("beds_min", beds);
+    if (baths) params.set("baths_min", baths);
 
     const qs = params.toString();
     return qs ? `/listings?${qs}` : "/listings";

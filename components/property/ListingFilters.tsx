@@ -26,11 +26,9 @@ import {
   BATH_OPTIONS,
   BED_OPTIONS,
   BUILDING_OPTIONS,
-  DOM_OPTIONS,
   FLOOR_OPTIONS,
   GARAGE_OPTIONS,
   KEYWORD_OPTIONS,
-  KITCHEN_OPTIONS,
   OWNERSHIP_OPTIONS,
   YEAR_BUILT_MIN_OPTIONS,
   matchKeywordOption,
@@ -43,50 +41,61 @@ import { matchKnownCity } from "@/lib/constants/cities";
 import { rememberLastSearch } from "@/lib/personalize/lastSearch";
 import { rememberPlace } from "@/lib/personalize/places";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { parseListingSearch } from "@/lib/utils/searchParams";
+import {
+  buildListingQueryString,
+  parseListingSearch,
+} from "@/lib/utils/searchParams";
 import { listingStatusTabs, STATUS_TABS } from "@/lib/utils/status";
 
-/** Filters drafted in the sheet and applied as one batch. */
-const PANEL_KEYS = [
-  "priceMin",
-  "priceMax",
-  "city",
-  "postal",
-  "beds",
-  "baths",
-  "sqftMin",
-  "sqftMax",
-  "garages",
-  "floors",
-  "basement",
-  "yearBuiltMin",
-  "domMax",
-  "familyRoom",
-  "kitchens",
-  "yearBuiltMax",
-  "floorsMax",
-  "feeMin",
-  "feeMax",
-  "listedSince",
-  "building",
-  "ownership",
-  "keywords",
-  "status",
-  "openHouse",
+/** Promote legacy URL keys to the MLS contract names, then drop the aliases. */
+function canonicalizeListingParams(params: URLSearchParams): URLSearchParams {
+  const query = parseListingSearch(params);
+  const page = params.get("page");
+  const next = new URLSearchParams(buildListingQueryString({
+    ...query,
+    page: page && Number(page) > 1 ? Number(page) : undefined,
+  }));
+  return next;
+}
+
+/** Draft field → canonical URL key (MLS filter contract). */
+const PANEL_FIELDS = [
+  { draft: "priceMin", url: "price_min" },
+  { draft: "priceMax", url: "price_max" },
+  { draft: "city", url: "city" },
+  { draft: "postal", url: "postal_code" },
+  { draft: "beds", url: "beds_min" },
+  { draft: "baths", url: "baths_min" },
+  { draft: "sqftMin", url: "sqft_min" },
+  { draft: "sqftMax", url: "sqft_max" },
+  { draft: "garages", url: "garages_min" },
+  { draft: "floors", url: "stories_min" },
+  { draft: "basement", url: "basement" },
+  { draft: "yearBuiltMin", url: "year_built_min" },
+  { draft: "yearBuiltMax", url: "year_built_max" },
+  { draft: "floorsMax", url: "stories_max" },
+  { draft: "feeMin", url: "maintenance_fee_min" },
+  { draft: "feeMax", url: "maintenance_fee_max" },
+  { draft: "listedSince", url: "listed_since" },
+  { draft: "building", url: "structure_type" },
+  { draft: "ownership", url: "common_interest" },
+  { draft: "keywords", url: "keywords" },
+  { draft: "status", url: "status" },
+  { draft: "openHouse", url: "has_open_house" },
 ] as const;
-type PanelKey = (typeof PANEL_KEYS)[number];
+
+type PanelKey = (typeof PANEL_FIELDS)[number]["draft"];
 type Draft = Record<PanelKey, string>;
 
-/**
- * Keys that count toward the Filters badge / applied pills. Sort stays in the
- * sheet but is not a "filter" pill of its own.
- */
+/** Canonical (+ a few display-only) keys that count toward the Filters badge. */
 const ALL_KEYS = [
-  "ai",
-  "q",
+  "semantic",
+  "search",
   "type",
+  "home_type",
   "poly",
-  ...PANEL_KEYS,
+  "transaction_type",
+  ...PANEL_FIELDS.map((field) => field.url),
 ] as const;
 type FilterKey = (typeof ALL_KEYS)[number];
 
@@ -103,9 +112,6 @@ const EMPTY_DRAFT: Draft = {
   floors: "",
   basement: "",
   yearBuiltMin: "",
-  domMax: "",
-  familyRoom: "",
-  kitchens: "",
   yearBuiltMax: "",
   floorsMax: "",
   feeMin: "",
@@ -118,42 +124,48 @@ const EMPTY_DRAFT: Draft = {
   openHouse: "",
 };
 
+function paramGet(params: URLSearchParams, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (value) return value;
+  }
+  return "";
+}
+
 function postalDraft(raw: string | null): string {
   return parsePostalList(raw ?? "").codes.map(formatPostal).join(", ");
 }
 
 function draftFromParams(params: URLSearchParams): Draft {
+  const openHouse = paramGet(params, "has_open_house", "openHouse");
   return {
-    priceMin: params.get("priceMin") ?? "",
-    priceMax: params.get("priceMax") ?? "",
-    city: params.get("city") ?? "",
-    postal: postalDraft(params.get("postal")),
-    beds: params.get("beds") ?? "",
-    baths: params.get("baths") ?? "",
-    sqftMin: params.get("sqftMin") ?? "",
-    sqftMax: params.get("sqftMax") ?? "",
-    garages: params.get("garages") ?? "",
-    floors: params.get("floors") ?? "",
-    basement: params.get("basement") ?? "",
-    yearBuiltMin: params.get("yearBuiltMin") ?? "",
-    domMax: params.get("domMax") ?? "",
-    familyRoom: params.get("familyRoom") === "1" ? "1" : "",
-    kitchens: params.get("kitchens") ?? "",
-    yearBuiltMax: params.get("yearBuiltMax") ?? "",
-    floorsMax: params.get("floorsMax") ?? "",
-    feeMin: params.get("feeMin") ?? "",
-    feeMax: params.get("feeMax") ?? "",
-    listedSince: params.get("listedSince") ?? "",
-    building: params.get("building") ?? "",
-    ownership: params.get("ownership") ?? "",
-    keywords: params.get("keywords") ?? "",
-    status: params.get("status") ?? "",
-    openHouse: params.get("openHouse") === "1" ? "1" : "",
+    priceMin: paramGet(params, "price_min", "priceMin"),
+    priceMax: paramGet(params, "price_max", "priceMax"),
+    city: paramGet(params, "city"),
+    postal: postalDraft(paramGet(params, "postal_code", "postal")),
+    beds: paramGet(params, "beds_min", "beds"),
+    baths: paramGet(params, "baths_min", "baths"),
+    sqftMin: paramGet(params, "sqft_min", "sqftMin"),
+    sqftMax: paramGet(params, "sqft_max", "sqftMax"),
+    garages: paramGet(params, "garages_min", "garages"),
+    floors: paramGet(params, "stories_min", "floors"),
+    basement: paramGet(params, "basement"),
+    yearBuiltMin: paramGet(params, "year_built_min", "yearBuiltMin"),
+    yearBuiltMax: paramGet(params, "year_built_max", "yearBuiltMax"),
+    floorsMax: paramGet(params, "stories_max", "floorsMax"),
+    feeMin: paramGet(params, "maintenance_fee_min", "feeMin"),
+    feeMax: paramGet(params, "maintenance_fee_max", "feeMax"),
+    listedSince: paramGet(params, "listed_since", "listedSince"),
+    building: paramGet(params, "structure_type", "building"),
+    ownership: paramGet(params, "common_interest", "ownership"),
+    keywords: paramGet(params, "keywords"),
+    status: paramGet(params, "status", "status_group"),
+    openHouse: openHouse === "1" || openHouse === "true" ? "1" : "",
   };
 }
 
 function sameDraft(a: Draft, b: Draft) {
-  return PANEL_KEYS.every((key) => a[key] === b[key]);
+  return PANEL_FIELDS.every((field) => a[field.draft] === b[field.draft]);
 }
 
 /**
@@ -168,7 +180,7 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
   const params = usePendingSearchParams();
   const { user } = useAuth();
 
-  const urlQuery = params.get("q") ?? "";
+  const urlQuery = paramGet(params, "search", "q");
   const [search, setSearch] = useState(urlQuery);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => draftFromParams(params));
@@ -198,12 +210,13 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
   }, [sheetOpen, params]);
 
   const update = (changes: Record<string, string | null>) => {
-    const next = new URLSearchParams(params.toString());
+    const staged = new URLSearchParams(params.toString());
     for (const [key, value] of Object.entries(changes)) {
-      if (value === null || value === "") next.delete(key);
-      else next.set(key, value);
+      if (value === null || value === "") staged.delete(key);
+      else staged.set(key, value);
     }
-    next.delete("page");
+    staged.delete("page");
+    const next = canonicalizeListingParams(staged);
     rememberLastSearch(parseListingSearch(next));
     navigate(`/listings?${next.toString()}`);
   };
@@ -212,25 +225,27 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
     event.preventDefault();
     const term = search.trim();
     if (term && looksLikePostal(term)) {
-      const codes = parsePostalList(`${params.get("postal") ?? ""},${term}`).codes;
-      update({ postal: codes.join(","), q: null, keywords: null });
+      const codes = parsePostalList(
+        `${paramGet(params, "postal_code", "postal")},${term}`,
+      ).codes;
+      update({ postal_code: codes.join(","), search: null, keywords: null });
       return;
     }
     // A known city belongs on `city=` (city_match_q) so tab counts and results
-    // stay aligned — free-text `q=brampton` used to fall back to the whole catalogue.
+    // stay aligned — free-text search used to fall back to the whole catalogue.
     const city = matchKnownCity(term);
     if (city) {
       rememberPlace(city);
-      update({ city, q: null, keywords: null });
+      update({ city, search: null, keywords: null });
       return;
     }
-    // Amenity / deal phrases belong on description `keywords`, not address `q`.
+    // Amenity / deal phrases belong on description `keywords`, not address search.
     const keyword = matchKeywordOption(term);
     if (keyword) {
-      update({ keywords: keyword.value, q: null });
+      update({ keywords: keyword.value, search: null });
       return;
     }
-    update({ q: term || null });
+    update({ search: term || null });
   };
 
   const openSheet = () => {
@@ -272,55 +287,78 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
     const nextCity = draft.city.trim() || null;
     rememberPlace(nextCity);
     update({
-      priceMin: priceMin || null,
-      priceMax: priceMax || null,
+      price_min: priceMin || null,
+      price_max: priceMax || null,
       city: nextCity,
-      postal: postal.codes.join(",") || null,
-      beds: draft.beds || null,
-      baths: draft.baths || null,
-      sqftMin: sqftMin || null,
-      sqftMax: sqftMax || null,
-      garages: draft.garages || null,
-      floors: draft.floors || null,
+      postal_code: postal.codes.join(",") || null,
+      beds_min: draft.beds || null,
+      baths_min: draft.baths || null,
+      sqft_min: sqftMin || null,
+      sqft_max: sqftMax || null,
+      garages_min: draft.garages || null,
+      stories_min: draft.floors || null,
       basement: draft.basement || null,
-      yearBuiltMin: draft.yearBuiltMin || null,
-      domMax: draft.domMax || null,
-      familyRoom: draft.familyRoom || null,
-      kitchens: draft.kitchens || null,
-      yearBuiltMax: draft.yearBuiltMax || null,
-      floorsMax: draft.floorsMax || null,
-      feeMin: draft.feeMin || null,
-      feeMax: draft.feeMax || null,
-      listedSince: draft.listedSince || null,
-      building: draft.building || null,
-      ownership: draft.ownership || null,
+      year_built_min: draft.yearBuiltMin || null,
+      year_built_max: draft.yearBuiltMax || null,
+      stories_max: draft.floorsMax || null,
+      maintenance_fee_min: draft.feeMin || null,
+      maintenance_fee_max: draft.feeMax || null,
+      listed_since: draft.listedSince || null,
+      structure_type: draft.building || null,
+      common_interest: draft.ownership || null,
       keywords: draft.keywords.split(",").map((word) => word.trim()).filter(Boolean).join(",") || null,
       status: draft.status || null,
-      openHouse: draft.openHouse || null,
+      has_open_house: draft.openHouse || null,
     });
     setSheetOpen(false);
   };
 
   const legacyRent = params.get("type") === "Rental";
-  const isRent = params.get("tx") === "rent" || legacyRent;
-  const activeType = legacyRent ? null : params.get("type");
-  const appliedKeys = ALL_KEYS.filter((key) => params.get(key) && !(key === "type" && legacyRent));
-  // Badge counts sheet-owned filters (not the free-text `q` already on the bar).
-  const sheetFilterCount = appliedKeys.filter((key) => key !== "q").length;
+  const isRent =
+    paramGet(params, "transaction_type", "tx") === "rent" || legacyRent;
+  const homeTypeRaw = paramGet(params, "home_type");
+  const homeTypeUi = homeTypeRaw
+    ? SEARCH_PROPERTY_TYPES.find(
+        (type) =>
+          type.toLowerCase() === homeTypeRaw.toLowerCase() ||
+          ({
+            Detached: "detached",
+            "Semi-Detached": "semi",
+            Townhome: "townhouse",
+            Condo: "condo",
+            Luxury: "",
+          }[type] === homeTypeRaw.toLowerCase()),
+      ) ?? homeTypeRaw
+    : null;
+  const activeType = legacyRent
+    ? null
+    : paramGet(params, "type") || homeTypeUi || null;
+  const appliedKeys = ALL_KEYS.filter((key) => {
+    if (!params.get(key)) return false;
+    if (key === "type" && legacyRent) return false;
+    // Prefer `home_type` when both are present after a partial migration.
+    if (key === "type" && params.get("home_type")) return false;
+    return true;
+  });
+  // Badge counts sheet-owned filters (not the free-text search already on the bar).
+  const sheetFilterCount = appliedKeys.filter((key) => key !== "search").length;
 
   const setRent = (rent: boolean) => {
     if (rent === isRent) return;
     update({
-      tx: rent ? "rent" : null,
+      transaction_type: rent ? "rent" : null,
       type: legacyRent ? null : activeType,
-      priceMin: null,
-      priceMax: null,
+      home_type: null,
+      price_min: null,
+      price_max: null,
     });
   };
 
-  const postalCodes = parsePostalList(params.get("postal") ?? "").codes;
+  const postalCodes = parsePostalList(paramGet(params, "postal_code", "postal")).codes;
   const removePostal = (code: string) =>
-    update({ postal: postalCodes.filter((c) => c !== code).join(",") || null });
+    update({
+      postal_code: postalCodes.filter((c) => c !== code).join(",") || null,
+    });
 
   const listingQuery = parseListingSearch(params);
 
@@ -384,7 +422,7 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
             />
           ))}
           {appliedKeys
-            .filter((key) => key !== "postal")
+            .filter((key) => key !== "postal_code")
             .map((key) => (
               <FilterPill
                 key={key}
@@ -393,14 +431,20 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
                   update(
                     key === "poly"
                       ? { poly: null, school: null, schoolKm: null }
-                      : { [key]: null },
+                      : key === "semantic"
+                        ? { semantic: null, sort: null }
+                        : key === "type" || key === "home_type"
+                          ? { type: null, home_type: null }
+                          : { [key]: null },
                   )
                 }
               />
             ))}
           <button
             type="button"
-            onClick={() => navigate(isRent ? "/listings?tx=rent" : "/listings")}
+            onClick={() =>
+              navigate(isRent ? "/listings?transaction_type=rent" : "/listings")
+            }
             className="text-caption font-medium text-ink-muted underline underline-offset-2 transition-colors hover:text-ink"
           >
             Clear all
@@ -447,7 +491,7 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
             <div className="flex flex-wrap gap-2">
               <ChipToggle
                 active={!activeType}
-                onClick={() => update({ type: null })}
+                onClick={() => update({ type: null, home_type: null })}
               >
                 All
               </ChipToggle>
@@ -455,7 +499,12 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
                 <ChipToggle
                   key={type}
                   active={activeType === type}
-                  onClick={() => update({ type: activeType === type ? null : type })}
+                  onClick={() =>
+                    update({
+                      type: activeType === type ? null : type,
+                      home_type: null,
+                    })
+                  }
                 >
                   {type}
                 </ChipToggle>
@@ -468,10 +517,16 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
               <Select
                 id="sheet-sort"
                 aria-label="Sort listings"
-                value={params.get("sort") ?? (params.get("ai") ? RELEVANCE_SORT.value : "newest")}
+                value={
+                  params.get("sort") ??
+                  (paramGet(params, "semantic", "ai") ? RELEVANCE_SORT.value : "newest")
+                }
                 onChange={(event) => update({ sort: event.target.value })}
               >
-                {(params.get("ai") ? [RELEVANCE_SORT, ...LISTING_SORTS] : LISTING_SORTS).map(
+                {(paramGet(params, "semantic", "ai")
+                  ? [RELEVANCE_SORT, ...LISTING_SORTS]
+                  : LISTING_SORTS
+                ).map(
                   (option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -671,42 +726,6 @@ function FilterFields({
           ))}
         </div>
       </div>
-
-      <ChipField
-        label="Days on market"
-        value={draft.domMax}
-        options={DOM_OPTIONS}
-        suffix=" or fewer"
-        onChange={(domMax) => setDraft((d) => ({ ...d, domMax }))}
-      />
-
-      <div className="space-y-1.5">
-        <span className="block text-small font-medium text-ink">Family room</span>
-        <div className="flex flex-wrap gap-2">
-          <ChipToggle
-            active={!draft.familyRoom}
-            onClick={() => setDraft((d) => ({ ...d, familyRoom: "" }))}
-          >
-            Any
-          </ChipToggle>
-          <ChipToggle
-            active={draft.familyRoom === "1"}
-            onClick={() =>
-              setDraft((d) => ({ ...d, familyRoom: d.familyRoom === "1" ? "" : "1" }))
-            }
-          >
-            Has family room
-          </ChipToggle>
-        </div>
-      </div>
-
-      <ChipField
-        label="Number of kitchens"
-        value={draft.kitchens}
-        options={KITCHEN_OPTIONS}
-        suffix="+"
-        onChange={(kitchens) => setDraft((d) => ({ ...d, kitchens }))}
-      />
 
       <Field label="Built in or before" htmlFor="sheet-year-max" hint="Few listings publish a year built.">
         <NumericInput
@@ -912,17 +931,21 @@ function keywordPillLabel(value: string): string {
 function pillLabel(key: FilterKey, params: URLSearchParams): string {
   const value = params.get(key) ?? "";
   switch (key) {
-    case "ai":
+    case "semantic":
       return `Like: ${value}`;
-    case "q":
+    case "search":
       return `"${value}"`;
-    case "beds":
+    case "transaction_type":
+      return value === "rent" ? "For rent" : value;
+    case "home_type":
+      return value;
+    case "beds_min":
       return `${value}+ beds`;
-    case "baths":
+    case "baths_min":
       return `${value}+ baths`;
-    case "garages":
+    case "garages_min":
       return `${value}+ garage`;
-    case "floors":
+    case "stories_min":
       return `${value}+ floors`;
     case "basement": {
       const labels: Record<string, string> = {
@@ -934,43 +957,37 @@ function pillLabel(key: FilterKey, params: URLSearchParams): string {
       };
       return labels[value] ?? `Basement: ${value}`;
     }
-    case "yearBuiltMin":
+    case "year_built_min":
       return `Built ${value}+`;
-    case "domMax":
-      return `≤${value} days on market`;
-    case "familyRoom":
-      return "Family room";
-    case "kitchens":
-      return `${value}+ kitchens`;
-    case "yearBuiltMax":
+    case "year_built_max":
       return `Built ${value} or earlier`;
-    case "floorsMax":
+    case "stories_max":
       return `Up to ${value} floors`;
-    case "feeMin":
+    case "maintenance_fee_min":
       return `Fees from ${formatPrice(Number(value))}/mo`;
-    case "feeMax":
+    case "maintenance_fee_max":
       return `Fees up to ${formatPrice(Number(value))}/mo`;
-    case "listedSince":
+    case "listed_since":
       return `Listed since ${value}`;
-    case "building":
+    case "structure_type":
       return `Building: ${value}`;
-    case "ownership":
+    case "common_interest":
       return `Ownership: ${value}`;
     case "keywords":
       return keywordPillLabel(value);
-    case "sqftMin":
+    case "sqft_min":
       return `${formatNumber(Number(value))}+ sq ft`;
-    case "sqftMax":
+    case "sqft_max":
       return `Up to ${formatNumber(Number(value))} sq ft`;
     case "status": {
       const tab = STATUS_TABS.find((t) => t.param.toLowerCase() === value.toLowerCase());
       return tab?.label ?? value;
     }
-    case "priceMin":
+    case "price_min":
       return `Min ${formatPrice(Number(value))}`;
-    case "priceMax":
+    case "price_max":
       return `Max ${formatPrice(Number(value))}`;
-    case "openHouse":
+    case "has_open_house":
       return "Open house";
     case "poly": {
       const school = params.get("school")?.trim();

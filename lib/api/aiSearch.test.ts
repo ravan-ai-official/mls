@@ -60,7 +60,7 @@ describe("ai URL param", () => {
     const query = parseListingParams({ ai: "big backyard", city: "Oakville" });
     expect(query.semantic).toBe("big backyard");
     expect(query.sort).toBe("relevance");
-    expect(buildListingQueryString(query)).toBe("city=Oakville&ai=big+backyard");
+    expect(buildListingQueryString(query)).toBe("city=Oakville&semantic=big+backyard");
   });
 
   it("keeps an explicit Newest sort alongside ai", () => {

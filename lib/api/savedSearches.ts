@@ -152,6 +152,15 @@ export function fromBackendParams(filters: SavedFilters): ListingQuery {
   const subTypes = (filters.property_sub_type ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   // Rentals were once saved as the UI type "Rental"; they restore as Rent.
   const legacyRent = filters[UI_TYPE_KEY]?.toLowerCase() === "rental";
+  const HOME_TYPE_TO_UI: Record<string, string> = {
+    detached: "Detached",
+    semi: "Semi-Detached",
+    townhouse: "Townhome",
+    condo: "Condo",
+  };
+  const homeTypeUi = filters.home_type
+    ? HOME_TYPE_TO_UI[filters.home_type.toLowerCase()]
+    : undefined;
 
   return {
     search: filters.search || undefined,
@@ -161,7 +170,7 @@ export function fromBackendParams(filters: SavedFilters): ListingQuery {
     transaction: filters.transaction_type === "rent" || legacyRent ? "rent" : "sale",
     // Status tabs save as `status_group`; searches saved before that kept `status`.
     status: statusParamForGroup(filters.status_group) ?? (filters.status || undefined),
-    type: legacyRent ? undefined : filters[UI_TYPE_KEY] || undefined,
+    type: legacyRent ? undefined : filters[UI_TYPE_KEY] || homeTypeUi || undefined,
     hasLease: filters.has_lease === "true" || undefined,
     priceMin: intParam(filters.price_min),
     priceMax: intParam(filters.price_max),
@@ -170,12 +179,25 @@ export function fromBackendParams(filters: SavedFilters): ListingQuery {
     sqftMin: intParam(filters.sqft_min),
     sqftMax: intParam(filters.sqft_max),
     yearBuiltMin: intParam(filters.year_built_min),
+    yearBuiltMax: intParam(filters.year_built_max),
     garagesMin: intParam(filters.garages_min),
     storiesMin: intParam(filters.stories_min),
+    storiesMax: intParam(filters.stories_max),
     basement: parseBasementFilter(filters.basement),
-    domMax: intParam(filters.days_on_market_max),
-    familyRoom: filters.family_room === "1" || filters.family_room === "true" || undefined,
-    kitchensMin: intParam(filters.kitchens_min),
+    feeMin: intParam(filters.maintenance_fee_min),
+    feeMax: intParam(filters.maintenance_fee_max),
+    listedSince: /^\d{4}-\d{2}-\d{2}$/.test(filters.listed_since ?? "")
+      ? filters.listed_since
+      : undefined,
+    buildingType: filters.structure_type || undefined,
+    ownership: filters.common_interest || undefined,
+    keywords: (() => {
+      const words = (filters.keywords ?? "")
+        .split(",")
+        .map((word) => word.trim())
+        .filter(Boolean);
+      return words.length ? words : undefined;
+    })(),
     propertySubTypes: subTypes.length ? subTypes : undefined,
     postalCodes: postal.length ? postal : undefined,
     openHouse: filters.has_open_house === "1" || filters.has_open_house === "true" || undefined,
@@ -260,9 +282,6 @@ export function describeCriteria(query: ListingQuery): string[] {
     };
     chips.push(labels[query.basement]);
   }
-  if (query.domMax) chips.push(`≤${query.domMax} days on market`);
-  if (query.familyRoom) chips.push("Family room");
-  if (query.kitchensMin) chips.push(`${query.kitchensMin}+ kitchens`);
   if (query.semantic) chips.push(`Like: ${query.semantic}`);
   return chips;
 }

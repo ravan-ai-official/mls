@@ -22,7 +22,7 @@ const ACTIONS: Array<{
   Icon: ComponentType<{ className?: string }>;
 }> = [
   { label: "Buy", desc: "Browse MLS® listings", href: "/listings?status=Active", Icon: IconBuy },
-  { label: "Rent", desc: "Find rental homes", href: "/listings?tx=rent", Icon: IconRent },
+  { label: "Rent", desc: "Find rental homes", href: "/listings?transaction_type=rent", Icon: IconRent },
   { label: "Preconstruction", desc: "Invest early", href: "/preconstruction", Icon: IconPrecon },
   { label: "Sell", desc: "Request a home valuation", href: "/sell", Icon: IconSell },
 ];

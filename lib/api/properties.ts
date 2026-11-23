@@ -64,7 +64,7 @@ export const SORT_TO_ORDERBY: Record<ListingSort, string> = {
   relevance: "relevance",
   // Kept for explicit saved-search round-trips; default "newest" omits
   // orderby in toBackendParams (sorted active queries timeout or empty).
-  newest: "-original_entry_timestamp",
+  newest: "-modification_timestamp",
   "price-asc": "list_price",
   "price-desc": "-list_price",
   "beds-desc": "-bedrooms_total",
@@ -120,9 +120,6 @@ export function toBackendParams(query: ListingQuery, limit?: number, offset?: nu
     garages_min: query.garagesMin,
     stories_min: query.storiesMin,
     basement: query.basement,
-    days_on_market_max: query.domMax,
-    family_room: query.familyRoom ? "1" : undefined,
-    kitchens_min: query.kitchensMin,
     // Repeatable: buildQuery() appends one key per entry, which DRF reads via
     // getlist(). Only sent when the caller passes real feed values.
     property_sub_type: query.propertySubTypes?.length ? query.propertySubTypes : undefined,
@@ -281,6 +278,7 @@ export async function getPropertyFacets(
   options: RequestOptions = {},
 ): Promise<PropertyFacets | null> {
   try {
+    const group = backendStatusGroup(query.status);
     const data = await apiFetch<{
       status?: Record<string, number>;
       status_group?: Partial<Record<BackendStatusGroup, number>>;
@@ -293,7 +291,8 @@ export async function getPropertyFacets(
       params: {
         search: query.search,
         city: query.city,
-        status: query.status,
+        status: group ? undefined : query.status,
+        status_group: group ?? undefined,
         transaction_type: query.transaction,
         has_lease: query.hasLease ? "true" : undefined,
         price_min: effectivePriceMin(query),
@@ -306,14 +305,20 @@ export async function getPropertyFacets(
         garages_min: query.garagesMin,
         stories_min: query.storiesMin,
         basement: query.basement,
-        days_on_market_max: query.domMax,
-        family_room: query.familyRoom ? "1" : undefined,
-        kitchens_min: query.kitchensMin,
         property_sub_type: query.propertySubTypes?.length
           ? query.propertySubTypes
           : undefined,
         home_type: query.type ? HOME_TYPE_PARAM[query.type] : undefined,
+        keywords: query.keywords?.length ? query.keywords.join(",") : undefined,
+        year_built_max: query.yearBuiltMax,
+        stories_max: query.storiesMax,
+        maintenance_fee_min: query.feeMin,
+        maintenance_fee_max: query.feeMax,
+        listed_since: query.listedSince,
+        structure_type: query.buildingType,
+        common_interest: query.ownership,
         postal_code: query.postalCodes?.length ? query.postalCodes.join(",") : undefined,
+        has_open_house: query.openHouse ? "1" : undefined,
       },
     });
     return {

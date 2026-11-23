@@ -543,8 +543,6 @@ export function validateCurated(document: unknown): FieldErrors {
       "garagesMin",
       "storiesMin",
       "storiesMax",
-      "domMax",
-      "kitchensMin",
       "feeMin",
       "feeMax",
     ] as const) {

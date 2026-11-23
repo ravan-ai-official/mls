@@ -326,8 +326,6 @@ export function parseCuratedQuery(queryRaw: Record<string, unknown>): Partial<Li
   const garagesMin = positiveInt(queryRaw.garagesMin);
   const storiesMin = positiveInt(queryRaw.storiesMin);
   const storiesMax = positiveInt(queryRaw.storiesMax);
-  const domMax = positiveInt(queryRaw.domMax);
-  const kitchensMin = positiveInt(queryRaw.kitchensMin);
   const feeMin = positiveInt(queryRaw.feeMin);
   const feeMax = positiveInt(queryRaw.feeMax);
   if (priceMin) query.priceMin = priceMin;
@@ -341,12 +339,9 @@ export function parseCuratedQuery(queryRaw: Record<string, unknown>): Partial<Li
   if (garagesMin) query.garagesMin = garagesMin;
   if (storiesMin) query.storiesMin = storiesMin;
   if (storiesMax) query.storiesMax = storiesMax;
-  if (domMax) query.domMax = domMax;
-  if (kitchensMin) query.kitchensMin = kitchensMin;
   if (feeMin) query.feeMin = feeMin;
   if (feeMax) query.feeMax = feeMax;
   if (queryRaw.openHouse === true) query.openHouse = true;
-  if (queryRaw.familyRoom === true) query.familyRoom = true;
 
   if (Array.isArray(queryRaw.keywords)) {
     const keywords = queryRaw.keywords

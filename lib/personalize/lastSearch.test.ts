@@ -51,7 +51,7 @@ describe("lastSearch / featured filters", () => {
     const cookie = serializeLastSearchCookie(filters);
     expect(parseLastSearchCookie(encodeURIComponent(cookie))).toEqual(filters);
     expect(featuredFiltersToListingsHref(filters)).toBe(
-      "/listings?city=Brampton&type=Townhome&beds=4",
+      "/listings?city=Brampton&home_type=townhouse&beds_min=4",
     );
   });
 

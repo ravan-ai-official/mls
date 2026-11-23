@@ -212,12 +212,6 @@ export interface ListingQuery {
    * Basement preference. URL `basement=yes|finished|unfinished|apartment|none`.
    */
   basement?: "yes" | "finished" | "unfinished" | "apartment" | "none";
-  /** Maximum days on market (backend `days_on_market_max`). URL `domMax`. */
-  domMax?: number;
-  /** Require a family room (backend `family_room=1`). URL `familyRoom=1`. */
-  familyRoom?: boolean;
-  /** Minimum kitchens (backend `kitchens_min`). URL `kitchens`. */
-  kitchensMin?: number;
   /**
    * Raw feed `property_sub_type` values, passed straight to the backend's
    * repeatable filter. Distinct from `type`, which is a canonical UI label

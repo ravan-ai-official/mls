@@ -109,9 +109,9 @@ describe("mapDeals / dealHref", () => {
     );
     expect(
       dealHref({ listingKey: null, address: "5 King St W", mlsNumber: "m" }),
-    ).toBe("/listings?q=5%20King%20St%20W");
+    ).toBe("/listings?search=5%20King%20St%20W");
     expect(dealHref({ listingKey: null, address: "", mlsNumber: "W1" })).toBe(
-      "/listings?q=W1",
+      "/listings?search=W1",
     );
   });
 });

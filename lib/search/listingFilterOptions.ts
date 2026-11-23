@@ -10,8 +10,6 @@ export const BED_OPTIONS = [1, 2, 3, 4, 5] as const;
 export const BATH_OPTIONS = [1, 2, 3, 4] as const;
 export const GARAGE_OPTIONS = [1, 2, 3] as const;
 export const FLOOR_OPTIONS = [1, 2, 3] as const;
-export const KITCHEN_OPTIONS = [1, 2, 3] as const;
-export const DOM_OPTIONS = [7, 14, 30, 60, 90] as const;
 export const YEAR_BUILT_MIN_OPTIONS = [2020, 2010, 2000, 1990, 1980] as const;
 
 /** Exact feed values; each was checked to return listings. */

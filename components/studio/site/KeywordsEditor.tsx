@@ -21,10 +21,8 @@ import {
   BATH_OPTIONS,
   BED_OPTIONS,
   BUILDING_OPTIONS,
-  DOM_OPTIONS,
   FLOOR_OPTIONS,
   GARAGE_OPTIONS,
-  KITCHEN_OPTIONS,
   OWNERSHIP_OPTIONS,
   YEAR_BUILT_MIN_OPTIONS,
 } from "@/lib/search/listingFilterOptions";
@@ -614,46 +612,6 @@ function KeywordsForm({
                       </div>
                     </div>
 
-                    <ChipField
-                      label="Days on market"
-                      value={page.query.domMax != null ? String(page.query.domMax) : ""}
-                      options={DOM_OPTIONS}
-                      suffix=" or fewer"
-                      onChange={(domMax) =>
-                        patchQuery(index, { domMax: domMax ? Number(domMax) : undefined })
-                      }
-                    />
-                    <div className="space-y-1.5">
-                      <span className="block text-caption text-ink-muted">Family room</span>
-                      <div className="flex flex-wrap gap-2">
-                        <ChipToggle
-                          active={!page.query.familyRoom}
-                          onClick={() => patchQuery(index, { familyRoom: undefined })}
-                        >
-                          Any
-                        </ChipToggle>
-                        <ChipToggle
-                          active={page.query.familyRoom === true}
-                          onClick={() =>
-                            patchQuery(index, {
-                              familyRoom: page.query.familyRoom ? undefined : true,
-                            })
-                          }
-                        >
-                          Has family room
-                        </ChipToggle>
-                      </div>
-                    </div>
-
-                    <ChipField
-                      label="Number of kitchens"
-                      value={page.query.kitchensMin != null ? String(page.query.kitchensMin) : ""}
-                      options={KITCHEN_OPTIONS}
-                      suffix="+"
-                      onChange={(kitchens) =>
-                        patchQuery(index, { kitchensMin: kitchens ? Number(kitchens) : undefined })
-                      }
-                    />
                     <ChipField
                       label="Most floors"
                       value={page.query.storiesMax != null ? String(page.query.storiesMax) : ""}

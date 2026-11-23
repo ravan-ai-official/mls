@@ -21,13 +21,15 @@ interface NavLinkItem {
   match?: (params: URLSearchParams) => boolean;
 }
 
-/** Mirrors parseListingParams: `tx=rent`, or the legacy `type=Rental`. */
+/** Mirrors parseListingParams: rent via transaction_type/tx, or legacy type=Rental. */
 const isRental = (params: URLSearchParams) =>
-  params.get("tx") === "rent" || params.get("type") === "Rental";
+  params.get("transaction_type") === "rent" ||
+  params.get("tx") === "rent" ||
+  params.get("type") === "Rental";
 
 const NAV_LINKS: NavLinkItem[] = [
   { label: "Buy", href: "/listings?status=Active", match: (params) => !isRental(params) },
-  { label: "Rent", href: "/listings?tx=rent", match: isRental },
+  { label: "Rent", href: "/listings?transaction_type=rent", match: isRental },
   { label: "Preconstruction", href: "/preconstruction" },
   { label: "Assignments", href: "/assignments" },
   { label: "Sell", href: "/sell" },
@@ -128,7 +130,13 @@ function NavLinkList({
 }
 
 function decorate(link: { label: string; href: string }): NavLinkItem {
-  if (link.href.includes("tx=rent") || link.href.includes("type=Rental")) return { ...link, match: isRental };
+  if (
+    link.href.includes("transaction_type=rent") ||
+    link.href.includes("tx=rent") ||
+    link.href.includes("type=Rental")
+  ) {
+    return { ...link, match: isRental };
+  }
   if (link.href.startsWith("/listings")) return { ...link, match: (params) => !isRental(params) };
   return link;
 }
