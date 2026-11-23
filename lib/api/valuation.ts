@@ -39,10 +39,6 @@ export interface ValuationSubject {
   propertySubType: string;
   lotFrontage: number | null;
   lotDepth: number | null;
-  /** Calendar year the home was built, when the listing carries it. */
-  yearBuilt: number | null;
-  /** Approximate age in years derived from year built (or provided by the visitor). */
-  age: number | null;
 }
 
 /**
@@ -212,12 +208,6 @@ export async function lookupSubject(
     params: { listing_key: input.listingKey, address: input.address },
   });
 
-  const yearBuilt = toNumber(raw.year_built);
-  const ageFromApi = toNumber(raw.age);
-  const age =
-    ageFromApi ??
-    (yearBuilt != null && yearBuilt >= 1800 ? new Date().getFullYear() - yearBuilt : null);
-
   return {
     listingKey: (raw.listing_key as string) ?? null,
     address: (raw.unparsed_address as string) ?? "",
@@ -234,8 +224,6 @@ export async function lookupSubject(
     propertySubType: (raw.property_sub_type as string) ?? "",
     lotFrontage: toNumber(raw.lot_frontage),
     lotDepth: toNumber(raw.lot_depth),
-    yearBuilt,
-    age: age != null && age >= 0 ? age : null,
   };
 }
 
@@ -253,8 +241,6 @@ export interface EstimateInput {
   parkingTotal?: number | null;
   lotFrontage?: number | null;
   lotDepth?: number | null;
-  yearBuilt?: number | null;
-  age?: number | null;
 }
 
 function mapComp(comp: Record<string, unknown>): ValuationComp {
@@ -324,8 +310,6 @@ export async function estimateValue(
         parking_total: input.parkingTotal ?? undefined,
         lot_frontage: input.lotFrontage ?? undefined,
         lot_depth: input.lotDepth ?? undefined,
-        year_built: input.yearBuilt ?? undefined,
-        age: input.age ?? undefined,
       },
     },
   );

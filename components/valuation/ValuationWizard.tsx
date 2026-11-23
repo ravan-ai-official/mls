@@ -112,8 +112,6 @@ export function ValuationWizard() {
         bathroomsTotal: numberOrNull("baths"),
         livingArea: numberOrNull("livingArea"),
         parkingTotal: numberOrNull("parking"),
-        yearBuilt: numberOrNull("yearBuilt"),
-        age: numberOrNull("age"),
       },
       {
         onSuccess: (estimated) => {
@@ -194,11 +192,6 @@ export function ValuationWizard() {
                 defaultValue={subject.parkingTotal ?? ""}
               />
             </Field>
-            <AgeAndYearBuiltFields
-              key={subject.listingKey ?? subject.address}
-              yearBuilt={subject.yearBuilt}
-              age={subject.age}
-            />
           </div>
 
           <div className="flex gap-3">
@@ -224,71 +217,6 @@ export function ValuationWizard() {
         />
       )}
     </div>
-  );
-}
-
-/**
- * Linked Age / Year built inputs. Changing one updates the other so the
- * estimate always gets a consistent year_built for the hedonic model.
- */
-function AgeAndYearBuiltFields({
-  yearBuilt,
-  age,
-}: {
-  yearBuilt: number | null;
-  age: number | null;
-}) {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState<string>(
-    yearBuilt != null && yearBuilt >= 1800 ? String(yearBuilt) : "",
-  );
-  const [yearsOld, setYearsOld] = useState<string>(() => {
-    if (age != null && age >= 0) return String(age);
-    if (yearBuilt != null && yearBuilt >= 1800) return String(Math.max(0, currentYear - yearBuilt));
-    return "";
-  });
-
-  function onYearChange(raw: string) {
-    setYear(raw);
-    const parsed = Number(raw);
-    if (!raw || !Number.isFinite(parsed) || parsed < 1800 || parsed > currentYear + 1) {
-      return;
-    }
-    setYearsOld(String(Math.max(0, currentYear - parsed)));
-  }
-
-  function onAgeChange(raw: string) {
-    setYearsOld(raw);
-    const parsed = Number(raw);
-    if (!raw || !Number.isFinite(parsed) || parsed < 0 || parsed > 250) {
-      return;
-    }
-    setYear(String(currentYear - parsed));
-  }
-
-  return (
-    <>
-      <Field label="Age (years)" htmlFor="val-age" hint="Approximate age of the home.">
-        <NumericInput
-          id="val-age"
-          name="age"
-          min={0}
-          max={250}
-          value={yearsOld}
-          onChange={(event) => onAgeChange(event.target.value)}
-        />
-      </Field>
-      <Field label="Year built" htmlFor="val-year-built" hint="Updates automatically when you change age.">
-        <NumericInput
-          id="val-year-built"
-          name="yearBuilt"
-          min={1800}
-          max={currentYear + 1}
-          value={year}
-          onChange={(event) => onYearChange(event.target.value)}
-        />
-      </Field>
-    </>
   );
 }
 
