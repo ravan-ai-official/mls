@@ -15,7 +15,7 @@ export const revalidate = 300;
 export default async function PreconstructionMapPage() {
   const { items } = await safeFetch(
     getPreconProjects({ limit: 100 }),
-    { items: [] as PreconProject[], total: 0 },
+    { items: [] as PreconProject[], total: 0, hasSearchHistory: false, cities: [] },
     "precon:map",
   );
   return <PreconMapSearchClient projects={items} />;
