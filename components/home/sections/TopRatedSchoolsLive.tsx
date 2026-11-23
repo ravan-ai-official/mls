@@ -1,6 +1,9 @@
+"use client";
+
 import { TopRatedSchools } from "@/components/home/sections/TopRatedSchools";
-import { getTopSchools, schoolSearchHistoryCities } from "@/lib/api/schools";
-import { getVisitorPersonalization } from "@/lib/personalize/visitorContext";
+import { getTopSchools, schoolSearchHistoryCities, type OfficialSchool } from "@/lib/api/schools";
+import { readClientVisitor } from "@/lib/personalize/clientVisitor";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 
 function adminSchoolNames(content?: Record<string, unknown>): string[] {
   const items = content?.items;
@@ -18,22 +21,25 @@ function adminSchoolNames(content?: Record<string, unknown>): string[] {
   return names;
 }
 
-/**
- * Homepage GTA Secondary Schools rail → GET /api/mls/schools/top/?limit=4
- * Appends cities= only when search history exists (never IP city).
- */
-export async function TopRatedSchoolsLive({ content }: { content?: Record<string, unknown> }) {
-  const visitor = await getVisitorPersonalization();
-  const historyCities = schoolSearchHistoryCities(
-    visitor.searchHistoryCities,
-    visitor.lastSearch.city,
+export function TopRatedSchoolsLive({ content }: { content?: Record<string, unknown> }) {
+  const { data: schools = [] } = useMlsQuery<OfficialSchool[]>(
+    ["home", "top-schools", adminSchoolNames(content).join("|")],
+    async () => {
+      const visitor = readClientVisitor();
+      const historyCities = schoolSearchHistoryCities(
+        visitor.searchHistoryCities,
+        visitor.lastSearch.city,
+      );
+      const names = adminSchoolNames(content);
+      return getTopSchools({
+        limit: 4,
+        cities: historyCities.length > 0 ? historyCities : undefined,
+        names: names.length > 0 ? names : undefined,
+        cache: "no-store",
+      }).catch(() => [] as OfficialSchool[]);
+    },
+    [],
   );
-  const names = adminSchoolNames(content);
-  const schools = await getTopSchools({
-    limit: 4,
-    cities: historyCities.length > 0 ? historyCities : undefined,
-    names: names.length > 0 ? names : undefined,
-    cache: "no-store",
-  }).catch(() => []);
+
   return <TopRatedSchools content={content} schools={schools} />;
 }

@@ -1,8 +1,11 @@
+"use client";
+
 import { Eyebrow } from "@/components/ui/Badge";
 import { Section } from "@/components/ui/Section";
 import { getIncentives } from "@/lib/api/home";
 import { formatDay, type Incentive } from "@/lib/api/homeMappers";
 import { WhatsappLink } from "@/components/providers/WhatsappProvider";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { textOf } from "@/lib/site/read";
 import { buyerIncentives } from "@/lib/home/staticSections";
 import { ArrowGlyph, IncentiveGlyph, WhatsAppGlyph } from "./sectionIcons";
@@ -36,9 +39,16 @@ function sampleIncentives(): Incentive[] {
   }));
 }
 
-export async function BuyersIncentives({ content }: { content?: Record<string, unknown> }) {
-  const live = await getIncentives();
-  const items = live && live.length > 0 ? live : sampleIncentives();
+export function BuyersIncentives({ content }: { content?: Record<string, unknown> }) {
+  const samples = sampleIncentives();
+  const { data: items = samples } = useMlsQuery<Incentive[]>(
+    ["home", "incentives"],
+    async () => {
+      const live = await getIncentives().catch(() => null);
+      return live && live.length > 0 ? live : samples;
+    },
+    samples,
+  );
 
   return (
     <Section>

@@ -1,49 +1,50 @@
+"use client";
+
 import Link from "next/link";
-import { safeFetch } from "@/lib/api/client";
 import { searchProperties } from "@/lib/api/properties";
 import { estimateValue } from "@/lib/api/valuation";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import type { PropertyDetail, PropertySummary } from "@/lib/types/domain";
 import { formatPrice } from "@/lib/utils/format";
 
 /**
- * Estimates tab in the HomeAtlas layout: four value tiles and three rating
- * cards. Figures come from the valuation model, active rentals in the same
- * city, and how long this listing has been up. School ratings are not in the
- * feed, so that card stays blank rather than showing a sample score.
+ * Estimates tab — valuation + rent comps fetched in the browser so Network
+ * shows `/api/mls/…` JSON.
  */
-export async function EstimatesPanel({ property }: { property: PropertyDetail }) {
-  const [estimate, rents] = await Promise.all([
-    safeFetch(
-      estimateValue({
-        listingKey: property.id,
-        latitude: property.latitude,
-        longitude: property.longitude,
-        postalCode: property.postalCode ?? undefined,
-        city: property.community ?? undefined,
-        propertySubType: property.propertySubType ?? property.type ?? undefined,
-        bedroomsTotal: property.beds,
-        bathroomsTotal: property.baths,
-        livingArea: property.sqft,
-        parkingTotal: property.parkingTotal,
-        lotFrontage: property.lotFrontage,
-      }),
-      null,
-      "property:estimate",
-    ),
-    property.community
-      ? safeFetch(
-          searchProperties({
-            city: property.community,
-            transaction: "rent",
-            status: "Active",
-            limit: 12,
-          }),
-          emptyList(),
-          "property:estimate-rent",
-        )
-      : Promise.resolve(emptyList()),
-  ]);
+export function EstimatesPanel({ property }: { property: PropertyDetail }) {
+  const { data } = useMlsQuery(
+    ["property", "estimates", property.id],
+    async () => {
+      const [estimate, rents] = await Promise.all([
+        estimateValue({
+          listingKey: property.id,
+          latitude: property.latitude,
+          longitude: property.longitude,
+          postalCode: property.postalCode ?? undefined,
+          city: property.community ?? undefined,
+          propertySubType: property.propertySubType ?? property.type ?? undefined,
+          bedroomsTotal: property.beds,
+          bathroomsTotal: property.baths,
+          livingArea: property.sqft,
+          parkingTotal: property.parkingTotal,
+          lotFrontage: property.lotFrontage,
+        }).catch(() => null),
+        property.community
+          ? searchProperties({
+              city: property.community,
+              transaction: "rent",
+              status: "Active",
+              limit: 12,
+            }).catch(() => emptyList())
+          : Promise.resolve(emptyList()),
+      ]);
+      return { estimate, rents };
+    },
+    { estimate: null, rents: emptyList() },
+  );
 
+  const estimate = data?.estimate ?? null;
+  const rents = data?.rents ?? emptyList();
   const usable = estimate && !estimate.sparse && estimate.market > 0 ? estimate : null;
   const rent = property.isLease ? property.price : medianPrice(rents.items);
   const value = usable?.market ?? (property.isLease ? null : property.price);

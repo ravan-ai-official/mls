@@ -1,23 +1,24 @@
+"use client";
+
 import { SafeImage } from "@/components/ui/SafeImage";
 import Link from "next/link";
 import { Eyebrow } from "@/components/ui/Badge";
 import { Section } from "@/components/ui/Section";
-import { safeFetch } from "@/lib/api/client";
-import { getBlogPosts } from "@/lib/api/blog";
+import { getBlogPosts, type BlogPost } from "@/lib/api/blog";
 import { researchCards } from "@/lib/home/contentSections";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { listOf, textOf } from "@/lib/site/read";
 import { formatDate } from "@/lib/utils/format";
 
 /**
- * "Research & Insights" — HomeAtlasUI HomePage L1022-1055.
- *
- * The three topic cards are the reference's; each now opens its own page
- * (the reference sent all three to market-trends). Below them, the latest
- * live blog posts, fetched the same way as the homepage ResearchRail. When the
- * blog is unreachable the posts row is simply omitted.
+ * "Research & Insights" — topic cards + live blog posts via `/api/vlog` proxy.
  */
-export async function ResearchInsights({ content }: { content?: Record<string, unknown> }) {
-  const posts = await safeFetch(getBlogPosts(3), [], "home:research-insights");
+export function ResearchInsights({ content }: { content?: Record<string, unknown> }) {
+  const { data: posts = [] } = useMlsQuery<BlogPost[]>(
+    ["home", "research-insights"],
+    () => getBlogPosts(3),
+    [],
+  );
 
   return (
     <Section

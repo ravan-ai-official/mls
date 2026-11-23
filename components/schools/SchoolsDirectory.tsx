@@ -6,11 +6,15 @@ import {
   DEFAULT_SCHOOL_RADIUS_KM,
   SCHOOL_RADIUS_OPTIONS_KM,
   SCHOOL_SEARCH_MIN_CHARS,
+  getTopSchools,
   homesNearSchoolHref,
+  schoolSearchHistoryCities,
   type OfficialSchool,
   type SchoolSearchHit,
 } from "@/lib/api/schools";
+import { readClientVisitor } from "@/lib/personalize/clientVisitor";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { useSchoolSearch } from "@/lib/queries/schools";
 import { ChipToggle, SearchInput } from "@/components/ui/Field";
 import { cn } from "@/lib/utils/cn";
@@ -50,7 +54,11 @@ function matchesLevel(school: OfficialSchool, filter: LevelFilter): boolean {
  * Search Ontario schools and open nearby listings. Built as a working tool:
  * search + level + radius, then a clear “see homes” action per school.
  */
-export function SchoolsDirectory({ initialSchools }: { initialSchools: OfficialSchool[] }) {
+export function SchoolsDirectory({
+  initialSchools = [],
+}: {
+  initialSchools?: OfficialSchool[];
+}) {
   const [query, setQuery] = useState("");
   // Top list from /schools/top/ is secondary-only; keep that as the default filter.
   const [level, setLevel] = useState<LevelFilter>("secondary");
@@ -59,9 +67,26 @@ export function SchoolsDirectory({ initialSchools }: { initialSchools: OfficialS
   const search = useSchoolSearch(debounced);
   const searching = debounced.trim().length >= SCHOOL_SEARCH_MIN_CHARS;
 
+  const { data: topSchools = initialSchools } = useMlsQuery<OfficialSchool[]>(
+    ["schools", "top"],
+    async () => {
+      const visitor = readClientVisitor();
+      const historyCities = schoolSearchHistoryCities(
+        visitor.searchHistoryCities,
+        visitor.lastSearch.city,
+      );
+      return getTopSchools({
+        limit: 100,
+        cities: historyCities.length > 0 ? historyCities : undefined,
+        cache: "no-store",
+      }).catch(() => [] as OfficialSchool[]);
+    },
+    initialSchools,
+  );
+
   const baseResults = searching
     ? (search.data ?? []).map(hitToSchool)
-    : initialSchools;
+    : topSchools;
 
   const results = useMemo(
     () => baseResults.filter((school) => matchesLevel(school, level)),

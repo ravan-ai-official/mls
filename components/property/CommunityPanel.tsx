@@ -1,10 +1,13 @@
-import { safeFetch } from "@/lib/api/client";
+"use client";
+
 import {
   getCatalogStats,
   getHomeTypeDistribution,
   getMarketTrends,
   getSoldTrends,
   HOME_TYPE_DISTRIBUTION,
+  type CatalogStats,
+  type MarketTrends,
   type SoldTrends,
 } from "@/lib/api/market";
 import {
@@ -27,15 +30,27 @@ import {
   REFERENCE_DISTRIBUTIONS,
   REFERENCE_INSIGHT_METRICS,
 } from "@/lib/demo/neighbourhoodInsights";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { formatPrice } from "@/lib/utils/format";
 
 /**
  * Community tab. Neighbourhood Insights matches HomeAtlasUI: 9 demographic
  * tiles + household income (and related) distribution chart. Census FSA data
  * is preferred; the reference demo profile fills gaps so the section always
- * appears.
+ * appears. Fetches in the browser via `/api/mls/…` so Network shows JSON.
  */
-export async function CommunityPanel({
+
+type CommunityPayload = {
+  stats: CatalogStats | null;
+  trends: MarketTrends | null;
+  census: CensusProfile | null;
+  wpCommunity: Awaited<ReturnType<typeof getWpCommunityProfile>> | null;
+  amenities: AmenitiesByCategory | null;
+  soldTrends: SoldTrends;
+  homeTypes: Array<{ name: string; count: number }>;
+};
+
+export function CommunityPanel({
   city,
   neighbourhood,
   postalCode,
@@ -65,33 +80,47 @@ export async function CommunityPanel({
     generatedAt: null,
     stale: false,
   };
-  const [stats, trends, census, wpCommunity, amenities, soldTrends, homeTypes] = await Promise.all([
-    city
-      ? safeFetch(getCatalogStats({ city }), null, "property:catalog")
-      : Promise.resolve(null),
-    city
-      ? safeFetch(getMarketTrends({ city }, 12), null, "property:trends")
-      : Promise.resolve(null),
-    fsa ? getCensusProfile(fsa) : Promise.resolve(null),
-    safeFetch(getWpCommunityProfile(city, neighbourhood), null, "property:wp-community"),
-    latitude !== null && longitude !== null
-      ? safeFetch(
-          getNearbyAmenities(latitude, longitude),
-          emptyAmenities,
-          "property:amenities",
-        )
-      : Promise.resolve(null),
-    city
-      ? getSoldTrends(city, 12, {}, { community: neighbourhood ?? undefined })
-      : Promise.resolve(emptySoldTrends),
-    city
-      ? safeFetch(
-          getHomeTypeDistribution(city, { community: neighbourhood }),
-          [] as Array<{ name: string; count: number }>,
-          "property:home-types",
-        )
-      : Promise.resolve([] as Array<{ name: string; count: number }>),
-  ]);
+  const fallback: CommunityPayload = {
+    stats: null,
+    trends: null,
+    census: null,
+    wpCommunity: null,
+    amenities: latitude !== null && longitude !== null ? emptyAmenities : null,
+    soldTrends: emptySoldTrends,
+    homeTypes: [],
+  };
+
+  const { data = fallback } = useMlsQuery<CommunityPayload>(
+    ["property", "community", city, neighbourhood, fsa, latitude, longitude],
+    async () => {
+      const [stats, trends, census, wpCommunity, amenities, soldTrends, homeTypes] =
+        await Promise.all([
+          city
+            ? getCatalogStats({ city }).catch(() => null)
+            : Promise.resolve(null),
+          city
+            ? getMarketTrends({ city }, 12).catch(() => null)
+            : Promise.resolve(null),
+          fsa ? getCensusProfile(fsa) : Promise.resolve(null),
+          getWpCommunityProfile(city, neighbourhood).catch(() => null),
+          latitude !== null && longitude !== null
+            ? getNearbyAmenities(latitude, longitude).catch(() => emptyAmenities)
+            : Promise.resolve(null),
+          city
+            ? getSoldTrends(city, 12, {}, { community: neighbourhood ?? undefined })
+            : Promise.resolve(emptySoldTrends),
+          city
+            ? getHomeTypeDistribution(city, { community: neighbourhood }).catch(
+                () => [] as Array<{ name: string; count: number }>,
+              )
+            : Promise.resolve([] as Array<{ name: string; count: number }>),
+        ]);
+      return { stats, trends, census, wpCommunity, amenities, soldTrends, homeTypes };
+    },
+    fallback,
+  );
+
+  const { stats, trends, census, wpCommunity, amenities, soldTrends, homeTypes } = data;
   const activityRows = comparisonRows(
     trends?.series ?? [],
     soldTrends.unavailable ? [] : soldTrends.months.slice(-12),
@@ -318,4 +347,3 @@ function comparisonRows(
   }
   return ordered;
 }
-

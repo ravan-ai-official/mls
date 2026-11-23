@@ -1,43 +1,50 @@
+"use client";
+
 import Link from "next/link";
 import { communityImage } from "@/components/communities/CommunityCard";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/States";
-import { safeFetch } from "@/lib/api/client";
 import { getCommunityImages } from "@/lib/api/home";
 import { getBulkCatalogStats } from "@/lib/api/market";
+import type { CityCatalogStat } from "@/lib/types/domain";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { textOf } from "@/lib/site/read";
 import { formatNumber, formatPrice } from "@/lib/utils/format";
 
-/**
- * Trending communities — HomeAtlasUI "Discover the GTA" (HomePage L234-293).
- *
- * Data is LIVE from `catalog-stats/bulk/` (API_GAPS G4), ranked by active
- * inventory; cities with zero active listings are dropped. The figures shown
- * are the live count and the live MEDIAN list price (the backend has no
- * average, so the reference's "avg." wording is not reused).
- *
- * Tile photos come from `/api/home/community-images/` (admin-curated, keyed
- * by lower-cased city). A city without one borrows the reference's photo from
- * lib/home/sampleData (decorative only — no sample numbers are shown); any
- * other city, or a photo that fails to load, gets the shared placeholder.
- */
 const SECTION = {
-  tone: "alt",
+  tone: "alt" as const,
   eyebrow: "Discover the GTA",
   title: "Trending Communities",
   action: { label: "View All", href: "/communities" },
-} as const;
+};
 
 const RAIL =
   "flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
-export async function TrendingCommunities({ content }: { content?: Record<string, unknown> }) {
-  const [rows, communityImages] = await Promise.all([
-    // Tiles show no sold figures, so skip the slow AMPRE sold lookup.
-    safeFetch(getBulkCatalogStats({ gta: true, includeSold: false }), [], "home:communities"),
-    getCommunityImages(),
-  ]);
+type CommunitiesPayload = {
+  rows: CityCatalogStat[];
+  communityImages: Record<string, string>;
+};
+
+export function TrendingCommunities({ content }: { content?: Record<string, unknown> }) {
+  const empty: CommunitiesPayload = { rows: [], communityImages: {} };
+  const { data, isPending } = useMlsQuery<CommunitiesPayload>(
+    ["home", "communities"],
+    async () => {
+      const [rows, communityImages] = await Promise.all([
+        getBulkCatalogStats({ gta: true, includeSold: false }).catch(() => [] as CityCatalogStat[]),
+        getCommunityImages().catch(() => null),
+      ]);
+      return { rows, communityImages: communityImages ?? {} };
+    },
+    empty,
+  );
+
+  const rows = data?.rows ?? [];
+  if (isPending && rows.length === 0) {
+    return <TrendingCommunitiesSkeleton />;
+  }
 
   const trending = rows
     .filter((row) => row.city && row.activeCount > 0)
@@ -45,6 +52,8 @@ export async function TrendingCommunities({ content }: { content?: Record<string
     .slice(0, 8);
 
   if (trending.length === 0) return null;
+
+  const communityImages = data?.communityImages ?? {};
 
   return (
     <Section
@@ -72,7 +81,6 @@ export async function TrendingCommunities({ content }: { content?: Record<string
                   sizes="192px"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
-                {/* Reference scrim: rgba(21,21,21,0.45), lightening on hover. */}
                 <span
                   aria-hidden="true"
                   className="absolute inset-0 bg-ink/45 transition-colors group-hover:bg-ink/35"
@@ -108,10 +116,6 @@ export async function TrendingCommunities({ content }: { content?: Record<string
   );
 }
 
-/**
- * Loading state with the section's real outline: same heading, and a rail of
- * 192×288 tiles, so nothing shifts when the data streams in.
- */
 export function TrendingCommunitiesSkeleton() {
   return (
     <Section {...SECTION}>

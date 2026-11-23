@@ -1,8 +1,11 @@
+"use client";
+
 import { Eyebrow } from "@/components/ui/Badge";
 import { getPartners } from "@/lib/api/home";
 import { connectionIconFor, type Partner } from "@/lib/api/homeMappers";
 import { WhatsappLink } from "@/components/providers/WhatsappProvider";
 import { trustedConnections } from "@/lib/home/contentSections";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { headingLines, textOf } from "@/lib/site/read";
 import { ConnectionGlyph } from "./contentIcons";
 
@@ -37,8 +40,12 @@ function fromPartner(p: Partner): ConnectionView {
   };
 }
 
-export async function TrustedConnections({ content }: { content?: Record<string, unknown> }) {
-  const partners = await getPartners();
+export function TrustedConnections({ content }: { content?: Record<string, unknown> }) {
+  const { data: partners } = useMlsQuery(
+    ["home", "partners"],
+    () => getPartners(),
+    null,
+  );
   const items: ConnectionView[] =
     partners && partners.length > 0
       ? partners.map(fromPartner)

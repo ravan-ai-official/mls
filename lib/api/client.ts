@@ -4,6 +4,10 @@
  * Works in both Server Components and the browser. Auth tokens live in httpOnly
  * cookies, so server-side calls attach the access token explicitly while browser
  * calls go through the /api/auth proxy routes.
+ *
+ * In the browser, mls-backend prefixes (`/api/mls`, `/api/home`, `/api/vlog`)
+ * are fetched same-origin through catch-all proxies so DevTools Network shows
+ * the JSON instead of burying the call inside an RSC flight payload.
  */
 
 export const API_BASE_URL = (
@@ -12,6 +16,24 @@ export const API_BASE_URL = (
   "http://localhost:8000"
 ).replace(/\/$/, "");
 
+const BROWSER_PROXY_PREFIXES = ["/api/mls/", "/api/home/", "/api/vlog/"] as const;
+
+/**
+ * Browser: same-origin proxy for backend prefixes. Server (and other paths):
+ * absolute `API_BASE_URL`. Next BFFs like `/api/properties/search` are not
+ * reached via `apiFetch` — they use `fetchJson` directly.
+ */
+function resolveApiUrl(path: string, query: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const withQuery = `${normalized}${query}`;
+  if (
+    typeof window !== "undefined" &&
+    BROWSER_PROXY_PREFIXES.some((prefix) => normalized.startsWith(prefix) || normalized === prefix.slice(0, -1))
+  ) {
+    return withQuery;
+  }
+  return `${API_BASE_URL}${withQuery}`;
+}
 export class ApiError extends Error {
   readonly status: number;
   readonly payload: unknown;
@@ -81,7 +103,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     ...rest
   } = options;
 
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}${buildQuery(params)}`;
+  const url = resolveApiUrl(path, buildQuery(params));
+  const inBrowser = typeof window !== "undefined";
 
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");
@@ -114,9 +137,13 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
        * still shows listings that can no longer be saved or opened — it reads
        * as "hardcoded data" when it is really a stale cache. Always hit the
        * network in dev so what is on screen reflects the running backend.
+       * Browser calls never use Next ISR — they go through the same-origin
+       * `/api/mls` proxy (or other BFFs) with no-store.
        */
-      ...(rest.cache
-        ? {}
+      ...(inBrowser || rest.cache
+        ? inBrowser
+          ? { cache: "no-store" as const }
+          : {}
         : revalidate !== undefined && process.env.NODE_ENV === "production"
           ? { next: { revalidate, ...(tags?.length ? { tags } : {}) } }
           : { cache: "no-store" as const }),

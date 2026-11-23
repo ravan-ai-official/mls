@@ -1,9 +1,12 @@
+"use client";
+
 import { SafeImage } from "@/components/ui/SafeImage";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Section } from "@/components/ui/Section";
 import { getInvestorPicks } from "@/lib/api/home";
 import type { InvestorPick } from "@/lib/api/homeMappers";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { textOf } from "@/lib/site/read";
 import { formatPrice } from "@/lib/utils/format";
 
@@ -60,9 +63,13 @@ function liveCard(pick: InvestorPick): CardView {
   };
 }
 
-export async function HighReturnProperties({ content }: { content?: Record<string, unknown> }) {
-  const feed = await getInvestorPicks(3);
-  if (feed === null || feed.picks.length === 0) return null;
+export function HighReturnProperties({ content }: { content?: Record<string, unknown> }) {
+  const { data: feed } = useMlsQuery(
+    ["home", "investor-picks"],
+    () => getInvestorPicks(3),
+    null,
+  );
+  if (feed === null || !feed || feed.picks.length === 0) return null;
   const cards = feed.picks.map(liveCard);
   const caption = feed.basisNote ?? textOf(content, "caption", DEFAULT_BASIS);
 

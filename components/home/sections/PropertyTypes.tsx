@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { ComponentType } from "react";
 import {
@@ -9,17 +11,12 @@ import {
   IconTownhome,
 } from "@/components/home/icons";
 import { Section } from "@/components/ui/Section";
-import { safeFetch } from "@/lib/api/client";
 import { getPropertyTypes } from "@/lib/api/properties";
-import type { UiPropertyType } from "@/lib/types/domain";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
+import type { PropertyTypeFacet, UiPropertyType } from "@/lib/types/domain";
 import { textOf } from "@/lib/site/read";
 import { formatNumber } from "@/lib/utils/format";
 
-/**
- * "Explore by Property Type" — six real UI types with live counts from
- * `/properties/property-types/` (structure_type / attached for home types,
- * $2M+ for Luxury, active leases for Rentals).
- */
 const TILES: Array<{
   icon: string;
   label: string;
@@ -71,16 +68,19 @@ const TILES: Array<{
   },
 ];
 
-export async function PropertyTypes({ content }: { content?: Record<string, unknown> }) {
-  const facets = await safeFetch(getPropertyTypes(), [], "home:property-types");
+export function PropertyTypes({ content }: { content?: Record<string, unknown> }) {
+  const { data: facets = [] } = useMlsQuery<PropertyTypeFacet[]>(
+    ["home", "property-types"],
+    () => getPropertyTypes(),
+    [],
+  );
+
   const counts = new Map<string, number>();
   for (const facet of facets) {
     if (!facet.uiType || facet.count <= 0) continue;
     counts.set(facet.uiType, (counts.get(facet.uiType) ?? 0) + facet.count);
   }
 
-  // Canonical TILES order wins over saved CMS item order (studio may still
-  // have Detached → Condos → …). CMS can still override labels/hrefs.
   const custom = Array.isArray(content?.items) ? content.items : [];
   const customByIcon = new Map<string, { label?: string; href?: string }>();
   for (const item of custom) {

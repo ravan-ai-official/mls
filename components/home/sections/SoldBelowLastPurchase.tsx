@@ -1,28 +1,33 @@
+"use client";
+
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { Section } from "@/components/ui/Section";
 import { getSoldBelowPurchase } from "@/lib/api/home";
 import type { SoldBelowRow } from "@/lib/api/homeMappers";
-import { getVisitorPersonalization } from "@/lib/personalize/visitorContext";
+import { readClientVisitor } from "@/lib/personalize/clientVisitor";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { textOf } from "@/lib/site/read";
 import { formatPrice } from "@/lib/utils/format";
 import { buildListingHref } from "@/lib/utils/searchParams";
 
 /**
  * Sold-below rail from mls-backend `/api/home/sold-below-purchase/`.
- *
- * Never renders mock/demo cards. When the feed is empty (`empty`, `count` 0,
- * or no complete rows) the whole section is omitted — no title, no skeleton
- * left behind after load. Site Studio headings still apply when there is data.
+ * Client fetch so Network shows the home-feed JSON.
  */
-export async function SoldBelowLastPurchase({ content }: { content?: Record<string, unknown> }) {
-  const visitor = await getVisitorPersonalization();
-  const rows = await getSoldBelowPurchase(3, {
-    cities: visitor.cities,
-    headers: visitor.headers,
-    cache: "no-store",
-  });
+export function SoldBelowLastPurchase({ content }: { content?: Record<string, unknown> }) {
+  const { data: rows } = useMlsQuery<SoldBelowRow[] | null>(
+    ["home", "sold-below"],
+    async () => {
+      const visitor = readClientVisitor();
+      return getSoldBelowPurchase(3, {
+        cities: visitor.cities,
+        cache: "no-store",
+      });
+    },
+    null,
+  );
   if (!rows || rows.length === 0) return null;
 
   return (

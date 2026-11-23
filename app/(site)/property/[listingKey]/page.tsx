@@ -2,34 +2,27 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache, Suspense } from "react";
-import { SafeImage } from "@/components/ui/SafeImage";
 import { Gallery } from "@/components/property/Gallery";
 import { InquiryForm } from "@/components/property/InquiryForm";
 import { ListingShareActions, ListingWhatsAppCard } from "@/components/property/ListingShareActions";
-import { KeyFacts, MarketDemand } from "@/components/property/KeyFacts";
+import { KeyFacts } from "@/components/property/KeyFacts";
 import { EstimatesPanel } from "@/components/property/EstimatesPanel";
 import { CommunityPanel } from "@/components/property/CommunityPanel";
 import { ClimateRisk } from "@/components/property/ClimateRisk";
-import { ComparablesBoard } from "@/components/property/ComparablesBoard";
-import { SchoolsSection } from "@/components/property/Neighbourhood";
-import { PriceHistory } from "@/components/property/PriceHistory";
+import { ClimateRiskPanel } from "@/components/property/ClimateRiskPanel";
+import { ComparablesSection } from "@/components/property/ComparablesSection";
+import { DemandPanel } from "@/components/property/DemandPanel";
+import { PriceHistorySection } from "@/components/property/PriceHistorySection";
 import { PropertyNote } from "@/components/property/PropertyNote";
 import { PropertyTabs } from "@/components/property/PropertyTabs";
 import { SaveButton } from "@/components/property/SaveButton";
+import { SchoolsPanel } from "@/components/property/SchoolsPanel";
+import { SimilarHomes } from "@/components/property/SimilarHomes";
 import { TouredButton } from "@/components/property/TouredButton";
 import { ViewTracker } from "@/components/property/ViewTracker";
-import { Badge } from "@/components/ui/Badge";
 import { PropertyGridSkeleton, Skeleton, UnavailableNote } from "@/components/ui/States";
-import { ApiError, safeFetch } from "@/lib/api/client";
-import {
-  getProperty,
-  getPropertyComparables,
-  getSimilarProperties,
-  searchProperties,
-} from "@/lib/api/properties";
-import { getClimateRisk } from "@/lib/api/climate";
-import { getListingEngagement, getPropertySnapshots } from "@/lib/api/neighbourhood";
-import { getSchoolsNear } from "@/lib/api/schools";
+import { ApiError } from "@/lib/api/client";
+import { getProperty } from "@/lib/api/properties";
 import { statusLabel } from "@/lib/api/mappers";
 import {
   EMPTY,
@@ -37,62 +30,12 @@ import {
   formatNumber,
   formatPrice,
 } from "@/lib/utils/format";
-import type { ListingQuery, PropertyDetail, PropertySummary } from "@/lib/types/domain";
+import type { PropertyDetail } from "@/lib/types/domain";
 import { absoluteUrl, JsonLd } from "@/components/seo/JsonLd";
 import { propertyJsonLd } from "@/lib/seo/jsonld";
 import { propertyPath } from "@/lib/seo/urls";
 
 export const revalidate = 300;
-
-const EMPTY_LISTINGS = {
-  items: [] as PropertySummary[],
-  total: 0,
-  nextOffset: null,
-  previousOffset: null,
-  approximate: false,
-  truncated: false,
-};
-
-/** ~km box around a point for peer searches when the comps API is unavailable. */
-function nearbyBounds(lat: number, lng: number, km: number) {
-  const dlat = km / 111;
-  const dlng = km / Math.max(111 * Math.cos((lat * Math.PI) / 180), 1e-6);
-  return {
-    latMin: lat - dlat,
-    latMax: lat + dlat,
-    lngMin: lng - dlng,
-    lngMax: lng + dlng,
-  };
-}
-
-/** Tight peer query: same type/beds/price band, nearby when coords exist. */
-function peerQuery(
-  property: PropertyDetail,
-  extras: ListingQuery = {},
-): ListingQuery {
-  const price = property.price;
-  const query: ListingQuery = {
-    city: property.community ?? undefined,
-    type: property.uiType ?? undefined,
-    bedsMin: property.beds != null ? Math.max(0, property.beds - 1) : undefined,
-    bathsMin: property.baths != null ? Math.max(0, property.baths - 1) : undefined,
-    limit: extras.limit ?? 6,
-    ...extras,
-  };
-  if (price != null && price > 0 && !property.isLease) {
-    query.priceMin = Math.round(price * 0.7);
-    query.priceMax = Math.round(price * 1.35);
-  }
-  if (
-    property.latitude != null &&
-    property.longitude != null &&
-    Number.isFinite(property.latitude) &&
-    Number.isFinite(property.longitude)
-  ) {
-    query.bounds = nearbyBounds(property.latitude, property.longitude, 8);
-  }
-  return query;
-}
 
 /**
  * Returns null only when the backend genuinely reports the listing is missing.
@@ -548,215 +491,6 @@ function LocationUnavailable({ title, detail }: { title: string; detail: string 
       <h2 className="text-h2 text-ink">{title}</h2>
       <UnavailableNote className="mt-3">{detail}</UnavailableNote>
     </section>
-  );
-}
-
-async function SimilarHomes({ property }: { property: PropertyDetail }) {
-  // Run recommendation + peer search together so a slow similar API never
-  // serializes an extra listings round-trip behind it.
-  const [recommended, peers] = await Promise.all([
-    safeFetch(getSimilarProperties(property.id), [], "property:similar"),
-    safeFetch(
-      searchProperties(
-        peerQuery(property, {
-          status: "Active",
-          transaction: property.isLease ? "rent" : "sale",
-          limit: 6,
-        }),
-      ),
-      EMPTY_LISTINGS,
-      "property:similar-peers",
-    ),
-  ]);
-
-  let similar = recommended.filter((item) => item.id !== property.id);
-  if (similar.length < 3) {
-    const extra = peers.items.filter(
-      (item) =>
-        item.id !== property.id &&
-        !similar.some((row) => row.id === item.id) &&
-        (property.uiType == null || item.uiType == null || item.uiType === property.uiType),
-    );
-    similar = [...similar, ...extra];
-  }
-
-  if (similar.length === 0) return null;
-
-  const city = property.community;
-  return (
-    <section className="rounded-2xl border border-line p-4 sm:p-5">
-      <h2 className="mb-4 text-[15px] font-semibold text-ink">
-        Similar{city ? ` in ${city}` : " nearby"}
-      </h2>
-      <ul className="space-y-1">
-        {similar.slice(0, 3).map((item) => (
-          <li key={item.id}>
-            <CompactSimilar property={item} />
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function CompactSimilar({ property }: { property: PropertySummary }) {
-  const price =
-    property.price === null
-      ? EMPTY
-      : property.isLease
-        ? formatLeasePrice(property.price)
-        : formatPrice(property.price);
-  return (
-    <Link href={propertyPath(property.id)} className="-mx-2 flex gap-3 rounded-xl p-2 hover:bg-surface-alt">
-      <SafeImage
-        src={property.image}
-        alt=""
-        width={64}
-        height={48}
-        className="h-12 w-16 shrink-0 rounded-lg object-cover"
-      />
-      <span className="min-w-0">
-        <span className="block text-[13px] font-semibold text-ink">{price}</span>
-        <span className="block truncate text-[11px] text-ink-muted">{property.address}</span>
-        <span className="block text-[11px] text-ink-muted">
-          {property.beds ?? EMPTY}bd · {property.baths ?? EMPTY}ba
-          {property.type ? ` · ${property.type}` : ""}
-        </span>
-      </span>
-    </Link>
-  );
-}
-
-async function PriceHistorySection({
-  listingKey,
-  listingId,
-}: {
-  listingKey: string;
-  listingId: string;
-}) {
-  const snapshots = await safeFetch(
-    getPropertySnapshots(listingKey),
-    [],
-    "property:snapshots",
-  );
-  return <PriceHistory snapshots={snapshots} listingId={listingId} />;
-}
-
-async function SchoolsPanel({
-  latitude,
-  longitude,
-}: {
-  latitude: number;
-  longitude: number;
-}) {
-  const schools = await safeFetch(
-    getSchoolsNear(latitude, longitude, { radiusKm: 8 }),
-    [],
-    "property:schools",
-  );
-  return <SchoolsSection schools={schools} />;
-}
-
-async function ClimateRiskPanel({
-  latitude,
-  longitude,
-}: {
-  latitude: number;
-  longitude: number;
-}) {
-  const payload = await safeFetch(
-    getClimateRisk(latitude, longitude),
-    null,
-    "property:climate-risk",
-  );
-  if (!payload?.risks?.length) {
-    return <ClimateRisk risks={[]} unavailable />;
-  }
-  return <ClimateRisk risks={payload.risks} source={payload.source} />;
-}
-
-async function DemandPanel({ listingKey }: { listingKey: string }) {
-  const engagement = await getListingEngagement(listingKey);
-  return <MarketDemand engagement={engagement} />;
-}
-
-async function ComparablesSection({ property }: { property: PropertyDetail }) {
-  const dropSelf = (items: PropertySummary[]) => items.filter((item) => item.id !== property.id);
-  const sameType = (items: PropertySummary[]) =>
-    property.uiType
-      ? items.filter((item) => !item.uiType || item.uiType === property.uiType)
-      : items;
-
-  const [comps, engagement] = await Promise.all([
-    safeFetch(
-      getPropertyComparables(property.id, 4),
-      { sale: [] as PropertySummary[], sold: [] as PropertySummary[], rent: [] as PropertySummary[] },
-      "property:comparables",
-    ),
-    getListingEngagement(property.id),
-  ]);
-
-  let sale = sameType(dropSelf(comps.sale));
-  let sold = sameType(dropSelf(comps.sold));
-  let rent = dropSelf(comps.rent);
-
-  // Fallback when the comps endpoint is empty/unavailable: tight peer search.
-  if (sale.length < 2 || sold.length < 2 || rent.length < 2) {
-    const [recommended, soldFallback, rentFallback, saleFallback] = await Promise.all([
-      sale.length < 2
-        ? safeFetch(getSimilarProperties(property.id), [], "property:similar")
-        : Promise.resolve([] as PropertySummary[]),
-      sold.length < 2
-        ? safeFetch(
-            searchProperties(peerQuery(property, { status: "Sold", limit: 6 })),
-            EMPTY_LISTINGS,
-            "property:sold-comps",
-          )
-        : Promise.resolve(EMPTY_LISTINGS),
-      rent.length < 2
-        ? safeFetch(
-            searchProperties(
-              peerQuery(property, { transaction: "rent", status: "Active", limit: 6 }),
-            ),
-            EMPTY_LISTINGS,
-            "property:rent-comps",
-          )
-        : Promise.resolve(EMPTY_LISTINGS),
-      sale.length < 2
-        ? safeFetch(
-            searchProperties(
-              peerQuery(property, {
-                status: "Active",
-                transaction: "sale",
-                limit: 8,
-              }),
-            ),
-            EMPTY_LISTINGS,
-            "property:sale-comps",
-          )
-        : Promise.resolve(EMPTY_LISTINGS),
-    ]);
-
-    if (sale.length < 2) {
-      const fromRec = sameType(dropSelf(recommended));
-      const fromSearch = sameType(dropSelf(saleFallback.items)).filter(
-        (item) => !fromRec.some((row) => row.id === item.id),
-      );
-      sale = [...fromRec, ...fromSearch];
-    }
-    if (sold.length < 2) sold = sameType(dropSelf(soldFallback.items));
-    if (rent.length < 2) rent = dropSelf(rentFallback.items);
-  }
-
-  return (
-    <ComparablesBoard
-      sale={sale}
-      sold={sold}
-      rent={rent}
-      engagement={engagement}
-      price={property.price}
-      annualTax={property.taxAnnualAmount}
-    />
   );
 }
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { AssignmentCard } from "@/components/assignments/AssignmentCard";
+import { SimilarAssignments } from "@/components/assignments/SimilarAssignments";
 import { Gallery } from "@/components/property/Gallery";
 import { assignmentLeadKey, InquiryForm } from "@/components/property/InquiryForm";
 import { absoluteUrl, breadcrumbJsonLd, JsonLd } from "@/components/seo/JsonLd";
@@ -12,11 +12,10 @@ import {
   assignmentPath,
   assignmentTitle,
   getPublicAssignment,
-  getSimilarAssignments,
   type PublicListing,
 } from "@/lib/api/assignments";
-import { ApiError, safeFetch } from "@/lib/api/client";
-import { sampleAssignment, sampleSimilarAssignments, USE_ASSIGNMENT_SAMPLES } from "@/lib/demo/assignments";
+import { ApiError } from "@/lib/api/client";
+import { sampleAssignment, USE_ASSIGNMENT_SAMPLES } from "@/lib/demo/assignments";
 import { preconPath } from "@/lib/seo/urls";
 import { formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
 
@@ -172,27 +171,5 @@ export default async function AssignmentPage({ params }: PageProps<"/assignments
         <SimilarAssignments id={listing.id} />
       </Suspense>
     </article>
-  );
-}
-
-/** Rail of similar approved assignments (scope #2e). Renders nothing when there are none. */
-async function SimilarAssignments({ id }: { id: number }) {
-  const similar = USE_ASSIGNMENT_SAMPLES
-    ? sampleSimilarAssignments(id)
-    : await safeFetch(getSimilarAssignments(id), [] as PublicListing[], "assignments:similar");
-  if (similar.length === 0) return null;
-  return (
-    <section className="mt-12" aria-labelledby="similar-assignments">
-      <h2 id="similar-assignments" className="text-h2 text-ink">
-        Similar assignments
-      </h2>
-      <ul className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {similar.map((item) => (
-          <li key={item.id}>
-            <AssignmentCard listing={item} headingLevel="h3" />
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

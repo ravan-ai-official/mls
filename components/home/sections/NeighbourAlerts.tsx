@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Badge, Eyebrow, type BadgeTone } from "@/components/ui/Badge";
 import { SafeImage } from "@/components/ui/SafeImage";
@@ -5,7 +7,8 @@ import { WhatsappLink } from "@/components/providers/WhatsappProvider";
 import { getNeighbourActivity } from "@/lib/api/home";
 import type { NeighbourActivityEvent, NeighbourActivityItem } from "@/lib/api/homeMappers";
 import { neighbourAlertPoints } from "@/lib/home/contentSections";
-import { getVisitorPersonalization } from "@/lib/personalize/visitorContext";
+import { readClientVisitor } from "@/lib/personalize/clientVisitor";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { headingLines, listOf, textOf } from "@/lib/site/read";
 import { formatPriceCompact } from "@/lib/utils/format";
 import { CheckDot } from "./contentIcons";
@@ -24,16 +27,22 @@ const EVENT_TONES: Record<NeighbourActivityEvent, BadgeTone> = {
   "Just Sold": "gold",
 };
 
-export async function NeighbourAlerts({ content }: { content?: Record<string, unknown> }) {
+export function NeighbourAlerts({ content }: { content?: Record<string, unknown> }) {
   const title = textOf(content, "title", "When Your Neighbours\nAre Selling");
   const bullets = listOf<string>(content, "bullets", neighbourAlertPoints);
-  const visitor = await getVisitorPersonalization();
-  // Ask for a full 2×2 preview; the API backfills from sold / drops / OH / listed.
-  const items = await getNeighbourActivity(4, {
-    cities: visitor.cities,
-    headers: visitor.headers,
-    cache: "no-store",
-  });
+  const { data: items = [] } = useMlsQuery<NeighbourActivityItem[]>(
+    ["home", "neighbour-activity"],
+    async () => {
+      const visitor = readClientVisitor();
+      return (
+        (await getNeighbourActivity(4, {
+          cities: visitor.cities,
+          cache: "no-store",
+        })) ?? []
+      );
+    },
+    [],
+  );
 
   return (
     <section className="bg-surface py-10 sm:py-14 lg:py-16">

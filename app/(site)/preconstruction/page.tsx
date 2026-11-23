@@ -1,16 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
-import { PreconCard } from "@/components/precon/PreconCard";
+import { PreconProjectsGrid } from "@/components/precon/PreconProjectsGrid";
 import { VipAccessForm } from "@/components/precon/VipAccessForm";
 import { Eyebrow } from "@/components/ui/Badge";
-import { EmptyState, Skeleton } from "@/components/ui/States";
-import { safeFetch } from "@/lib/api/client";
-import {
-  getPreconProjects,
-  type PreconDealsQuery,
-  type PreconProject,
-} from "@/lib/api/preconstruction";
+import { type PreconDealsQuery } from "@/lib/api/preconstruction";
 
 export const metadata: Metadata = {
   title: "Preconstruction projects",
@@ -105,62 +98,9 @@ export default async function PreconstructionPage({
       </section>
 
       <div className="container-page space-y-16 py-10">
-        <Suspense key={JSON.stringify(deals)} fallback={<ProjectsSkeleton />}>
-          <Projects deals={deals} />
-        </Suspense>
+        <PreconProjectsGrid key={JSON.stringify(deals)} deals={deals} />
         <VipAccessForm />
       </div>
     </>
-  );
-}
-
-async function Projects({ deals }: { deals: PreconDealsQuery }) {
-  const feed = await safeFetch(
-    getPreconProjects({
-      limit: 24,
-      deals,
-      cache: "no-store",
-    }),
-    { items: [] as PreconProject[], total: 0, hasSearchHistory: false, cities: [] },
-    "precon:list",
-  );
-
-  if (feed.items.length === 0) {
-    const filtered = hasDealsFilters(deals);
-    return (
-      <EmptyState
-        title={filtered ? "No matching projects" : "No projects available"}
-        description={
-          filtered
-            ? "Try clearing filters, or browse the full preconstruction list."
-            : "There are no published preconstruction projects right now. Check back soon."
-        }
-        action={
-          filtered
-            ? { label: "Show all projects", href: "/preconstruction" }
-            : { label: "Browse resale listings", href: "/listings" }
-        }
-      />
-    );
-  }
-
-  return (
-    <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {feed.items.map((project) => (
-        <li key={project.id}>
-          <PreconCard project={project} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ProjectsSkeleton() {
-  return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Loading projects">
-      {Array.from({ length: 6 }).map((_, index) => (
-        <Skeleton key={index} className="aspect-[4/3] w-full rounded-card" />
-      ))}
-    </div>
   );
 }

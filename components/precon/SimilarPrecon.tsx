@@ -1,14 +1,18 @@
+"use client";
+
 import { PreconCard } from "@/components/precon/PreconCard";
-import { safeFetch } from "@/lib/api/client";
-import { getSimilarPrecon } from "@/lib/api/preconstruction";
+import { getSimilarPrecon, type PreconProject } from "@/lib/api/preconstruction";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 
 /**
- * "Similar projects" rail, matching the property page's SimilarHomes. Renders
- * nothing on error or an empty result — a recommendation rail is optional
- * content and must never break or pad out the page.
+ * Similar projects rail — client fetch so Network shows `/api/mls/…` JSON.
  */
-export async function SimilarPrecon({ projectId }: { projectId: number }) {
-  const similar = await safeFetch(getSimilarPrecon(projectId), [], "precon:similar");
+export function SimilarPrecon({ projectId }: { projectId: number }) {
+  const { data: similar = [] } = useMlsQuery<PreconProject[]>(
+    ["precon", "similar", projectId],
+    () => getSimilarPrecon(projectId).catch(() => [] as PreconProject[]),
+    [],
+  );
   if (similar.length === 0) return null;
 
   return (

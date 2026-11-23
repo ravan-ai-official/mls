@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Eyebrow } from "@/components/ui/Badge";
 import { Section } from "@/components/ui/Section";
@@ -13,19 +15,20 @@ import {
   formatNumber,
   formatPriceCompact,
 } from "@/lib/utils/format";
+import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { headingLines, textOf } from "@/lib/site/read";
 import { buildListingHref } from "@/lib/utils/searchParams";
 import { ArrowGlyph } from "./sectionIcons";
 
 /**
- * "Market Intelligence, Made Useful." — HomeAtlasUI HomePage L753-831.
- *
- * Heading sits above the cards (not in a tall empty left column). Snapshot and
- * sold teaser are LIVE from `/api/home/market-snapshot/`; report links open
- * /market-trends for that city.
+ * Market Intelligence — snapshot from `/api/home/market-snapshot/` in the browser.
  */
-export async function MarketIntelligence({ content }: { content?: Record<string, unknown> }) {
-  const snapshot = await getMarketSnapshot();
+export function MarketIntelligence({ content }: { content?: Record<string, unknown> }) {
+  const { data: snapshot = null } = useMlsQuery(
+    ["home", "market-snapshot"],
+    () => getMarketSnapshot(),
+    null,
+  );
   const liveStats = snapshot ? snapshotStats(snapshot) : [];
   const live = snapshot !== null && liveStats.length > 0;
   const stats: SnapshotStat[] = live ? liveStats : gtaMarketSnapshot;
