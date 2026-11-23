@@ -66,9 +66,10 @@ export function Gallery({
 
   if (count === 0) {
     return (
-      <div className="flex h-[220px] items-center justify-center rounded-surface border border-line bg-surface-alt text-small text-ink-muted sm:h-[360px] lg:h-[440px]">
-        No photos available for this listing
-      </div>
+      <div
+        aria-hidden
+        className="h-[220px] rounded-surface border border-line bg-surface-alt sm:h-[360px] lg:h-[440px]"
+      />
     );
   }
 
@@ -190,26 +191,23 @@ export function Gallery({
  * while a new remote listing photo streams in.
  */
 function LightboxSlide({ src, alt }: { src: string; alt: string }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = failedSrc === src;
 
   return (
     <div className="flex h-full min-h-0 w-full items-center justify-center px-4">
       {/* eslint-disable-next-line @next/next/no-img-element -- lightbox needs instant src swaps */}
-      <img
-        key={src}
-        src={src}
-        alt={alt}
-        decoding="async"
-        fetchPriority="high"
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
-        className={cn(
-          "h-auto w-auto max-h-full max-w-full object-contain",
-          failed && "hidden",
-        )}
-      />
-      {failed && (
-        <p className="text-small text-white/70">This photo couldn&apos;t be loaded.</p>
+      {!failed && (
+        <img
+          key={src}
+          src={src}
+          alt={alt}
+          decoding="async"
+          fetchPriority="high"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedSrc(src)}
+          className="h-auto w-auto max-h-full max-w-full object-contain"
+        />
       )}
     </div>
   );
