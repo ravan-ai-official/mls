@@ -41,7 +41,7 @@ describe("map urls", () => {
   it("sends the box, filters and limit for a viewport", () => {
     const view = mapQueryView({ viewport, filters: "city=Toronto", poly: "" })!;
     const url = new URL(mapListingsUrl(view), "http://x");
-    expect(url.pathname).toBe("/api/properties/map");
+    expect(url.pathname).toBe("/api/mls/properties/filter");
     expect(Object.fromEntries(url.searchParams)).toEqual({
       city: "Toronto",
       lat_min: "43.612",
@@ -62,7 +62,7 @@ describe("map urls", () => {
   it("builds the aggregates url from bounds and zoom only", () => {
     const view = mapQueryView({ viewport, filters: "city=Toronto", poly: "" })!;
     const url = new URL(mapAggregatesUrl(view), "http://x");
-    expect(url.pathname).toBe("/api/properties/aggregates");
+    expect(url.pathname).toBe("/api/mls/properties/map-aggregates");
     expect(url.searchParams.get("zoom")).toBe("12");
     expect(url.searchParams.has("city")).toBe(false);
   });

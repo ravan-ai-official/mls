@@ -5,10 +5,11 @@ import {
   type InfiniteData,
   type Query,
 } from "@tanstack/react-query";
-import type { MapCluster } from "@/lib/api/geo";
-import { fetchJson } from "@/lib/queries/fetcher";
+import { getMapAggregates, type MapCluster } from "@/lib/api/geo";
+import { searchProperties } from "@/lib/api/properties";
 import { mapViewKey, qk, type MapViewKey } from "@/lib/queries/keys";
-import type { PropertySummary } from "@/lib/types/domain";
+import type { ListingQuery, PropertySummary } from "@/lib/types/domain";
+import { parseListingSearch } from "@/lib/utils/searchParams";
 
 /**
  * Map search reads: listing rows for the viewport (or a drawn area) and H3
@@ -96,14 +97,33 @@ function boxParams(view: MapViewKey): Record<string, string> {
   };
 }
 
-/** `/api/properties/map` URL: filters plus either the drawn area or the box. */
+/**
+ * ListingQuery for a map view — hits mls-backend `GET /api/mls/properties/filter/`
+ * via the same-origin proxy (not a Next-only `/api/properties/map` BFF).
+ */
+export function mapListingsQueryInput(view: MapViewKey, offset = 0): ListingQuery {
+  const params = new URLSearchParams(view.filters);
+  if (view.poly) params.set("poly", view.poly);
+  const query = parseListingSearch(params);
+  const [south, west, north, east] = view.bounds;
+  return {
+    ...query,
+    bounds: view.poly
+      ? undefined
+      : { latMin: south, latMax: north, lngMin: west, lngMax: east },
+    limit: MAP_PAGE_SIZE,
+    offset: offset > 0 ? offset : 0,
+  };
+}
+
+/** @deprecated Test helper — prefer `mapListingsQueryInput`. */
 export function mapListingsUrl(view: MapViewKey, offset = 0): string {
   const qs = new URLSearchParams(view.filters);
   const area: Record<string, string> = view.poly ? { poly: view.poly } : boxParams(view);
   for (const [key, value] of Object.entries(area)) qs.set(key, value);
   qs.set("limit", String(MAP_PAGE_SIZE));
   if (offset > 0) qs.set("offset", String(offset));
-  return `/api/properties/map?${qs.toString()}`;
+  return `/api/mls/properties/filter?${qs.toString()}`;
 }
 
 /**
@@ -134,10 +154,10 @@ export function flattenMapPages(data: InfiniteData<MapListings, number>): MapLis
   return { items, total: data.pages.at(-1)?.total ?? 0 };
 }
 
-/** `/api/properties/aggregates` URL. H3 counts ignore listing filters. */
+/** @deprecated Test helper — aggregates load via `getMapAggregates`. */
 export function mapAggregatesUrl(view: MapViewKey): string {
   const qs = new URLSearchParams({ ...boxParams(view), zoom: String(view.zoom) });
-  return `/api/properties/aggregates?${qs.toString()}`;
+  return `/api/mls/properties/map-aggregates?${qs.toString()}`;
 }
 
 /**
@@ -148,11 +168,12 @@ export function mapAggregatesUrl(view: MapViewKey): string {
 export function mapListingsQuery(view: MapViewKey) {
   return infiniteQueryOptions({
     queryKey: qk.map.listings(view),
-    queryFn: ({ signal, pageParam }) =>
-      fetchJson<MapListings>(mapListingsUrl(view, pageParam), {
-        signal,
-        fallback: "Could not load listings for this area.",
-      }),
+    queryFn: async ({ pageParam }): Promise<MapListings> => {
+      const result = await searchProperties(mapListingsQueryInput(view, pageParam), {
+        cache: "no-store",
+      });
+      return { items: result.items, total: result.total };
+    },
     initialPageParam: 0,
     getNextPageParam: (last, _all, lastOffset) => nextMapOffset(last, lastOffset),
     select: flattenMapPages,
@@ -166,8 +187,14 @@ export function mapListingsQuery(view: MapViewKey) {
 export function mapAggregatesQuery(view: MapViewKey) {
   return queryOptions({
     queryKey: qk.map.aggregates(view),
-    queryFn: ({ signal }) =>
-      fetchJson<MapAggregatesResponse>(mapAggregatesUrl(view), { signal }),
+    queryFn: async (): Promise<MapAggregatesResponse> => {
+      const [south, west, north, east] = view.bounds;
+      return getMapAggregates(
+        { latMin: south, latMax: north, lngMin: west, lngMax: east },
+        view.zoom,
+        { cache: "no-store" },
+      );
+    },
     staleTime: MAP_STALE_TIME,
     gcTime: MAP_GC_TIME,
     placeholderData: keepPreviousData,

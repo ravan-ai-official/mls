@@ -6,22 +6,21 @@ import { PropertyRow } from "@/components/property/PropertyRow";
 import { ViewToggle, type ListingView } from "@/components/property/ViewToggle";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState, ErrorState, PropertyGridSkeleton } from "@/components/ui/States";
-import { useListingsSearch } from "@/lib/queries/properties";
-import { matchKnownCity } from "@/lib/constants/cities";
-import type { ListingQuery } from "@/lib/types/domain";
+import {
+  listingQueryFromSearch,
+  useListingsSearch,
+} from "@/lib/queries/properties";
 import {
   PAGE_SIZE,
   buildListingHref,
   currentPage,
   hasActiveFilters,
-  parseListingSearch,
 } from "@/lib/utils/searchParams";
 import { backendStatusGroup, statusGroup } from "@/lib/utils/status";
 
 /**
- * Client listings grid. Fetches `/api/properties/search` so DevTools Network
- * shows the JSON envelope (items/total) instead of only the Next.js RSC stream
- * from a server-rendered page navigation.
+ * Client listings grid. Fetches mls-backend `GET /api/mls/properties/filter/`
+ * (via same-origin proxy) so DevTools Network shows the real backend JSON.
  */
 export function ListingsResults({ isStaff = false }: { isStaff?: boolean }) {
   const params = useSearchParams();
@@ -163,13 +162,4 @@ export function ListingsResults({ isStaff = false }: { isStaff?: boolean }) {
   );
 }
 
-/** Same defaults as the listings page server query (For Sale when unset). */
-export function listingQueryFromSearch(params: URLSearchParams | string): ListingQuery {
-  const parsed = parseListingSearch(params);
-  const cityFromSearch =
-    !parsed.city && parsed.search ? matchKnownCity(parsed.search) : null;
-  const query = cityFromSearch
-    ? { ...parsed, city: cityFromSearch, search: undefined }
-    : parsed;
-  return query.status || query.openHouse ? query : { ...query, status: "Active" };
-}
+export { listingQueryFromSearch };

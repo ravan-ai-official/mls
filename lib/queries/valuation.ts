@@ -3,23 +3,21 @@
 import { keepPreviousData, queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import {
   AUTOCOMPLETE_MIN_CHARS,
+  autocompleteAddress,
+  estimateValue,
+  lookupSubject,
   type AddressSuggestion,
   type EstimateInput,
   type ValuationResult,
   type ValuationSubject,
 } from "@/lib/api/valuation";
-import { fetchJson } from "@/lib/queries/fetcher";
 import { qk } from "@/lib/queries/keys";
 
 export function addressAutocompleteQuery(q: string) {
   const term = q.trim();
   return queryOptions({
     queryKey: qk.valuation.autocomplete(term),
-    queryFn: ({ signal }) =>
-      fetchJson<AddressSuggestion[]>(
-        `/api/valuation/autocomplete?q=${encodeURIComponent(term)}`,
-        { signal },
-      ),
+    queryFn: () => autocompleteAddress(term, { cache: "no-store" }),
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
   });
@@ -34,13 +32,16 @@ export function useAddressAutocomplete(q: string) {
   });
 }
 
-/** `/api/valuation/lookup` URL for a chosen suggestion. */
+/**
+ * Stable key for tests / debugging. Lookup itself goes through
+ * `lookupSubject` → `/api/mls/valuation/lookup/`.
+ */
 export function valuationLookupUrl(suggestion: Pick<AddressSuggestion, "listingKey" | "label">) {
   const qs = new URLSearchParams({
     listing_key: suggestion.listingKey ?? "",
     address: suggestion.label,
   });
-  return `/api/valuation/lookup?${qs.toString()}`;
+  return `/api/mls/valuation/lookup?${qs.toString()}`;
 }
 
 /**
@@ -50,21 +51,21 @@ export function valuationLookupUrl(suggestion: Pick<AddressSuggestion, "listingK
  */
 export function useValuationLookup() {
   return useMutation({
-    mutationFn: (suggestion: AddressSuggestion) =>
-      fetchJson<ValuationSubject>(valuationLookupUrl(suggestion), {
-        fallback: "We couldn't find details for that address.",
-      }),
+    mutationFn: (suggestion: AddressSuggestion): Promise<ValuationSubject> =>
+      lookupSubject(
+        {
+          listingKey: suggestion.listingKey ?? undefined,
+          address: suggestion.label,
+        },
+        { cache: "no-store" },
+      ),
   });
 }
 
 /** Runs the comparable-sales model. Nothing cached depends on it. */
 export function useValuationEstimate() {
   return useMutation({
-    mutationFn: (input: EstimateInput) =>
-      fetchJson<ValuationResult>("/api/valuation/estimate", {
-        method: "POST",
-        body: input,
-        fallback: "We couldn't produce an estimate right now.",
-      }),
+    mutationFn: (input: EstimateInput): Promise<ValuationResult> =>
+      estimateValue(input, { cache: "no-store" }),
   });
 }

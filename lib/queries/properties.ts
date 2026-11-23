@@ -7,9 +7,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { PropertyDetail } from "@/lib/types/domain";
-import type { ListingsResult } from "@/lib/api/properties";
-import { fetchJson } from "@/lib/queries/fetcher";
+import {
+  compareProperties,
+  searchProperties,
+  type ListingsResult,
+} from "@/lib/api/properties";
+import { matchKnownCity } from "@/lib/constants/cities";
+import type { ListingQuery, PropertyDetail } from "@/lib/types/domain";
+import { parseListingSearch } from "@/lib/utils/searchParams";
 import { qk } from "@/lib/queries/keys";
 
 const LISTINGS_STALE_TIME = 3 * 60_000;
@@ -27,16 +32,27 @@ export function listingsSearchKey(search: string | URLSearchParams): string {
   return params.toString();
 }
 
-/** Shared options for prefetch / useQuery against `/api/properties/search`. */
+/** Same defaults as the listings page (For Sale when unset). */
+export function listingQueryFromSearch(params: URLSearchParams | string): ListingQuery {
+  const parsed = parseListingSearch(params);
+  const cityFromSearch =
+    !parsed.city && parsed.search ? matchKnownCity(parsed.search) : null;
+  const query = cityFromSearch
+    ? { ...parsed, city: cityFromSearch, search: undefined }
+    : parsed;
+  return query.status || query.openHouse ? query : { ...query, status: "Active" };
+}
+
+/**
+ * Shared options for prefetch / useQuery against mls-backend
+ * `GET /api/mls/properties/filter/` (via same-origin proxy).
+ */
 export function listingsSearchQuery(search: string | URLSearchParams) {
   const filters = listingsSearchKey(search);
   return queryOptions({
     queryKey: qk.properties.search(filters),
-    queryFn: ({ signal }) =>
-      fetchJson<ListingsResult>(
-        `/api/properties/search${filters ? `?${filters}` : ""}`,
-        { signal, fallback: "Could not load listings." },
-      ),
+    queryFn: () =>
+      searchProperties(listingQueryFromSearch(filters), { cache: "no-store" }),
     staleTime: LISTINGS_STALE_TIME,
     placeholderData: keepPreviousData,
   });
@@ -60,16 +76,8 @@ export function useListingsSearch(search: string | URLSearchParams, enabled = tr
  * dedupes/caches by key, so neither failure mode is expressible here.
  */
 
-async function fetchProperties(
-  ids: string[],
-  signal?: AbortSignal,
-): Promise<PropertyDetail[]> {
-  const params = new URLSearchParams();
-  ids.forEach((id) => params.append("ids", id));
-  return fetchJson<PropertyDetail[]>(`/api/properties/compare?${params.toString()}`, {
-    signal,
-    fallback: "Could not load listings.",
-  });
+async function fetchProperties(ids: string[]): Promise<PropertyDetail[]> {
+  return compareProperties(ids.slice(0, 50), { cache: "no-store" });
 }
 
 /** Cache key for one property, so a set query can seed and reuse single rows. */
@@ -98,8 +106,8 @@ export function usePropertiesByIds(ids: string[]) {
   return useQuery<PropertyDetail[]>({
     queryKey: qk.properties.byIds(ids),
     enabled: ids.length > 0,
-    queryFn: async ({ signal }): Promise<PropertyDetail[]> => {
-      const data = await fetchProperties(ids, signal);
+    queryFn: async (): Promise<PropertyDetail[]> => {
+      const data = await fetchProperties(ids);
       for (const property of data) {
         queryClient.setQueryData(propertyKey(property.id), property);
       }
@@ -140,8 +148,8 @@ export function usePropertyLookup(ids: string[]) {
   const results = useQueries({
     queries: ids.map((id) => ({
       queryKey: propertyKey(id),
-      queryFn: async ({ signal }: { signal?: AbortSignal }) => {
-        const [property] = await fetchProperties([id], signal);
+      queryFn: async () => {
+        const [property] = await fetchProperties([id]);
         if (!property) throw new Error("Listing unavailable.");
         return property;
       },
@@ -154,3 +162,5 @@ export function usePropertyLookup(ids: string[]) {
   });
   return byId;
 }
+
+export type { ListingsResult };

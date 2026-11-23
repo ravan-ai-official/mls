@@ -3,15 +3,19 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useUserKeys } from "@/components/providers/AuthProvider";
 import {
+  getRecentSales,
   normalizeRecentSalesPropertyType,
   type RecentSalesFilters,
   type RecentSalesPage,
 } from "@/lib/api/market";
-import { fetchJson } from "@/lib/queries/fetcher";
 
 export type { RecentSalesFilters };
 
-/** Recently sold homes. Disabled while signed out (the route would 401). */
+/**
+ * Recently sold homes. Disabled while signed out.
+ * Hits mls-backend `GET /api/mls/market/recent-sales/` via the same-origin
+ * proxy (session cookie attached server-side).
+ */
 export function useRecentSales(
   city: string,
   days: number,
@@ -39,25 +43,22 @@ export function useRecentSales(
         garagesMax,
         lotWidthMin,
       }) ?? ["me", "anonymous", "recent-sales"],
-    queryFn: ({ signal }) => {
-      const params = new URLSearchParams({
+    queryFn: () =>
+      getRecentSales("", {
         city,
-        days: String(days),
-        page: String(page),
-      });
-      if (propertyType) params.set("property_type", propertyType);
-      if (bedsMin != null) params.set("beds_min", String(bedsMin));
-      if (bathsMin != null) params.set("baths_min", String(bathsMin));
-      if (garagesMin != null) params.set("garages_min", String(garagesMin));
-      if (garagesMax != null) params.set("garages_max", String(garagesMax));
-      if (lotWidthMin != null) params.set("lot_width_min", String(lotWidthMin));
-      return fetchJson<RecentSalesPage>(`/api/market/recent-sales?${params}`, {
-        signal,
-        fallback: "Could not load recent sales.",
-      });
-    },
+        days,
+        page,
+        propertyType: propertyType || undefined,
+        bedsMin,
+        bathsMin,
+        garagesMin,
+        garagesMax,
+        lotWidthMin,
+      }),
     enabled: Boolean(keys && city),
     placeholderData: keepPreviousData,
     staleTime: 10 * 60_000,
   });
 }
+
+export type { RecentSalesPage };

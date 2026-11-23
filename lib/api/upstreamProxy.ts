@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { API_BASE_URL } from "@/lib/api/client";
+import { ACCESS_COOKIE } from "@/lib/auth/session";
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -19,6 +21,7 @@ const HOP_BY_HOP = new Set([
  * so DevTools Network shows the real JSON (not an RSC flight payload).
  *
  * `prefix` is the backend path prefix including leading slash, e.g. `/api/mls`.
+ * Upstream paths always use a trailing slash (Django/DRF).
  */
 export async function proxyUpstream(
   request: Request,
@@ -27,11 +30,10 @@ export async function proxyUpstream(
 ): Promise<Response> {
   const incoming = new URL(request.url);
   const targetPath = path.map(encodeURIComponent).join("/");
-  // Preserve a trailing slash when the browser request had one (DRF style).
-  const needsSlash =
-    incoming.pathname.endsWith("/") && (targetPath === "" || !targetPath.endsWith("/"));
-  const joined = targetPath ? `${prefix}/${targetPath}` : `${prefix}/`;
-  const upstream = `${API_BASE_URL}${joined}${needsSlash && targetPath ? "/" : ""}${incoming.search}`;
+  // DRF routes are registered with trailing slashes; always send one so the
+  // upstream never 301/308s and the browser never sees a redirect hop.
+  const joined = targetPath ? `${prefix}/${targetPath}/` : `${prefix}/`;
+  const upstream = `${API_BASE_URL}${joined}${incoming.search}`;
 
   const headers = new Headers();
   for (const name of ["accept", "authorization", "content-type", "x-forwarded-for", "user-agent"]) {
@@ -39,6 +41,16 @@ export async function proxyUpstream(
     if (value) headers.set(name, value);
   }
   if (!headers.has("accept")) headers.set("Accept", "application/json");
+
+  // Browser calls don't set Authorization; attach the httpOnly session cookie.
+  if (!headers.has("authorization")) {
+    try {
+      const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+    } catch {
+      // cookies() can throw outside a request context; ignore.
+    }
+  }
 
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
@@ -51,6 +63,8 @@ export async function proxyUpstream(
       headers,
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: "no-store",
+      // Follow any residual upstream redirects so the browser never sees 308.
+      redirect: "follow",
       signal: controller.signal,
     });
 

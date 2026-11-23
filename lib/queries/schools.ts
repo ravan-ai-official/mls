@@ -1,19 +1,18 @@
 "use client";
 
 import { keepPreviousData, queryOptions, useQuery } from "@tanstack/react-query";
-import type { SchoolSearchHit } from "@/lib/api/schools";
-import { SCHOOL_SEARCH_MIN_CHARS } from "@/lib/api/schools";
-import { fetchJson } from "@/lib/queries/fetcher";
+import {
+  SCHOOL_SEARCH_MIN_CHARS,
+  searchSchools,
+  type SchoolSearchHit,
+} from "@/lib/api/schools";
 import { qk } from "@/lib/queries/keys";
 
 export function schoolSearchQuery(q: string) {
   const term = q.trim();
   return queryOptions({
     queryKey: qk.schools.search(term),
-    queryFn: ({ signal }) =>
-      fetchJson<SchoolSearchHit[]>(`/api/schools/search?q=${encodeURIComponent(term)}`, {
-        signal,
-      }),
+    queryFn: () => searchSchools(term, { cache: "no-store" }),
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
   });
@@ -30,3 +29,5 @@ export function useSchoolSearch(q: string) {
     placeholderData: keepPreviousData,
   });
 }
+
+export type { SchoolSearchHit };

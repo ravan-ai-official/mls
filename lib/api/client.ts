@@ -20,19 +20,25 @@ const BROWSER_PROXY_PREFIXES = ["/api/mls/", "/api/home/", "/api/vlog/"] as cons
 
 /**
  * Browser: same-origin proxy for backend prefixes. Server (and other paths):
- * absolute `API_BASE_URL`. Next BFFs like `/api/properties/search` are not
- * reached via `apiFetch` — they use `fetchJson` directly.
+ * absolute `API_BASE_URL`.
+ *
+ * Next.js (`trailingSlash: false`) 308-redirects `/api/mls/foo/` → `/api/mls/foo`.
+ * Request without the trailing slash so DevTools shows one JSON response, not a
+ * Permanent Redirect. The proxy re-adds the slash for Django/DRF upstream.
  */
 function resolveApiUrl(path: string, query: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  const withQuery = `${normalized}${query}`;
-  if (
+  const isBrowserProxy =
     typeof window !== "undefined" &&
-    BROWSER_PROXY_PREFIXES.some((prefix) => normalized.startsWith(prefix) || normalized === prefix.slice(0, -1))
-  ) {
-    return withQuery;
+    BROWSER_PROXY_PREFIXES.some(
+      (prefix) => normalized.startsWith(prefix) || normalized === prefix.slice(0, -1),
+    );
+  if (isBrowserProxy) {
+    const noTrailing =
+      normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+    return `${noTrailing}${query}`;
   }
-  return `${API_BASE_URL}${withQuery}`;
+  return `${API_BASE_URL}${normalized}${query}`;
 }
 export class ApiError extends Error {
   readonly status: number;
