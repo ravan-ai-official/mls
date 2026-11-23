@@ -17,6 +17,12 @@ import {
 } from "@/components/map/MapSearch";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { salesStageLabel, type PreconProject, type PreconSalesStage } from "@/lib/api/preconstruction";
+import {
+  MAP_PIN_ACTIVE,
+  MAP_PIN_TEAL,
+  MAP_TILE_ATTRIBUTION,
+  MAP_TILE_URL,
+} from "@/lib/map/basemap";
 import { isPointInPolygon, type LatLngPoint } from "@/lib/map/polygon";
 import { useMapDrawing, type DrawMode } from "@/lib/map/useMapDrawing";
 import { useUserLocation } from "@/lib/map/useUserLocation";
@@ -37,15 +43,12 @@ function hasLocation(project: PreconProject): project is MappedProject {
 /** Only numbers and fixed text reach this HTML, never a project field. */
 function preconIcon(project: PreconProject, active: boolean) {
   const label = project.price ? formatPriceCompact(project.price) : "Pre-con";
+  const bg = active ? MAP_PIN_ACTIVE : MAP_PIN_TEAL;
   return L.divIcon({
     className: "",
-    html: `<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition-colors ${
-      active
-        ? "bg-[var(--color-gold)] border-[var(--color-gold)] text-[var(--color-ink)]"
-        : "bg-[var(--color-navy)] border-[var(--color-navy)] text-white"
-    }">${label}</span>`,
+    html: `<span style="background:${bg};border:2px solid #fff;border-radius:7px;min-width:58px;height:25px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:500;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.25);white-space:nowrap">${label}</span>`,
     iconSize: [0, 0],
-    iconAnchor: [26, 14],
+    iconAnchor: [29, 14],
   });
 }
 
@@ -124,10 +127,7 @@ export function PreconMapSearch({ projects }: { projects: PreconProject[] }) {
           zoomControl={false}
           className="h-full w-full"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
           <BoundsWatcher onChange={handleBounds} />
           <FitProjects projects={mapped} />
           <FlyTo target={flyTarget} />

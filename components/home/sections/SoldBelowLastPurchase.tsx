@@ -1,6 +1,6 @@
-import { SafeImage } from "@/components/ui/SafeImage";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import { SafeImage } from "@/components/ui/SafeImage";
 import { Section } from "@/components/ui/Section";
 import { getSoldBelowPurchase } from "@/lib/api/home";
 import type { SoldBelowRow } from "@/lib/api/homeMappers";
@@ -10,9 +10,11 @@ import { formatPrice } from "@/lib/utils/format";
 import { buildListingHref } from "@/lib/utils/searchParams";
 
 /**
- * Sold-below rail: live repeat sales that closed under the prior purchase.
- * Prefer visitor cities (search history / IP); hide the section when the feed
- * has nothing rather than showing sample cards.
+ * Sold-below rail from mls-backend `/api/home/sold-below-purchase/`.
+ *
+ * Never renders mock/demo cards. When the feed is empty (`empty`, `count` 0,
+ * or no complete rows) the whole section is omitted — no title, no skeleton
+ * left behind after load. Site Studio headings still apply when there is data.
  */
 export async function SoldBelowLastPurchase({ content }: { content?: Record<string, unknown> }) {
   const visitor = await getVisitorPersonalization();
@@ -57,11 +59,7 @@ function compactLoss(amount: number): string {
 
 function SoldCard({ row }: { row: SoldBelowRow }) {
   const pct = ((row.lossAmount / row.previousClosePrice) * 100).toFixed(1);
-  const href = buildListingHref({
-    city: row.city || undefined,
-    type: row.propertySubType || undefined,
-    status: "Sold",
-  });
+  const href = `/property/${encodeURIComponent(row.listingKey)}`;
   const bottomLine = `Sold ${compactLoss(row.lossAmount)} below previous purchase`;
 
   return (
@@ -70,17 +68,14 @@ function SoldCard({ row }: { row: SoldBelowRow }) {
       className="group overflow-hidden rounded-surface border border-line bg-surface transition-shadow hover:shadow-card-hover"
     >
       <div className="relative h-[180px] overflow-hidden bg-surface-alt">
-        {row.imageUrl ? (
-          <SafeImage
-            src={row.imageUrl}
-            alt={row.address}
-            fill
-            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-linear-to-br from-navy/20 to-navy/5" aria-hidden="true" />
-        )}
+        {/* Missing image_url → generic house placeholder; never invent listing data. */}
+        <SafeImage
+          src={row.imageUrl}
+          alt={row.address}
+          fill
+          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+        />
         <Badge tone="navy" className="absolute left-3 top-3 font-bold">
           {pct}% below last purchase
         </Badge>
@@ -98,7 +93,9 @@ function SoldCard({ row }: { row: SoldBelowRow }) {
           </Badge>
         </div>
         <p className="truncate text-small font-medium text-ink">{row.address}</p>
-        <p className="mt-0.5 text-caption text-ink-muted">{bottomLine}</p>
+        <p className="mt-0.5 text-caption text-ink-muted">
+          {row.city} · {bottomLine}
+        </p>
       </div>
     </Link>
   );

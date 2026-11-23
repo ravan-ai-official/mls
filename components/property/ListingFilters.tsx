@@ -40,9 +40,11 @@ import type { ListingQuery } from "@/lib/types/domain";
 import { formatNumber, formatPrice } from "@/lib/utils/format";
 import { formatPostal, looksLikePostal, parsePostalList } from "@/lib/utils/postal";
 import { matchKnownCity } from "@/lib/constants/cities";
+import { rememberLastSearch } from "@/lib/personalize/lastSearch";
 import { rememberPlace } from "@/lib/personalize/places";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { parseListingSearch } from "@/lib/utils/searchParams";
-import { STATUS_TABS } from "@/lib/utils/status";
+import { listingStatusTabs, STATUS_TABS } from "@/lib/utils/status";
 
 /** Filters drafted in the sheet and applied as one batch. */
 const PANEL_KEYS = [
@@ -164,6 +166,7 @@ function sameDraft(a: Draft, b: Draft) {
 export function ListingFilters({ resultCount }: { resultCount: number }) {
   const { navigate } = usePendingNavigation();
   const params = usePendingSearchParams();
+  const { user } = useAuth();
 
   const urlQuery = params.get("q") ?? "";
   const [search, setSearch] = useState(urlQuery);
@@ -201,6 +204,7 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
       else next.set(key, value);
     }
     next.delete("page");
+    rememberLastSearch(parseListingSearch(next));
     navigate(`/listings?${next.toString()}`);
   };
 
@@ -492,6 +496,7 @@ export function ListingFilters({ resultCount }: { resultCount: number }) {
               draft={draft}
               setDraft={setDraft}
               isRent={isRent}
+              isStaff={Boolean(user?.isStaff)}
               postalError={postalError}
               clearPostalError={() => setPostalError(null)}
             />
@@ -506,15 +511,18 @@ function FilterFields({
   draft,
   setDraft,
   isRent,
+  isStaff,
   postalError,
   clearPostalError,
 }: {
   draft: Draft;
   setDraft: Dispatch<SetStateAction<Draft>>;
   isRent: boolean;
+  isStaff: boolean;
   postalError: string | null;
   clearPostalError: () => void;
 }) {
+  const statusTabs = listingStatusTabs(isStaff);
   return (
     <div className="grid grid-cols-1 gap-4">
       <Field label={isRent ? "Min rent / month" : "Min price"} htmlFor="sheet-price-min">
@@ -820,7 +828,7 @@ function FilterFields({
           >
             All
           </ChipToggle>
-          {STATUS_TABS.map((tab) => (
+          {statusTabs.map((tab) => (
             <ChipToggle
               key={tab.param}
               active={draft.status.toLowerCase() === tab.param.toLowerCase()}

@@ -95,7 +95,7 @@ function HomeBlock({ section }: { section: SiteSection }) {
       );
     case "newPrecon":
       return (
-        <Live fallback={<RailFallback title="New preconstruction projects" />}>
+        <Live fallback={<RailFallback title="Pre-construction deals" />}>
           <NewPrecon content={content} />
         </Live>
       );
@@ -114,6 +114,8 @@ function HomeBlock({ section }: { section: SiteSection }) {
     case "marketDeals":
       return <GtaMarketDeals content={content} />;
     case "soldBelow":
+      // Skeleton only while loading; empty feed returns null (no mock cards,
+      // no leftover title/skeleton after the stream resolves).
       return (
         <Live fallback={<RailFallback title="Sold Below Last Purchase" />}>
           <SoldBelowLastPurchase content={content} />

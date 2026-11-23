@@ -117,21 +117,28 @@ describe("mapDeals / dealHref", () => {
 });
 
 describe("mapSoldBelow", () => {
-  it("maps rows and skips ones without prices", () => {
+  const valid = {
+    listing_key: "S1",
+    address: "9 Elm",
+    city: "Vaughan",
+    close_price: 1000000,
+    close_date: "2026-09-01",
+    previous_close_price: 1100000,
+    previous_close_date: "2021-04-01",
+    loss_amount: 100000,
+  };
+
+  it("maps complete rows and skips incomplete ones", () => {
     const rows = mapSoldBelow({
       results: [
-        {
-          listing_key: "S1",
-          address: "9 Elm",
-          city: "Vaughan",
-          close_price: 1000000,
-          close_date: "2026-09-01",
-          previous_close_price: 1100000,
-          previous_close_date: "2021-04-01",
-          loss_amount: 100000,
-        },
+        valid,
         { listing_key: "S2", close_price: null, previous_close_price: 5 },
+        { ...valid, listing_key: "S3", address: "" },
+        { ...valid, listing_key: "S4", loss_amount: 0 },
+        { ...valid, listing_key: "S5", previous_close_price: 900000 },
       ],
+      count: 5,
+      empty: false,
       computed_at: null,
     });
     expect(rows).toHaveLength(1);
@@ -141,6 +148,12 @@ describe("mapSoldBelow", () => {
       previousCloseDate: "2021-04-01",
       imageUrl: null,
     });
+  });
+
+  it("returns no rows when the envelope is empty", () => {
+    expect(mapSoldBelow({ results: [], count: 0, empty: true, source: "none" })).toEqual([]);
+    expect(mapSoldBelow({ results: [valid], count: 0, empty: false })).toEqual([]);
+    expect(mapSoldBelow({ empty: true, results: [valid], count: 1 })).toEqual([]);
   });
 });
 

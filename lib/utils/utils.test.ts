@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { EMPTY, formatPriceCompact, formatTorontoDateTime } from "./format";
 import { formatPhone, maskPhone, toE164 } from "./phone";
 import { formatPostal, looksLikePostal, normalizePostal, parsePostalList } from "./postal";
-import { backendStatusGroup, STATUS_TABS, statusGroup, statusParamForGroup } from "./status";
+import {
+  backendStatusGroup,
+  listingStatusTabs,
+  STATUS_TABS,
+  statusGroup,
+  statusParamForGroup,
+} from "./status";
 import { getVideoEmbed } from "./video";
 
 describe("toE164", () => {
@@ -77,6 +83,20 @@ describe("backendStatusGroup", () => {
     for (const tab of STATUS_TABS) {
       expect(backendStatusGroup(statusParamForGroup(tab.group))).toBe(tab.group);
     }
+  });
+});
+
+describe("listingStatusTabs", () => {
+  it("hides De-listed for non-staff and keeps it for staff", () => {
+    expect(listingStatusTabs(false).map((tab) => tab.group)).toEqual([
+      "active",
+      "sold",
+    ]);
+    expect(listingStatusTabs(true).map((tab) => tab.group)).toEqual([
+      "active",
+      "sold",
+      "de-listed",
+    ]);
   });
 });
 

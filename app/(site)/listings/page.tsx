@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { PropertyCard } from "@/components/property/PropertyCard";
 import { PropertyRow } from "@/components/property/PropertyRow";
@@ -10,10 +11,15 @@ import { StatusTabs, type StatusTabItem } from "@/components/search/StatusTabs";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState, ErrorState, PropertyGridSkeleton } from "@/components/ui/States";
 import { getPropertyFacets, searchProperties } from "@/lib/api/properties";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, type RequestOptions } from "@/lib/api/client";
+import { getCurrentUser, requireAccessToken } from "@/lib/auth/session";
 import { matchKnownCity } from "@/lib/constants/cities";
 import type { ListingQuery, PropertyFacets } from "@/lib/types/domain";
-import { backendStatusGroup, STATUS_TABS, statusGroup } from "@/lib/utils/status";
+import {
+  backendStatusGroup,
+  listingStatusTabs,
+  statusGroup,
+} from "@/lib/utils/status";
 import {
   PAGE_SIZE,
   buildListingHref,
@@ -33,6 +39,8 @@ export const metadata: Metadata = {
 export default async function ListingsPage({ searchParams }: PageProps<"/listings">) {
   // Next 16: searchParams is a Promise.
   const params = await searchParams;
+  // Non-staff must never land on ?status=De-listed (empty / useless tab).
+  await stripDelistedForPublic(params);
   const rent = parseListingParams(params).transaction === "rent";
 
   return (
@@ -71,6 +79,39 @@ export default async function ListingsPage({ searchParams }: PageProps<"/listing
 }
 
 /**
+ * mls-backend hides delisted from anyone without JWT + is_staff. Strip the
+ * URL so non-staff never sit on an empty De-listed state from a shared link.
+ */
+async function stripDelistedForPublic(
+  params: Record<string, string | string[] | undefined>,
+) {
+  const query = listingQuery(params);
+  if (backendStatusGroup(query.status) !== "de-listed") return;
+  const user = await getCurrentUser();
+  if (user?.isStaff) return;
+  redirect(
+    buildListingHref({
+      ...query,
+      status: undefined,
+      page: undefined,
+    }),
+  );
+}
+
+/** Staff JWT for mls-backend delisted visibility (`viewer_can_see_delisted`). */
+async function staffAuthOptions(): Promise<{
+  isStaff: boolean;
+  options: RequestOptions;
+}> {
+  const user = await getCurrentUser();
+  const isStaff = Boolean(user?.isStaff);
+  if (!isStaff) return { isStaff: false, options: {} };
+  const token = await requireAccessToken();
+  if (!token) return { isStaff: false, options: {} };
+  return { isStaff: true, options: { token, cache: "no-store" } };
+}
+
+/**
  * The page's query: the URL's, defaulting to For Sale. Buy, Rent and "Clear
  * filters" land on homes you can actually act on, and junk feed statuses stay
  * out unless a status is asked for by name.
@@ -98,15 +139,20 @@ async function FiltersSlot({
   params: Record<string, string | string[] | undefined>;
 }) {
   const query = listingQuery(params);
+  // Staff JWT unlocks real de-listed facet counts; public always gets 0.
+  const { isStaff, options: authOptions } = await staffAuthOptions();
 
   // Facets are scoped to everything EXCEPT status, so each tab shows how many
   // homes switching to it would return — a count that changed with the active
   // tab would be useless for deciding whether to click.
-  const facets = await getPropertyFacets({
-    ...query,
-    status: undefined,
-    openHouse: undefined,
-  });
+  const facets = await getPropertyFacets(
+    {
+      ...query,
+      status: undefined,
+      openHouse: undefined,
+    },
+    authOptions,
+  );
   const group = backendStatusGroup(query.status);
   const resultCount = query.openHouse
     ? (facets?.openHouse ?? 0)
@@ -119,7 +165,7 @@ async function FiltersSlot({
       <AiSearchNotice />
       <ListingFilters resultCount={resultCount} />
       <div className="mt-3 sm:mt-4">
-        <ListingStatusTabs facets={facets} query={query} />
+        <ListingStatusTabs facets={facets} query={query} isStaff={isStaff} />
       </div>
     </>
   );
@@ -134,8 +180,10 @@ function tabLabel(group: string, fallback: string, rent: boolean): string {
 }
 
 /**
- * Fixed status tabs — For Sale / Sold / De-listed / Open house (scope items 8
- * and 17, HouseSigma's search bar) — with faceted counts (API_GAPS G2).
+ * Fixed status tabs — For Sale / Sold / (staff) De-listed / Open house — with
+ * faceted counts (API_GAPS G2). De-listed is staff-only (mls-backend
+ * `viewer_can_see_delisted`); public never sees the tab or sends
+ * `status_group=de-listed`.
  *
  * The set is fixed rather than built from the feed's raw statuses, so a stray
  * value in the data ("Unknown", a test row) never becomes a tab. Counts come
@@ -150,15 +198,18 @@ function tabLabel(group: string, fallback: string, rent: boolean): string {
 function ListingStatusTabs({
   facets,
   query,
+  isStaff,
 }: {
   facets: PropertyFacets | null;
   query: ListingQuery;
+  isStaff: boolean;
 }) {
   const base = { ...query, status: undefined, openHouse: undefined, page: undefined };
   const rent = query.transaction === "rent";
+  const tabs = listingStatusTabs(isStaff);
 
   const items: StatusTabItem[] = [
-    ...STATUS_TABS.map((tab) => ({
+    ...tabs.map((tab) => ({
       id: tab.group,
       label: tabLabel(tab.group, tab.label, rent),
       count: facets?.statusGroup?.[tab.group] ?? null,
@@ -186,10 +237,15 @@ async function Results({
   const query = listingQuery(params);
   const page = currentPage(query);
   const view: ListingView = params.view === "list" ? "list" : "grid";
+  const group = backendStatusGroup(query.status);
+  const { isStaff, options: staffOptions } = await staffAuthOptions();
+  // Only staff may request de-listed, and only with a JWT on the filter call.
+  const authOptions =
+    isStaff && group === "de-listed" ? staffOptions : ({} as RequestOptions);
 
   let result;
   try {
-    result = await searchProperties(query);
+    result = await searchProperties(query, authOptions);
   } catch (error) {
     const message =
       error instanceof ApiError
@@ -203,7 +259,6 @@ async function Results({
     );
   }
 
-  const group = backendStatusGroup(query.status);
   if (result.items.length === 0 && (group === "sold" || group === "de-listed")) {
     const rent = query.transaction === "rent";
     const label = group === "de-listed" ? "de-listed" : rent ? "leased" : "sold";
@@ -234,7 +289,9 @@ async function Results({
         }
         description={
           activeEmpty
-            ? "Try Sold or De-listed above, or clear the search to browse the full catalogue."
+            ? isStaff
+              ? "Try Sold or De-listed above, or clear the search to browse the full catalogue."
+              : "Try Sold above, or clear the search to browse the full catalogue."
             : hasActiveFilters(query)
               ? "Try widening your price range or clearing a filter."
               : "There are no listings in the catalogue right now."

@@ -16,8 +16,10 @@ import {
 } from "@/lib/site/heroFilters";
 import { listOf } from "@/lib/site/read";
 import { matchKnownCity } from "@/lib/constants/cities";
+import { rememberLastSearch } from "@/lib/personalize/lastSearch";
 import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { looksLikePostal, parsePostalList } from "@/lib/utils/postal";
+import { parseListingSearch } from "@/lib/utils/searchParams";
 import { cn } from "@/lib/utils/cn";
 
 const DEFAULT_TRY_PROMPTS = [
@@ -212,9 +214,16 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
     return qs ? `/listings?${qs}` : "/listings";
   }
 
+  function rememberHeroSearch() {
+    rememberPlace(cityFromText(query));
+    const href = buildHref();
+    const qs = href.includes("?") ? href.slice(href.indexOf("?") + 1) : "";
+    if (qs) rememberLastSearch(parseListingSearch(qs));
+  }
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    rememberPlace(cityFromText(query));
+    rememberHeroSearch();
     router.push(buildHref());
   }
 
@@ -290,7 +299,7 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
           type="button"
           variant="secondary"
           onClick={() => {
-            rememberPlace(cityFromText(query));
+            rememberHeroSearch();
             router.push(buildHref());
           }}
           className="h-11 justify-between rounded-control px-3.5 text-small font-normal"

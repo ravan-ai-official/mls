@@ -11,6 +11,7 @@ import {
   type SchoolSearchHit,
 } from "@/lib/api/schools";
 import { saveAiSearchNotice, useAiSearch } from "@/lib/queries/aiSearch";
+import { rememberLastSearch } from "@/lib/personalize/lastSearch";
 import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { fetchJson, HttpError } from "@/lib/queries/fetcher";
 import type { ListingQuery } from "@/lib/types/domain";
@@ -131,6 +132,7 @@ export function AiSearchBox({
       fallback: notice.fallback,
     });
     rememberPlace(next.city ?? cityFromText(prompt));
+    rememberLastSearch(next);
     navigate(qs ? `${path}?${qs}` : path);
     onSearched?.();
   }

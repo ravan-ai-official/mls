@@ -52,7 +52,8 @@ function matchesLevel(school: OfficialSchool, filter: LevelFilter): boolean {
  */
 export function SchoolsDirectory({ initialSchools }: { initialSchools: OfficialSchool[] }) {
   const [query, setQuery] = useState("");
-  const [level, setLevel] = useState<LevelFilter>("all");
+  // Top list from /schools/top/ is secondary-only; keep that as the default filter.
+  const [level, setLevel] = useState<LevelFilter>("secondary");
   const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_SCHOOL_RADIUS_KM);
   const debounced = useDebouncedValue(query, 300);
   const search = useSchoolSearch(debounced);

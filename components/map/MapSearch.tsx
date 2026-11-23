@@ -17,6 +17,13 @@ import {
 } from "@/components/map/MapListingCard";
 import { cn } from "@/lib/utils/cn";
 import {
+  MAP_CLUSTER_ORANGE,
+  MAP_PIN_ACTIVE,
+  MAP_PIN_TEAL,
+  MAP_TILE_ATTRIBUTION,
+  MAP_TILE_URL,
+} from "@/lib/map/basemap";
+import {
   getBoundingBoxFromPoints,
   serializePolygonParam,
   type LatLngPoint,
@@ -39,6 +46,7 @@ import {
   type SchoolSearchHit,
 } from "@/lib/api/schools";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { rememberLastSearch } from "@/lib/personalize/lastSearch";
 import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { PLACE_SEARCH_MIN_CHARS, usePlaceSearch } from "@/lib/queries/geo";
 import { useSchoolSearch } from "@/lib/queries/schools";
@@ -56,33 +64,27 @@ const DEFAULT_CENTER: [number, number] = [43.6532, -79.3832];
 const DEFAULT_ZOOM = 11;
 
 /**
- * Price-label marker.
- *
- * A divIcon keeps the label in the DOM, so it inherits our type styles and is
- * readable by assistive tech, unlike a rendered-image pin.
+ * Price pin — HouseSigma shape: teal rounded pill, white stroke; orange when
+ * selected. Label stays in the DOM for assistive tech.
  */
 function priceIcon(property: PropertySummary, active: boolean) {
   const label = property.price === null ? EMPTY : formatPriceCompact(property.price);
+  const bg = active ? MAP_PIN_ACTIVE : MAP_PIN_TEAL;
   return L.divIcon({
     className: "",
-    html: `<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition-colors ${
-      active
-        ? "bg-[var(--color-gold)] border-[var(--color-gold)] text-[var(--color-ink)]"
-        : "bg-white border-[var(--color-line)] text-[var(--color-ink)]"
-    }">${label}</span>`,
+    html: `<span style="background:${bg};border:2px solid #fff;border-radius:7px;min-width:58px;height:25px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:500;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.25);white-space:nowrap">${label}</span>`,
     iconSize: [0, 0],
-    iconAnchor: [26, 14],
+    iconAnchor: [29, 14],
   });
 }
 
-/** Cluster bubble sized by listing count, for low/mid zoom levels. */
+/** Cluster bubble — HouseSigma orange (#ff5f05), white stroke, count in white. */
 function clusterIcon(count: number) {
-  const size = count > 500 ? 56 : count > 100 ? 48 : count > 25 ? 42 : 36;
+  const size = count > 500 ? 52 : count > 100 ? 44 : count > 25 ? 38 : 35;
+  const label = count > 999 ? `${Math.round(count / 1000)}k` : String(count);
   return L.divIcon({
     className: "",
-    html: `<span style="width:${size}px;height:${size}px" class="flex items-center justify-center rounded-full bg-[var(--color-navy)] text-white text-[11px] font-semibold shadow-md ring-4 ring-[var(--color-navy)]/20">${
-      count > 999 ? `${Math.round(count / 1000)}k` : count
-    }</span>`,
+    html: `<span style="width:${size}px;height:${size}px;background:${MAP_CLUSTER_ORANGE};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:${size >= 44 ? 15 : 13}px;font-weight:500;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.2)">${label}</span>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -245,6 +247,7 @@ export function MapSearch() {
   /** Writes the query to the URL without a server round-trip. */
   const pushQuery = useCallback((next: ListingQuery) => {
     const qs = buildListingQueryString({ ...next, view: undefined, page: undefined });
+    rememberLastSearch(next);
     // Next 16 syncs native pushState with useSearchParams, and it gives the
     // back button a step per drawn area.
     window.history.pushState(null, "", qs ? `/map-search?${qs}` : "/map-search");
@@ -448,10 +451,7 @@ export function MapSearch() {
           zoomControl={false}
           className="h-full w-full"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
           <BoundsWatcher onChange={handleBounds} />
           <FlyTo target={flyTarget} zoom={flyZoom} />
           {userLocation.position && (

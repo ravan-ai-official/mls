@@ -28,7 +28,7 @@ export function TopRatedSchools({
         eyebrow={eyebrow}
         title={title}
         description={LIVE_DESCRIPTION}
-        action={{ label: "View all schools", href: "/schools" }}
+        action={{ label: "View all", href: "/schools" }}
       >
         <p className="text-small text-ink-muted">
           The public homepage loads these results from the Ministry of Education. Sample ratings are not shown.
@@ -43,7 +43,7 @@ export function TopRatedSchools({
       eyebrow={eyebrow}
       title={title}
       description={LIVE_DESCRIPTION}
-      action={{ label: "View all schools", href: "/schools" }}
+      action={{ label: "View all", href: "/schools" }}
     >
       {schools.length === 0 ? (
         <p className="text-small text-ink-muted">EQAO results are unavailable right now.</p>
@@ -106,7 +106,7 @@ export function TopRatedSchools({
               href="/schools"
               className="inline-flex h-10 shrink-0 items-center justify-center rounded-control bg-navy px-4 text-small font-semibold text-white transition-colors hover:bg-navy/90"
             >
-              View all schools
+              View all
             </Link>
           </div>
         </>

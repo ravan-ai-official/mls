@@ -377,25 +377,55 @@ export async function getNewlyListed(
 }
 
 /**
- * Home "Featured" rail: admin pins first, then listings in preferred cities
- * (search history / IP), then exclusive fill. `pinnedCount` is admin-only.
+ * Home "Featured" rail (mls-backend FeaturedPropertiesAPIView).
+ *
+ * Pass last-search filter params only when the visitor has real search history
+ * — the backend treats those as “has history” (featured_source=history) and
+ * skips curated fill. Omit them (still forward IP headers) so IP-local +
+ * curated defaults can run. Never invent cities. Rentals are excluded server-side.
+ * Default limit is 12.
  */
 export async function getFeaturedProperties(
-  limit = 6,
-  options: RequestOptions & { cities?: string[] } = {},
-): Promise<{ listings: PropertySummary[]; pinnedCount: number; localCount: number }> {
-  const { cities, ...rest } = options;
+  limit = 12,
+  options: RequestOptions & {
+    /** @deprecated Prefer `historyParams` — kept for city-only callers. */
+    cities?: string[];
+    /** Last-search filters (city, price_min, beds_min, …). Empty → no history. */
+    historyParams?: Record<string, string | number | undefined>;
+  } = {},
+): Promise<{
+  listings: PropertySummary[];
+  pinnedCount: number;
+  localCount: number;
+  historyCount: number;
+  curatedCount: number;
+  hasSearchHistory: boolean;
+}> {
+  const { cities, historyParams, ...rest } = options;
+  const history = { ...(historyParams ?? {}) };
+  // Legacy city-only callers → cities= so backend still detects history.
+  if (!history.city && !history.cities && cities?.length) {
+    history.cities = cities.join(",");
+  }
+  const hasHistoryParams = Object.values(history).some(
+    (value) => value !== undefined && value !== null && String(value).trim() !== "",
+  );
+
   const data = await apiFetch<
-    BackendListResponse<BackendPropertySummary> & {
+    BackendListResponse<BackendPropertySummary & { featured_source?: string }> & {
       pinned_count?: number;
       local_count?: number;
+      history_count?: number;
+      curated_count?: number;
+      has_search_history?: boolean;
     }
   >(`${MLS}/properties/featured-properties/`, {
-    revalidate: cities?.length ? 60 : 300,
+    revalidate: hasHistoryParams ? 60 : 300,
     ...rest,
     params: {
       limit,
-      cities: cities?.length ? cities.join(",") : undefined,
+      // Never send IP city as cities= — only real search history.
+      ...(hasHistoryParams ? history : {}),
       ...rest.params,
     },
   });
@@ -403,6 +433,9 @@ export async function getFeaturedProperties(
     listings: (data.results ?? []).map(mapPropertySummary),
     pinnedCount: data.pinned_count ?? 0,
     localCount: data.local_count ?? 0,
+    historyCount: data.history_count ?? 0,
+    curatedCount: data.curated_count ?? 0,
+    hasSearchHistory: Boolean(data.has_search_history) || hasHistoryParams,
   };
 }
 

@@ -217,34 +217,67 @@ export interface SoldBelowRow {
   bedrooms: number | null;
   bathrooms: number | null;
   closePrice: number;
-  closeDate: string | null;
+  closeDate: string;
   previousClosePrice: number;
-  previousCloseDate: string | null;
+  previousCloseDate: string;
   lossAmount: number;
   imageUrl: string | null;
 }
 
+/**
+ * Maps mls-backend `/api/home/sold-below-purchase/`. Drops incomplete rows so
+ * the homepage never invents addresses/prices — mirrors `_is_complete_sold_below_row`.
+ */
 export function mapSoldBelow(payload: unknown): SoldBelowRow[] {
+  if (!payload || typeof payload !== "object") return [];
+  const envelope = payload as {
+    empty?: unknown;
+    count?: unknown;
+    results?: unknown;
+  };
+  // Explicit empty envelope → hide the section; never fall back to mocks.
+  if (envelope.empty === true) return [];
+  const count = toNumber(envelope.count);
+  if (count === 0) return [];
+
   return results(payload).flatMap((raw): SoldBelowRow[] => {
     const r = record(raw);
+    const listingKey = str(r.listing_key);
+    const address = str(r.address);
+    const city = str(r.city);
+    const closeDate = str(r.close_date);
+    const previousCloseDate = str(r.previous_close_date);
     const closePrice = toNumber(r.close_price);
     const previousClosePrice = toNumber(r.previous_close_price);
-    if (!closePrice || !previousClosePrice) return [];
+    const lossAmount = toNumber(r.loss_amount);
+    if (
+      !listingKey ||
+      !address ||
+      !city ||
+      !closeDate ||
+      !previousCloseDate ||
+      closePrice === null ||
+      previousClosePrice === null ||
+      lossAmount === null ||
+      closePrice <= 0 ||
+      previousClosePrice <= closePrice ||
+      lossAmount <= 0
+    ) {
+      return [];
+    }
     return [
       {
-        listingKey:
-          str(r.listing_key) ??
-          `${str(r.address) ?? ""}-${str(r.close_date) ?? ""}`,
-        address: str(r.address) ?? "",
-        city: str(r.city) ?? "",
+        listingKey,
+        address,
+        city,
         propertySubType: str(r.property_sub_type),
         bedrooms: int(r.bedrooms),
         bathrooms: int(r.bathrooms),
         closePrice,
-        closeDate: str(r.close_date),
+        closeDate,
         previousClosePrice,
-        previousCloseDate: str(r.previous_close_date),
-        lossAmount: toNumber(r.loss_amount) ?? previousClosePrice - closePrice,
+        previousCloseDate,
+        lossAmount,
         imageUrl: safeUrl(r.image_url),
       },
     ];

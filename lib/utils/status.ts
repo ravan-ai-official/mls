@@ -1,8 +1,8 @@
 /**
  * Listing status groups.
  *
- * Mirrors mls-v2's `status_group` filter (mls/services/query_helpers.py) so the
- * Watched sub-tabs group a saved home the same way the search endpoint would.
+ * Mirrors mls-backend's `status_group` filter (mls/services/query_helpers.py)
+ * so the Watched sub-tabs group a saved home the same way search would.
  * Feeds disagree on vocabulary — DDF says "Active", TRREB says "Sold"/"Closed",
  * de-listings arrive as any of several words — hence the lookup rather than an
  * equality check.
@@ -54,6 +54,16 @@ export const STATUS_TABS: ReadonlyArray<{
   { group: "sold", param: "Sold", label: STATUS_GROUP_LABELS.sold },
   { group: "de-listed", param: "De-listed", label: STATUS_GROUP_LABELS.delisted },
 ];
+
+/**
+ * De-listed is staff-only on the public listings page (mls-backend
+ * `viewer_can_see_delisted`). Prefer `is_staff` — `can_author` /
+ * `can_use_studio` are not enough for this feed gate.
+ */
+export function listingStatusTabs(isStaff: boolean): typeof STATUS_TABS {
+  if (isStaff) return STATUS_TABS;
+  return STATUS_TABS.filter((tab) => tab.group !== "de-listed");
+}
 
 /**
  * A `?status=` value → the backend group it selects, or null for anything

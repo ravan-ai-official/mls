@@ -1,14 +1,8 @@
 /**
- * Inline section data from HomeAtlasUI/src/pages/HomePage.tsx, ported verbatim.
+ * Inline section data from HomeAtlasUI/src/pages/HomePage.tsx, ported where a
+ * live feed does not yet own the rail (e.g. keyword deal cards, incentives).
  *
- * REFERENCE SAMPLE DATA, PENDING BACKEND. Deals counts,
- * sold-below-purchase prices, school ratings, incentive amounts and the market
- * snapshot have no endpoint yet (see docs/HOMEPAGE_BACKEND_REQUIREMENTS.xlsx).
- * Per the product decision they render as the reference shows them until those
- * endpoints exist, and the sections carry an "illustration" caption wherever a
- * figure could be read as advice. Property ids point into
- * lib/home/sampleData.ts `properties`; they are not MLS® listings, so cards
- * link to a matching search, never to /property/<id>.
+ * Sold-below is live via mls-backend and must never use sample cards here.
  */
 
 /* GTA MARKET DEALS (reference L548-588) */
@@ -64,20 +58,6 @@ export const marketDeals: MarketDeal[] = [
     count: "189 sold",
     href: "/listings?status=Sold",
   },
-];
-
-/* SOLD BELOW LAST PURCHASE (reference L627-630) */
-
-export interface SoldBelowPick {
-  id: string;
-  prevPrice: number;
-  desc: string;
-}
-
-export const soldBelowPicks: SoldBelowPick[] = [
-  { id: "s3", prevPrice: 1410000, desc: "Sold $70K below previous purchase" },
-  { id: "s7", prevPrice: 1390000, desc: "Sold $95K below previous purchase" },
-  { id: "s8", prevPrice: 1100000, desc: "Sold $75K below previous purchase" },
 ];
 
 /* BUYER'S INCENTIVES (reference L717-723) */

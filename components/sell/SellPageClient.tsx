@@ -1,23 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { SafeImage } from "@/components/ui/SafeImage";
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { MARKET_CITIES, type RecentSale } from "@/lib/api/market";
-import { properties as sampleProperties, formatFullPrice } from "@/lib/home/sampleData";
+import {
+  MARKET_CITIES,
+  RECENT_SALES_PROPERTY_TYPES,
+  type RecentSale,
+} from "@/lib/api/market";
 import { useSubmitInquiry } from "@/lib/queries/inquiries";
 import { useRecentSales } from "@/lib/queries/market";
 import { formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
 import { propertyPath } from "@/lib/seo/urls";
 import { cn } from "@/lib/utils/cn";
 
-const SAMPLE_SOLD = sampleProperties.filter((p) => p.status === "sold").slice(0, 6);
+/** Prefer the listing detail page; fall back to a sold search so cards stay clickable. */
+function soldCardHref(sale: RecentSale): string {
+  if (sale.listingKey) return propertyPath(sale.listingKey);
+  const params = new URLSearchParams({ status: "Sold" });
+  if (sale.address) params.set("q", sale.address);
+  else if (sale.city) params.set("city", sale.city);
+  return `/listings?${params}`;
+}
 
 function minBedsOrBaths(raw: string): number | undefined {
   const cleaned = raw.replace("+", "").trim();
   if (!cleaned) return undefined;
   const parsed = Number.parseInt(cleaned, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+/** Sell-form garage select → mls-backend garages_min / garages_max. */
+function garageFilters(raw: string): { garagesMin?: number; garagesMax?: number } {
+  const value = raw.trim().toLowerCase();
+  if (!value) return {};
+  if (value === "none") return { garagesMax: 0 };
+  const match = value.match(/(\d+)/);
+  if (!match) return {};
+  const spaces = Number.parseInt(match[1], 10);
+  return Number.isFinite(spaces) && spaces > 0 ? { garagesMin: spaces } : {};
+}
+
+function lotWidthMin(raw: string): number | undefined {
+  const parsed = Number.parseFloat(raw.trim());
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
@@ -35,13 +60,6 @@ function cityFromAddress(address: string): string {
   const lower = address.toLowerCase();
   const hit = MARKET_CITIES.find((city) => lower.includes(city.toLowerCase()));
   return hit ?? "Toronto";
-}
-
-function soldOverAsk(sold: number, list: number): string {
-  const pct = ((sold - list) / list) * 100;
-  if (pct > 0) return `+${pct.toFixed(1)}% over ask`;
-  if (pct < 0) return `${pct.toFixed(1)}% under ask`;
-  return "At asking";
 }
 
 function IconChevronRight() {
@@ -74,66 +92,15 @@ function ServiceCard({ icon, title, description }: { icon: ReactNode; title: str
   );
 }
 
-function SampleSoldCard({ property }: { property: (typeof SAMPLE_SOLD)[number] }) {
-  const ratio =
-    property.soldPrice && property.price
-      ? ((property.soldPrice - property.price) / property.price) * 100
-      : 0;
-  const isOverAsk = ratio >= 0;
-  return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-      <div className="relative h-44 overflow-hidden">
-        <SafeImage src={property.image} alt={property.address} fill className="object-cover" sizes="(max-width:768px) 100vw, 33vw" />
-        {property.soldDate ? (
-          <span className="absolute left-3 top-3 rounded bg-navy px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-            Sold {formatDate(property.soldDate)}
-          </span>
-        ) : null}
-        {property.soldPrice && property.price ? (
-          <span
-            className={cn(
-              "absolute right-3 top-3 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white",
-              isOverAsk ? "bg-gold" : "bg-ink-soft",
-            )}
-          >
-            {soldOverAsk(property.soldPrice, property.price)}
-          </span>
-        ) : null}
-      </div>
-      <div className="p-4">
-        <p className="text-small font-semibold leading-tight text-ink">{property.address}</p>
-        <p className="mb-3 text-caption text-ink-muted">
-          {property.neighbourhood}, {property.community}
-        </p>
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="mb-0.5 text-[10px] uppercase tracking-wide text-ink-subtle">Sold price</p>
-            <p className="text-body font-bold text-navy">
-              {property.soldPrice ? formatFullPrice(property.soldPrice) : "—"}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="mb-0.5 text-[10px] uppercase tracking-wide text-ink-subtle">Listed</p>
-            <p className="text-small text-ink-muted line-through">{formatFullPrice(property.price)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 border-t border-line pt-3 text-caption text-ink-muted">
-          <span>{property.beds} bd</span>
-          <span>{property.baths} ba</span>
-          <span>{property.sqft.toLocaleString("en-CA")} sqft</span>
-          <span className="ml-auto text-[10px] text-ink-subtle">{property.type}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function LiveSoldCard({ sale }: { sale: RecentSale }) {
   const over = sale.overUnderAskingPct;
   const isOverAsk = over === null || over >= 0;
-  const href = sale.listingKey ? propertyPath(sale.listingKey) : null;
-  const body = (
-    <>
+
+  return (
+    <Link
+      href={soldCardHref(sale)}
+      className="group block overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy"
+    >
       <div className="mb-3 flex items-start justify-between gap-2">
         {sale.closeDate ? (
           <span className="rounded bg-navy px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -149,11 +116,17 @@ function LiveSoldCard({ sale }: { sale: RecentSale }) {
               isOverAsk ? "bg-gold" : "bg-ink-soft",
             )}
           >
-            {over > 0 ? `+${over.toFixed(1)}% over ask` : over < 0 ? `${over.toFixed(1)}% under ask` : "At asking"}
+            {over > 0
+              ? `+${over.toFixed(1)}% over ask`
+              : over < 0
+                ? `${over.toFixed(1)}% under ask`
+                : "At asking"}
           </span>
         ) : null}
       </div>
-      <p className="text-small font-semibold leading-tight text-ink group-hover:text-navy">{sale.address}</p>
+      <p className="text-small font-semibold leading-tight text-ink group-hover:text-navy">
+        {sale.address}
+      </p>
       <p className="mb-3 text-caption text-ink-muted">{sale.city}</p>
       <div className="mb-3 flex items-center justify-between">
         <div>
@@ -173,18 +146,6 @@ function LiveSoldCard({ sale }: { sale: RecentSale }) {
         {sale.daysOnMarket !== null ? <span>{formatNumber(sale.daysOnMarket)} DOM</span> : null}
         <span className="ml-auto text-[10px] text-ink-subtle">{sale.propertyType ?? ""}</span>
       </div>
-    </>
-  );
-
-  const className =
-    "group block overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy";
-
-  if (!href) {
-    return <div className={className}>{body}</div>;
-  }
-  return (
-    <Link href={href} className={className}>
-      {body}
     </Link>
   );
 }
@@ -200,7 +161,6 @@ export function SellPageClient() {
   const [garage, setGarage] = useState("");
   const [lotWidth, setLotWidth] = useState("");
   const [compsVisible, setCompsVisible] = useState(false);
-  const [soldUnlocked, setSoldUnlocked] = useState(false);
 
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
@@ -240,15 +200,14 @@ export function SellPageClient() {
       propertyType: propertyType || undefined,
       bedsMin: minBedsOrBaths(beds),
       bathsMin: minBedsOrBaths(baths),
+      ...garageFilters(garage),
+      lotWidthMin: lotWidthMin(lotWidth),
     }),
-    [propertyType, beds, baths],
+    [propertyType, beds, baths, garage, lotWidth],
   );
+  // Query key includes type / beds / baths so changing hero filters refetches.
   const salesQuery = useRecentSales(compsCity, 90, 1, compsFilters);
   const liveSales = (salesQuery.data?.results ?? []).slice(0, 6);
-
-  useEffect(() => {
-    if (user) setSoldUnlocked(true);
-  }, [user]);
 
   function handleSeeComps() {
     setCompsVisible(true);
@@ -359,7 +318,7 @@ export function SellPageClient() {
     }
   }
 
-  const showLiveComps = compsVisible && Boolean(user) && soldUnlocked;
+  const showLiveComps = compsVisible && Boolean(user);
   const showAuthGate = compsVisible && !user;
 
   return (
@@ -393,6 +352,9 @@ export function SellPageClient() {
 
           <div className="rounded-2xl bg-surface p-6 text-left shadow-xl md:p-8">
             <h2 className="mb-5 text-body font-bold text-ink">Enter Your Property Details</h2>
+            <p className="mb-4 text-caption text-ink-muted">
+              Type, beds, baths, garage and lot width all refine the sold comps below (after you sign in).
+            </p>
             <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <label className={labelClass}>Property Address</label>
@@ -409,11 +371,11 @@ export function SellPageClient() {
                 <div className="relative">
                   <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} className={selectClass}>
                     <option value="">Select type</option>
-                    <option>Detached</option>
-                    <option>Semi-Detached</option>
-                    <option>Townhome</option>
-                    <option>Condo</option>
-                    <option>Luxury</option>
+                    {RECENT_SALES_PROPERTY_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
                   </select>
                   <SelectChevron />
                 </div>
@@ -450,11 +412,11 @@ export function SellPageClient() {
                 <label className={labelClass}>Garage</label>
                 <div className="relative">
                   <select value={garage} onChange={(e) => setGarage(e.target.value)} className={selectClass}>
-                    <option value="">Select</option>
-                    <option>None</option>
-                    <option>1-car</option>
-                    <option>2-car</option>
-                    <option>3-car</option>
+                    <option value="">Any</option>
+                    <option value="None">None</option>
+                    <option value="1-car">1-car</option>
+                    <option value="2-car">2-car</option>
+                    <option value="3-car">3-car</option>
                   </select>
                   <SelectChevron />
                 </div>
@@ -463,6 +425,7 @@ export function SellPageClient() {
                 <label className={labelClass}>Lot Width (ft)</label>
                 <input
                   type="text"
+                  inputMode="decimal"
                   placeholder="e.g. 40"
                   value={lotWidth}
                   onChange={(e) => setLotWidth(e.target.value)}
@@ -570,15 +533,32 @@ export function SellPageClient() {
                 </p>
               </div>
             ) : showLiveComps ? (
-              salesQuery.isPending ? (
+              salesQuery.isPending && !salesQuery.data ? (
                 <p className="text-small text-ink-muted">Loading sold comparables for {compsCity}…</p>
+              ) : salesQuery.isError ? (
+                <div className="rounded-2xl border border-line bg-surface p-10 text-center shadow-card">
+                  <p className="text-small text-ink-muted">
+                    {salesQuery.error.message || "Sold data is temporarily unavailable."}{" "}
+                    <button
+                      type="button"
+                      className="font-semibold text-navy underline"
+                      onClick={() => void salesQuery.refetch()}
+                    >
+                      Try again
+                    </button>
+                  </p>
+                </div>
               ) : liveSales.length === 0 ? (
                 <div className="rounded-2xl border border-line bg-surface p-10 text-center shadow-card">
                   <p className="text-small text-ink-muted">
                     No closed sales found for {compsCity}
-                    {propertyType ? ` · ${propertyType}` : ""}
+                    {propertyType
+                      ? ` · ${RECENT_SALES_PROPERTY_TYPES.find((t) => t.value === propertyType)?.label ?? propertyType}`
+                      : ""}
                     {beds ? ` · ${beds}+ beds` : ""}
-                    {baths ? ` · ${baths}+ baths` : ""} in the last 90 days. Widen a filter, try a nearby
+                    {baths ? ` · ${baths}+ baths` : ""}
+                    {garage ? ` · ${garage}` : ""}
+                    {lotWidth ? ` · ${lotWidth}+ ft lot` : ""} in the last 90 days. Widen a filter, try a nearby
                     city, or{" "}
                     <Link href="/recently-sold" className="font-semibold text-navy underline">
                       browse recently sold
@@ -587,45 +567,48 @@ export function SellPageClient() {
                   </p>
                 </div>
               ) : (
-                <div
-                  className={cn(
-                    "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3",
-                    salesQuery.isPlaceholderData && "opacity-60 transition-opacity",
-                  )}
-                >
-                  {liveSales.map((sale) => (
-                    <LiveSoldCard key={sale.listingKey} sale={sale} />
-                  ))}
+                <div className="space-y-3">
+                  {salesQuery.isFetching ? (
+                    <p className="text-caption text-ink-muted" aria-live="polite">
+                      Updating sold comps for your filters…
+                    </p>
+                  ) : null}
+                  <div
+                    className={cn(
+                      "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3",
+                      salesQuery.isPlaceholderData && "opacity-60 transition-opacity",
+                    )}
+                  >
+                    {liveSales.map((sale) => (
+                      <LiveSoldCard
+                        key={sale.listingKey || `${sale.address}-${sale.closeDate}`}
+                        sale={sale}
+                      />
+                    ))}
+                  </div>
                 </div>
               )
             ) : showAuthGate ? (
-              <div className="relative">
-                <div className="pointer-events-none grid select-none grid-cols-1 gap-5 opacity-50 blur-sm md:grid-cols-2 lg:grid-cols-3">
-                  {SAMPLE_SOLD.map((prop) => (
-                    <SampleSoldCard key={prop.id} property={prop} />
-                  ))}
+              <div className="rounded-2xl border border-gold/30 bg-surface px-8 py-12 text-center shadow-card">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-soft">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" stroke="#c7a45a" strokeWidth="1.75" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke="#c7a45a" strokeWidth="1.75" strokeLinecap="round" />
+                  </svg>
                 </div>
-                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-surface/70 backdrop-blur-sm">
-                  <div className="max-w-sm rounded-2xl border border-gold/30 bg-surface px-8 py-8 text-center shadow-xl">
-                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-soft">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3" y="11" width="18" height="11" rx="2" stroke="#c7a45a" strokeWidth="1.75" />
-                        <path d="M7 11V7a5 5 0 0110 0v4" stroke="#c7a45a" strokeWidth="1.75" strokeLinecap="round" />
-                      </svg>
-                    </div>
-                    <h3 className="mb-1 text-body font-bold text-ink">Sign In to View Sold Data</h3>
-                    <p className="mb-5 text-small leading-relaxed text-ink-muted">
-                      Past sale prices are available to registered HomeAtlas members.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => openAuth("signup")}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-navy py-3 text-small font-bold text-white transition hover:bg-navy-deep"
-                    >
-                      Sign In / Register — Free
-                    </button>
-                  </div>
-                </div>
+                <h3 className="mb-1 text-body font-bold text-ink">Sign in to view sold comps</h3>
+                <p className="mx-auto mb-5 max-w-md text-small leading-relaxed text-ink-muted">
+                  MLS® rules require a free HomeAtlas account before sold prices can be shown. After
+                  you sign in, your type, beds, baths, garage and lot filters apply to live closed
+                  sales in {compsCity}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openAuth("signup")}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-navy px-6 py-3 text-small font-bold text-white transition hover:bg-navy-deep"
+                >
+                  Sign In / Register — Free
+                </button>
               </div>
             ) : null}
           </section>

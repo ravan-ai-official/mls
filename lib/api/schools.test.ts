@@ -3,6 +3,7 @@ import {
   extractSchoolQuery,
   homesNearSchoolHref,
   schoolSearchArea,
+  schoolSearchHistoryCities,
 } from "@/lib/api/schools";
 
 describe("schoolSearchArea", () => {
@@ -33,5 +34,19 @@ describe("extractSchoolQuery", () => {
 
   it("returns null when no school is named", () => {
     expect(extractSchoolQuery("condo near subway in Toronto")).toBeNull();
+  });
+});
+
+describe("schoolSearchHistoryCities", () => {
+  it("prefers last-search city and dedupes places history", () => {
+    expect(schoolSearchHistoryCities(["Mississauga", "Oakville"], "Oakville")).toEqual([
+      "Oakville",
+      "Mississauga",
+    ]);
+  });
+
+  it("returns empty when there is no search history (IP must not fill this)", () => {
+    expect(schoolSearchHistoryCities([])).toEqual([]);
+    expect(schoolSearchHistoryCities([], null)).toEqual([]);
   });
 });

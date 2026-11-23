@@ -6,8 +6,11 @@ import { VipAccessForm } from "@/components/precon/VipAccessForm";
 import { Eyebrow } from "@/components/ui/Badge";
 import { EmptyState, Skeleton } from "@/components/ui/States";
 import { safeFetch } from "@/lib/api/client";
-import { COMMUNITY_CITIES } from "@/lib/constants/cities";
-import { getPreconProjects, type PreconProject } from "@/lib/api/preconstruction";
+import {
+  getPreconProjects,
+  type PreconDealsQuery,
+  type PreconProject,
+} from "@/lib/api/preconstruction";
 
 export const metadata: Metadata = {
   title: "Preconstruction projects",
@@ -24,16 +27,50 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function intParam(value: string | string[] | undefined): number | undefined {
+  const raw = first(value);
+  if (!raw) return undefined;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+/** Same filters as the homepage Pre-construction deals rail (no IP inventing). */
+function dealsFromSearchParams(params: Params): PreconDealsQuery {
+  const citiesCsv = first(params.cities)?.trim();
+  const city = first(params.city)?.trim();
+  const cities = citiesCsv
+    ? citiesCsv.split(",").map((part) => part.trim()).filter(Boolean).slice(0, 5)
+    : city
+      ? [city]
+      : undefined;
+  return {
+    cities,
+    bedsMin: intParam(params.beds_min) ?? intParam(params.beds),
+    bathsMin: intParam(params.baths_min) ?? intParam(params.baths),
+    priceMin: intParam(params.price_min) ?? intParam(params.priceMin),
+    priceMax: intParam(params.price_max) ?? intParam(params.priceMax),
+  };
+}
+
+function hasDealsFilters(deals: PreconDealsQuery): boolean {
+  return Boolean(
+    deals.cities?.length ||
+      deals.bedsMin ||
+      deals.bathsMin ||
+      deals.priceMin ||
+      deals.priceMax,
+  );
+}
+
 export default async function PreconstructionPage({
   searchParams,
 }: {
   searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
-  const rawCity = first(params.city)?.trim() || "";
-  const city =
-    COMMUNITY_CITIES.find((option) => option.toLowerCase() === rawCity.toLowerCase()) ||
-    (rawCity.length >= 2 && rawCity.length <= 40 ? rawCity : undefined);
+  const deals = dealsFromSearchParams(params);
+  const filtered = hasDealsFilters(deals);
+  const citiesLabel = deals.cities?.join(", ");
 
   return (
     <>
@@ -41,12 +78,12 @@ export default async function PreconstructionPage({
         <div className="container-page">
           <Eyebrow>New developments</Eyebrow>
           <h1 className="mt-3 text-h1 text-ink">
-            {city ? `Preconstruction in ${city}` : "Preconstruction projects"}
+            {citiesLabel ? `Preconstruction in ${citiesLabel}` : "Pre-construction deals"}
           </h1>
           <p className="mt-2 max-w-2xl text-small text-ink-muted">
-            {city
-              ? `New builds near ${city}, from early registration through to final release.`
-              : "New builds across the GTA, from early registration through to final release."}
+            {filtered
+              ? "Featured projects matching your search — pinned first, then newest."
+              : "Featured preconstruction across the GTA — pinned first, then newest."}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link
@@ -55,12 +92,12 @@ export default async function PreconstructionPage({
             >
               Search on map
             </Link>
-            {city ? (
+            {filtered ? (
               <Link
                 href="/preconstruction"
                 className="text-small font-medium text-navy hover:underline"
               >
-                Clear city filter
+                Clear filters
               </Link>
             ) : null}
           </div>
@@ -68,8 +105,8 @@ export default async function PreconstructionPage({
       </section>
 
       <div className="container-page space-y-16 py-10">
-        <Suspense key={city || "all"} fallback={<ProjectsSkeleton />}>
-          <Projects city={city} />
+        <Suspense key={JSON.stringify(deals)} fallback={<ProjectsSkeleton />}>
+          <Projects deals={deals} />
         </Suspense>
         <VipAccessForm />
       </div>
@@ -77,24 +114,29 @@ export default async function PreconstructionPage({
   );
 }
 
-async function Projects({ city }: { city?: string }) {
-  const { items } = await safeFetch(
-    getPreconProjects({ limit: 24, city }),
-    { items: [] as PreconProject[], total: 0 },
+async function Projects({ deals }: { deals: PreconDealsQuery }) {
+  const feed = await safeFetch(
+    getPreconProjects({
+      limit: 24,
+      deals,
+      cache: "no-store",
+    }),
+    { items: [] as PreconProject[], total: 0, hasSearchHistory: false, cities: [] },
     "precon:list",
   );
 
-  if (items.length === 0) {
+  if (feed.items.length === 0) {
+    const filtered = hasDealsFilters(deals);
     return (
       <EmptyState
-        title={city ? `No projects near ${city}` : "No projects available"}
+        title={filtered ? "No matching projects" : "No projects available"}
         description={
-          city
-            ? "Try another city, or browse the full preconstruction list."
+          filtered
+            ? "Try clearing filters, or browse the full preconstruction list."
             : "There are no published preconstruction projects right now. Check back soon."
         }
         action={
-          city
+          filtered
             ? { label: "Show all projects", href: "/preconstruction" }
             : { label: "Browse resale listings", href: "/listings" }
         }
@@ -104,7 +146,7 @@ async function Projects({ city }: { city?: string }) {
 
   return (
     <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((project) => (
+      {feed.items.map((project) => (
         <li key={project.id}>
           <PreconCard project={project} />
         </li>

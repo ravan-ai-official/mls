@@ -17,6 +17,29 @@ export const SCHOOL_SEARCH_MIN_CHARS = 2;
 export const DEFAULT_SCHOOL_RADIUS_KM = 2;
 export const SCHOOL_RADIUS_OPTIONS_KM = [1, 2, 3] as const;
 
+/**
+ * Cities for schools/top/ — search history only. Never pass IP/geo city.
+ * Empty array → omit cities/city so the API returns the GTA-wide ranking.
+ */
+export function schoolSearchHistoryCities(
+  searchHistoryCities: string[],
+  lastSearchCity?: string | null,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const city of [
+    ...(lastSearchCity ? [lastSearchCity] : []),
+    ...searchHistoryCities,
+  ]) {
+    const key = city.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(city.trim());
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
 export interface OfficialSchool {
   id: string;
   name: string;
@@ -173,20 +196,34 @@ export async function getSchoolsNear(
     .filter((school): school is OfficialSchool => school !== null);
 }
 
+/**
+ * GET /api/mls/schools/top/ — secondary schools ranked by eqao_percent high→low.
+ *
+ * Pass `cities` only from real search history. Omit cities/city entirely for the
+ * GTA-wide list — never substitute IP/geo city. Preserve API order; do not
+ * re-sort or invent ratings client-side. Limit capped at 100 by the API.
+ */
 export async function getTopSchools(
   options: RequestOptions & { limit?: number; cities?: string[]; names?: string[] } = {},
 ): Promise<OfficialSchool[]> {
   const { limit = 4, cities, names, ...rest } = options;
-  const personalized = Boolean(cities?.length || names?.length);
+  const historyCities = (cities ?? []).map((city) => city.trim()).filter(Boolean);
+  const personalized = Boolean(historyCities.length || names?.length);
   const data = await apiFetch<{ schools?: RawSchool[] }>(`${MLS}/schools/top/`, {
     revalidate: personalized ? 3_600 : 86_400,
     ...rest,
     params: {
-      limit,
-      cities: cities?.length ? cities.join(",") : undefined,
+      limit: Math.min(100, Math.max(1, limit)),
+      // Single city → city=; several → cities=CSV. Never send empty.
+      ...(historyCities.length === 1
+        ? { city: historyCities[0] }
+        : historyCities.length > 1
+          ? { cities: historyCities.join(",") }
+          : {}),
       names: names?.length ? names.join(",") : undefined,
     },
   });
+  // Keep API rank order (eqao_percent descending).
   return (data.schools ?? [])
     .map((school) => mapSchool(school))
     .filter((school): school is OfficialSchool => school !== null);

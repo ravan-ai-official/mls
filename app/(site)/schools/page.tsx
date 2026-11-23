@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Eyebrow } from "@/components/ui/Badge";
 import { SchoolsDirectory } from "@/components/schools/SchoolsDirectory";
-import { getTopSchools } from "@/lib/api/schools";
+import { getTopSchools, schoolSearchHistoryCities } from "@/lib/api/schools";
+import { getVisitorPersonalization } from "@/lib/personalize/visitorContext";
 
 export const metadata: Metadata = {
   title: "Schools",
@@ -13,17 +14,28 @@ export const metadata: Metadata = {
 export const revalidate = 86_400;
 
 export default async function SchoolsPage() {
-  const initialSchools = await getTopSchools({ limit: 8 }).catch(() => []);
+  const visitor = await getVisitorPersonalization();
+  const historyCities = schoolSearchHistoryCities(
+    visitor.searchHistoryCities,
+    visitor.lastSearch.city,
+  );
+  // View all: higher limit (API max 100). Same cities rules as homepage rail.
+  const initialSchools = await getTopSchools({
+    limit: 100,
+    cities: historyCities.length > 0 ? historyCities : undefined,
+    cache: "no-store",
+  }).catch(() => []);
 
   return (
     <>
       <header className="border-b border-line bg-surface-alt py-8 sm:py-12">
         <div className="container-page">
           <Eyebrow>Schools &amp; families</Eyebrow>
-          <h1 className="mt-3 text-h1 text-ink">Search homes by school</h1>
+          <h1 className="mt-3 text-h1 text-ink">GTA Secondary Schools</h1>
           <p className="mt-2 max-w-2xl text-small text-ink-muted">
-            Pick a school, choose how far to look, and open live listings nearby.
-            Use this the way buyers shortlist neighbourhoods around a preferred school.
+            {historyCities.length > 0
+              ? `Top secondary schools by published EQAO in ${historyCities.join(", ")}. Pick a school to see homes nearby.`
+              : "Top secondary schools across the GTA by published EQAO. Pick a school to see homes nearby."}
           </p>
         </div>
       </header>

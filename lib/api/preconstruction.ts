@@ -100,23 +100,100 @@ function mapPrecon(raw: BackendPrecon): PreconProject {
   };
 }
 
+/** Homepage / browse filters for featured precon deals (search history only). */
+export type PreconDealsQuery = {
+  cities?: string[];
+  bedsMin?: number;
+  bathsMin?: number;
+  priceMin?: number;
+  priceMax?: number;
+};
+
+/** Query params for GET /precon-properties/ featured deals + View all href. */
+export function toPreconDealsParams(
+  query: PreconDealsQuery = {},
+  options: { pageSize?: number; page?: number } = {},
+): Record<string, string | number | undefined> {
+  const cities = (query.cities ?? []).map((city) => city.trim()).filter(Boolean);
+  return {
+    ordering: "featured",
+    exclude_stage: "sold_out",
+    page_size: options.pageSize,
+    page: options.page,
+    ...(cities.length === 1
+      ? { city: cities[0] }
+      : cities.length > 1
+        ? { cities: cities.join(",") }
+        : {}),
+    beds_min: query.bedsMin,
+    baths_min: query.bathsMin,
+    price_min: query.priceMin,
+    price_max: query.priceMax,
+  };
+}
+
+/** /preconstruction?… with the same filters as the homepage deals rail. */
+export function buildPreconDealsHref(query: PreconDealsQuery = {}): string {
+  const params = toPreconDealsParams(query);
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `/preconstruction?${qs}` : "/preconstruction";
+}
+
 export async function getPreconProjects(
-  options: RequestOptions & { limit?: number; page?: number; city?: string } = {},
-): Promise<{ items: PreconProject[]; total: number }> {
-  const { limit = 12, page = 1, city, ...rest } = options;
-  const cityFilter = city?.trim() || undefined;
+  options: RequestOptions & {
+    limit?: number;
+    page?: number;
+    city?: string;
+    /** Search-history filters for the featured deals rail. Never pass IP city. */
+    deals?: PreconDealsQuery;
+  } = {},
+): Promise<{
+  items: PreconProject[];
+  total: number;
+  hasSearchHistory: boolean;
+  cities: string[];
+}> {
+  const { limit = 12, page = 1, city, deals, ...rest } = options;
+  const dealsParams = deals
+    ? toPreconDealsParams(deals, { pageSize: limit, page })
+    : {
+        page_size: limit,
+        page,
+        city: city?.trim() || undefined,
+      };
+  const personalized = Boolean(
+    deals?.cities?.length ||
+      deals?.bedsMin ||
+      deals?.bathsMin ||
+      deals?.priceMin ||
+      deals?.priceMax,
+  );
 
   const data = await apiFetch<{
     count?: number;
     results?: BackendPrecon[];
+    has_search_history?: boolean;
+    cities?: string[];
   }>(`${MLS}/precon-properties/`, {
-    revalidate: 300,
+    revalidate: personalized ? 60 : 300,
     ...rest,
-    params: { page_size: limit, page, city: cityFilter, ...rest.params },
+    params: { ...dealsParams, ...rest.params },
   });
 
   const rows = data.results ?? [];
-  return { items: rows.map(mapPrecon), total: data.count ?? rows.length };
+  return {
+    items: rows.map(mapPrecon),
+    total: data.count ?? rows.length,
+    hasSearchHistory: Boolean(data.has_search_history),
+    cities: Array.isArray(data.cities)
+      ? data.cities.filter((row): row is string => typeof row === "string" && row.trim().length > 0)
+      : [],
+  };
 }
 
 /**

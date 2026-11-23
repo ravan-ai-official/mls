@@ -1,10 +1,10 @@
 /**
- * Server fetchers for the homepage feeds (/api/home/… on mls-v2).
+ * Server fetchers for the homepage feeds (/api/home/… on mls-backend).
  *
  * Every fetcher resolves to `null` on any failure (network, timeout, 503 from
- * an AMPRE-backed feed) so a section can fall back to its sample content
- * instead of taking down the page. Timeouts are short: these are optional
- * rails and ISR re-renders them in the background anyway.
+ * an AMPRE-backed feed) so a section can hide or degrade instead of taking
+ * down the page. Sold-below never falls back to mock cards — empty means hide.
+ * Timeouts are short: these are optional rails and ISR re-renders them anyway.
  */
 
 import { apiFetch, safeFetch, type RequestOptions } from "./client";

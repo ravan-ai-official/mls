@@ -100,7 +100,14 @@ export const qk = {
       city: string,
       days: number,
       page: number,
-      filters: { propertyType?: string; bedsMin?: number; bathsMin?: number } = {},
+      filters: {
+        propertyType?: string;
+        bedsMin?: number;
+        bathsMin?: number;
+        garagesMin?: number;
+        garagesMax?: number;
+        lotWidthMin?: number;
+      } = {},
     ) =>
       [
         "me",
@@ -113,6 +120,9 @@ export const qk = {
         normText(filters.propertyType ?? ""),
         filters.bedsMin ?? null,
         filters.bathsMin ?? null,
+        filters.garagesMin ?? null,
+        filters.garagesMax ?? null,
+        filters.lotWidthMin ?? null,
       ] as const,
   }),
 };

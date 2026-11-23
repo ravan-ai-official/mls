@@ -499,6 +499,108 @@ export async function getListingSyncStatus(
 export const RECENT_SALES_DAYS = [7, 30, 90] as const;
 export type RecentSalesDays = (typeof RECENT_SALES_DAYS)[number];
 
+/**
+ * Sell-page / recently-sold UI labels → mls-backend `property_type` aliases
+ * (`RECENT_SALES_TYPE_ALIASES` in views_market.py).
+ */
+export const RECENT_SALES_PROPERTY_TYPES = [
+  { label: "Detached", value: "detached" },
+  { label: "Semi-Detached", value: "semi-detached" },
+  { label: "Townhome", value: "townhome" },
+  { label: "Condo", value: "condo" },
+  { label: "Luxury", value: "luxury" },
+] as const;
+
+/** TRREB PropertySubType prefixes keyed like mls-backend SOLD_PROPERTY_TYPES. */
+const RECENT_SALES_TYPE_PREFIXES: Record<string, string[]> = {
+  detached: ["Detached"],
+  semi: ["Semi-Detached"],
+  townhouse: ["Att/Row/Townhouse"],
+  condo_townhouse: ["Condo Townhouse"],
+  condo_apartment: ["Condo Apartment"],
+};
+
+const RECENT_SALES_TYPE_ALIASES: Record<string, string> = {
+  detached: "detached",
+  semi: "semi",
+  "semi-detached": "semi",
+  semi_detached: "semi",
+  "semi detached": "semi",
+  townhome: "townhouse",
+  townhouse: "townhouse",
+  condo: "condo_apartment",
+  condo_apartment: "condo_apartment",
+  condo_townhouse: "condo_townhouse",
+  luxury: "luxury",
+};
+
+const LUXURY_CLOSE_PRICE_MIN = 1_500_000;
+
+/** Normalize a UI / URL property type to a mls-backend `property_type` alias. */
+export function normalizeRecentSalesPropertyType(
+  raw: string | null | undefined,
+): string | undefined {
+  const key = (raw ?? "").trim().toLowerCase().replace(/_/g, "-").replace(/\s+/g, "-");
+  if (!key) return undefined;
+  return key in RECENT_SALES_TYPE_ALIASES ? key : undefined;
+}
+
+export interface RecentSalesFilters {
+  propertyType?: string;
+  bedsMin?: number;
+  bathsMin?: number;
+  /** Inclusive minimum garage/parking spaces (1-car → 1). */
+  garagesMin?: number;
+  /** Inclusive maximum; sell-form “None” sends 0. */
+  garagesMax?: number;
+  /** Minimum lot frontage / width in feet. */
+  lotWidthMin?: number;
+}
+
+/**
+ * Client-side mirror of mls-backend `filter_recent_sales` so sell-page comps
+ * still react when an older API ignores filter query params.
+ */
+export function filterRecentSalesClient(
+  rows: RecentSale[],
+  filters: RecentSalesFilters,
+): RecentSale[] {
+  const typeRaw = normalizeRecentSalesPropertyType(filters.propertyType);
+  const typeKey = typeRaw ? RECENT_SALES_TYPE_ALIASES[typeRaw] : undefined;
+  const prefixes =
+    typeKey && typeKey !== "luxury" ? RECENT_SALES_TYPE_PREFIXES[typeKey] : null;
+
+  return rows.filter((row) => {
+    if (typeKey === "luxury") {
+      if (row.closePrice < LUXURY_CLOSE_PRICE_MIN) return false;
+    } else if (prefixes) {
+      const sub = (row.propertyType ?? "").trim();
+      if (!prefixes.some((prefix) => sub.startsWith(prefix))) return false;
+    }
+    if (filters.bedsMin != null && (row.beds == null || row.beds < filters.bedsMin)) {
+      return false;
+    }
+    if (filters.bathsMin != null && (row.baths == null || row.baths < filters.bathsMin)) {
+      return false;
+    }
+    const garage = row.garageSpaces;
+    if (filters.garagesMin != null && (garage == null || garage < filters.garagesMin)) {
+      return false;
+    }
+    if (filters.garagesMax != null) {
+      const spaces = garage == null ? 0 : garage;
+      if (spaces > filters.garagesMax) return false;
+    }
+    if (
+      filters.lotWidthMin != null &&
+      (row.lotFrontage == null || row.lotFrontage < filters.lotWidthMin)
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 export interface RecentSale {
   listingKey: string;
   address: string;
@@ -506,6 +608,9 @@ export interface RecentSale {
   propertyType: string | null;
   beds: number | null;
   baths: number | null;
+  garageSpaces: number | null;
+  /** Lot frontage / width in feet when the feed provides it. */
+  lotFrontage: number | null;
   closePrice: number;
   listPrice: number | null;
   closeDate: string;
@@ -529,14 +634,10 @@ export interface RecentSalesPage {
  * `market/recent-sales/` — closed sales from the TRREB feed. Signed-in only
  * (TRREB VOW rules), so it always needs the user's token.
  */
-export interface RecentSalesQuery {
+export interface RecentSalesQuery extends RecentSalesFilters {
   city: string;
   days: number;
   page: number;
-  /** Detached / Semi-Detached / Townhome / Condo / Luxury (or sold-type keys). */
-  propertyType?: string;
-  bedsMin?: number;
-  bathsMin?: number;
 }
 
 export async function getRecentSales(
@@ -558,30 +659,41 @@ export async function getRecentSales(
       city: query.city,
       days: query.days,
       page: query.page,
-      property_type: query.propertyType || undefined,
+      property_type: normalizeRecentSalesPropertyType(query.propertyType),
       beds_min: query.bedsMin ?? undefined,
       baths_min: query.bathsMin ?? undefined,
+      garages_min: query.garagesMin ?? undefined,
+      garages_max: query.garagesMax ?? undefined,
+      lot_width_min: query.lotWidthMin ?? undefined,
     },
   });
+  const results = (data.results ?? []).map((row) => ({
+    listingKey: String(row.listing_key ?? row.ListingKey ?? "").trim(),
+    address: String(row.address ?? row.UnparsedAddress ?? "").trim(),
+    city: String(row.city ?? row.City ?? "").trim(),
+    propertyType:
+      (row.property_sub_type as string) ||
+      (row.PropertySubType as string) ||
+      null,
+    beds: num(row.bedrooms ?? row.BedroomsTotal),
+    baths: num(row.bathrooms ?? row.BathroomsTotalInteger),
+    garageSpaces: num(row.garage_spaces ?? row.GarageSpaces ?? row.ParkingTotal),
+    lotFrontage: num(row.lot_frontage ?? row.FrontageLengthNumeric),
+    closePrice: num(row.close_price ?? row.ClosePrice) ?? 0,
+    listPrice: num(row.list_price ?? row.ListPrice),
+    closeDate: String(row.close_date ?? row.CloseDate ?? ""),
+    daysOnMarket: num(row.days_on_market),
+    overUnderAskingPct: num(row.over_under_asking_pct),
+  }));
+  // Defense in depth: older backends may ignore newer filter query params.
+  const filtered = filterRecentSalesClient(results, query);
   return {
     city: data.city,
     days: data.days,
-    count: data.count,
+    count: filtered.length === results.length ? data.count : filtered.length,
     page: data.page,
     pageSize: data.page_size,
     truncated: data.truncated === true,
-    results: (data.results ?? []).map((row) => ({
-      listingKey: String(row.listing_key ?? ""),
-      address: String(row.address ?? ""),
-      city: String(row.city ?? ""),
-      propertyType: (row.property_sub_type as string) || null,
-      beds: num(row.bedrooms),
-      baths: num(row.bathrooms),
-      closePrice: num(row.close_price) ?? 0,
-      listPrice: num(row.list_price),
-      closeDate: String(row.close_date ?? ""),
-      daysOnMarket: num(row.days_on_market),
-      overUnderAskingPct: num(row.over_under_asking_pct),
-    })),
+    results: filtered,
   };
 }

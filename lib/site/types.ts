@@ -116,7 +116,12 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
       "The six type tiles (Detached, Semi-Detached, Townhomes, Luxury, Condos, Rentals) and their links. Counts stay live.",
     canHide: true,
   },
-  newPrecon: { label: "New preconstruction", summary: "Heading only. Projects come from the pre-construction list.", canHide: true },
+  newPrecon: {
+    label: "Pre-construction deals",
+    summary:
+      "Heading only. Featured precon rail (pinned first); with search history, scopes by remembered cities and beds/baths/price. Never uses IP city.",
+    canHide: true,
+  },
   todaysNew: { label: "Today's new listings", summary: "Heading only. The 24-hour subtitle stays automatic so it never overclaims.", canHide: true },
   highReturn: {
     label: "High return",

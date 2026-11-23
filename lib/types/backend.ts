@@ -87,6 +87,11 @@ export interface BackendPropertySummary {
    * payloads and may include them. Optional so the base search shape stays honest.
    */
   is_featured?: boolean | null;
+  /**
+   * Featured rail only (mls-backend FeaturedPropertiesAPIView):
+   * pinned | history | local | curated | exclusive.
+   */
+  featured_source?: "pinned" | "history" | "local" | "curated" | "exclusive" | string | null;
   subdivision_name?: string | null;
   living_area?: string | null;
   /** DDF band when exact LivingArea is null (e.g. 800–899). */

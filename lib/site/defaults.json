@@ -119,7 +119,7 @@
           "title": "Featured MLS\u00ae Listings",
           "description": "Hand-picked homes from the HomeAtlas team.",
           "useAutomaticDescription": true,
-          "actionLabel": "View All Listings",
+          "actionLabel": "View all",
           "actionHref": "/listings"
         }
       },
@@ -167,8 +167,8 @@
         "visible": true,
         "content": {
           "eyebrow": "Invest ahead",
-          "title": "New Preconstruction Projects",
-          "actionLabel": "View All Projects",
+          "title": "Pre-construction deals",
+          "actionLabel": "View all",
           "actionHref": "/preconstruction"
         }
       },
