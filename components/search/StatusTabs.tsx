@@ -5,7 +5,8 @@ import { Tabs, type TabItem } from "@/components/ui/Tabs";
 export interface StatusTabItem {
   id: string;
   label: string;
-  count: number | null;
+  /** Optional trailing count; omit on listing status tabs. */
+  count?: number | null;
   href: string;
 }
 

@@ -8,7 +8,7 @@ import { StatusTabs, type StatusTabItem } from "@/components/search/StatusTabs";
 import { getPropertyFacets } from "@/lib/api/properties";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
-import type { ListingQuery, PropertyFacets } from "@/lib/types/domain";
+import type { ListingQuery } from "@/lib/types/domain";
 import { buildListingHref } from "@/lib/utils/searchParams";
 import {
   backendStatusGroup,
@@ -49,7 +49,7 @@ export function ListingFiltersChrome() {
       <AiSearchNotice />
       <ListingFilters resultCount={resultCount} />
       <div className="mt-3 sm:mt-4">
-        <ListingStatusTabs facets={facets} query={query} isStaff={isStaff} />
+        <ListingStatusTabs query={query} isStaff={isStaff} />
       </div>
     </>
   );
@@ -63,11 +63,9 @@ function tabLabel(group: string, fallback: string, rent: boolean): string {
 }
 
 function ListingStatusTabs({
-  facets,
   query,
   isStaff,
 }: {
-  facets: PropertyFacets | null;
   query: ListingQuery;
   isStaff: boolean;
 }) {
@@ -75,17 +73,16 @@ function ListingStatusTabs({
   const rent = query.transaction === "rent";
   const tabs = listingStatusTabs(isStaff);
 
+  // Labels only — no per-tab counts (For Sale / Sold / Open house).
   const items: StatusTabItem[] = [
     ...tabs.map((tab) => ({
       id: tab.group,
       label: tabLabel(tab.group, tab.label, rent),
-      count: facets?.statusGroup?.[tab.group] ?? null,
       href: buildListingHref({ ...base, status: tab.param }),
     })),
     {
       id: "open-house",
       label: "Open house",
-      count: facets?.openHouse ?? null,
       href: buildListingHref({ ...base, openHouse: true }),
     },
   ];
