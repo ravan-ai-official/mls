@@ -4,7 +4,6 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, TelInput, Textarea } from "@/components/ui/Field";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { USE_ASSIGNMENT_SAMPLES } from "@/lib/demo/assignments";
 import { useSubmitInquiry } from "@/lib/queries/inquiries";
 
 /**
@@ -90,11 +89,6 @@ export function InquiryForm({
     const data = new FormData(event.currentTarget);
     const fullName = String(data.get("name") ?? "").trim();
     const [firstName, ...rest] = fullName.split(" ");
-
-    if (USE_ASSIGNMENT_SAMPLES && listingKey.startsWith("ASSIGNMENT-")) {
-      setSent(true);
-      return;
-    }
 
     try {
       await submit.mutateAsync({

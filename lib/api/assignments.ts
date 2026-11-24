@@ -45,6 +45,8 @@ export interface PublicListingPage {
   page: number;
   pageSize: number;
   results: PublicListing[];
+  /** Cities that currently have at least one approved assignment (from the API). */
+  availableCities: string[];
 }
 
 export interface AssignmentQuery {
@@ -107,32 +109,57 @@ export function assignmentPath(listing: Pick<PublicListing, "id">): string {
   return `/assignments/${listing.id}`;
 }
 
+function parseAvailableCities(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const cities: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const city = item.trim();
+    if (!city) continue;
+    const key = city.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cities.push(city);
+  }
+  return cities;
+}
+
+/** True when the listing has at least one usable photo URL for cards/gallery. */
+export function listingHasPhoto(listing: PublicListing): boolean {
+  return Boolean(listing.photos[0]);
+}
+
 export async function getPublicAssignments(
   query: AssignmentQuery = {},
   options: RequestOptions = {},
 ): Promise<PublicListingPage> {
-  const data = await apiFetch<{ count?: number; page?: number; page_size?: number; results?: Array<Record<string, unknown>> }>(
-    `${BASE}/`,
-    {
-      revalidate: 300,
-      ...options,
-      params: {
-        purpose: "assignment",
-        city: query.city,
-        price_min: query.priceMin,
-        price_max: query.priceMax,
-        beds_min: query.bedsMin,
-        precon_property: query.preconProjectId,
-        page: query.page,
-        page_size: query.pageSize,
-      },
+  const data = await apiFetch<{
+    count?: number;
+    page?: number;
+    page_size?: number;
+    results?: Array<Record<string, unknown>>;
+    available_cities?: unknown;
+  }>(`${BASE}/`, {
+    revalidate: 300,
+    ...options,
+    params: {
+      purpose: "assignment",
+      city: query.city,
+      price_min: query.priceMin,
+      price_max: query.priceMax,
+      beds_min: query.bedsMin,
+      precon_property: query.preconProjectId,
+      page: query.page,
+      page_size: query.pageSize,
     },
-  );
+  });
   return {
     count: data.count ?? 0,
     page: data.page ?? 1,
     pageSize: data.page_size ?? 12,
     results: (data.results ?? []).map(mapPublicListing),
+    availableCities: parseAvailableCities(data.available_cities),
   };
 }
 

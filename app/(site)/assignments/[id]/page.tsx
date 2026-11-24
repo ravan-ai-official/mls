@@ -15,7 +15,6 @@ import {
   type PublicListing,
 } from "@/lib/api/assignments";
 import { ApiError } from "@/lib/api/client";
-import { sampleAssignment, USE_ASSIGNMENT_SAMPLES } from "@/lib/demo/assignments";
 import { preconPath } from "@/lib/seo/urls";
 import { formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
 
@@ -25,7 +24,6 @@ export const revalidate = 300;
 async function load(segment: string): Promise<PublicListing | null> {
   const id = Number(segment);
   if (!Number.isInteger(id) || id <= 0) return null;
-  if (USE_ASSIGNMENT_SAMPLES) return sampleAssignment(id);
   try {
     return await getPublicAssignment(id);
   } catch (error) {

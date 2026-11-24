@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { absoluteMediaUrl, assignmentTitle, isOptimizableImage, mapPublicListing } from "./assignments";
+import {
+  absoluteMediaUrl,
+  assignmentTitle,
+  isOptimizableImage,
+  listingHasPhoto,
+  mapPublicListing,
+} from "./assignments";
 
 describe("mapPublicListing", () => {
   const row = {
@@ -32,6 +38,11 @@ describe("mapPublicListing", () => {
   it("titles by project, falling back to the address", () => {
     expect(assignmentTitle(mapPublicListing(row))).toBe("Festival Tower");
     expect(assignmentTitle(mapPublicListing({ ...row, project_name: "" }))).toBe("12 King St");
+  });
+
+  it("detects usable card photos", () => {
+    expect(listingHasPhoto(mapPublicListing(row))).toBe(true);
+    expect(listingHasPhoto(mapPublicListing({ ...row, media: [] }))).toBe(false);
   });
 });
 

@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { AssignmentCard } from "@/components/assignments/AssignmentCard";
-import { getPublicAssignments, type PublicListingPage } from "@/lib/api/assignments";
+import {
+  getPublicAssignments,
+  listingHasPhoto,
+  type PublicListingPage,
+} from "@/lib/api/assignments";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 
 const EMPTY_PAGE: PublicListingPage = {
@@ -10,6 +14,7 @@ const EMPTY_PAGE: PublicListingPage = {
   page: 1,
   pageSize: 4,
   results: [],
+  availableCities: [],
 };
 
 /**
@@ -31,7 +36,8 @@ export function ProjectAssignments({
     EMPTY_PAGE,
   );
 
-  if (data.results.length === 0) return null;
+  const results = data.results.filter(listingHasPhoto);
+  if (results.length === 0) return null;
 
   return (
     <section className="mt-16" aria-labelledby="project-assignments-heading">
@@ -39,14 +45,14 @@ export function ProjectAssignments({
         <h2 id="project-assignments-heading" className="text-h2 text-ink">
           Assignments in {projectTitle}
         </h2>
-        {data.count > data.results.length && (
+        {data.count > results.length && (
           <Link href="/assignments" className="text-small font-medium text-navy hover:underline">
             See all {data.count}
           </Link>
         )}
       </div>
       <ul className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {data.results.map((listing) => (
+        {results.map((listing) => (
           <li key={listing.id}>
             <AssignmentCard listing={listing} headingLevel="h3" />
           </li>

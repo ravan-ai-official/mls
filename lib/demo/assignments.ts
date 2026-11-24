@@ -1,14 +1,9 @@
 /**
- * Sample assignments for client demos. The public /assignments pages read this
- * instead of the API while USE_ASSIGNMENT_SAMPLES is true. Nothing here is a
- * real listing, and none of it is sent to the backend.
- *
- * Set the flag to false once approved submissions should show instead.
+ * Test-only assignment fixtures. Production /assignments codepaths must never
+ * import this module — live data comes from listing-submissions/public only.
  */
 
 import type { AssignmentQuery, PublicListing, PublicListingPage } from "@/lib/api/assignments";
-
-export const USE_ASSIGNMENT_SAMPLES = true;
 
 const shot = (id: string) =>
   `https://images.unsplash.com/${id}?w=1400&h=900&fit=crop&auto=format`;
@@ -401,10 +396,14 @@ export function sampleAssignmentPage(query: AssignmentQuery = {}): PublicListing
   }
 
   const start = (page - 1) * pageSize;
+  const availableCities = [
+    ...new Set(SAMPLE_ASSIGNMENTS.map((listing) => listing.city).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
   return {
     count: rows.length,
     page,
     pageSize,
     results: rows.slice(start, start + pageSize),
+    availableCities,
   };
 }

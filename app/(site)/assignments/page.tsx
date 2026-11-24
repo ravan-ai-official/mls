@@ -8,7 +8,7 @@ import { NavChip } from "@/components/navigation/NavChip";
 import { PendingContent, PendingNavigationProvider } from "@/components/navigation/PendingNavigation";
 import { Eyebrow } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
-import { COMMUNITY_CITIES } from "@/lib/constants/cities";
+import { getPublicAssignments } from "@/lib/api/assignments";
 
 export const metadata: Metadata = {
   title: "Exclusive pre-construction assignments",
@@ -30,14 +30,28 @@ const PRICE_OPTIONS = [
 type Params = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
+async function loadAvailableCities(): Promise<string[]> {
+  try {
+    const page = await getPublicAssignments({ page: 1, pageSize: 1 }, { cache: "no-store" });
+    return page.availableCities;
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Exclusive Assignments (scope #13, like Housing.com's owner listings):
  * approved assignment sales submitted through /sell/list. Filters live in the
- * URL so every view is shareable and crawlable.
+ * URL so every view is shareable and crawlable. City chips come from the live
+ * `available_cities` feed — never from hardcoded demo inventory.
  */
 export default async function AssignmentsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
-  const city = COMMUNITY_CITIES.find((c) => c.toLowerCase() === first(params.city)?.toLowerCase());
+  const availableCities = await loadAvailableCities();
+  const cityParam = first(params.city)?.trim();
+  const city = cityParam
+    ? availableCities.find((option) => option.toLowerCase() === cityParam.toLowerCase())
+    : undefined;
   const priceMax = PRICE_OPTIONS.find((o) => String(o.max) === first(params.priceMax))?.max;
   const page = Math.max(1, Number(first(params.page)) || 1);
 
@@ -74,7 +88,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
             <NavChip href={href({ city: null, page: 1 })} current={!city} scroll={false}>
               All cities
             </NavChip>
-            {COMMUNITY_CITIES.map((option) => (
+            {availableCities.map((option) => (
               <NavChip
                 key={option}
                 href={href({ city: option, page: 1 })}

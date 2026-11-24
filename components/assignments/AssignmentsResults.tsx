@@ -5,9 +5,9 @@ import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import {
   getPublicAssignments,
+  listingHasPhoto,
   type PublicListingPage,
 } from "@/lib/api/assignments";
-import { sampleAssignmentPage, USE_ASSIGNMENT_SAMPLES } from "@/lib/demo/assignments";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 
 const PAGE_SIZE = 12;
@@ -28,7 +28,8 @@ export function buildAssignmentsHref(page: number, city?: string, priceMax?: num
 }
 
 /**
- * Assignments grid. Fetches in the browser via `/api/mls/…` (or sample data).
+ * Assignments grid. Live feed only via `/api/mls/listing-submissions/public/`.
+ * Never falls back to sample/demo listings.
  */
 export function AssignmentsResults({
   city,
@@ -43,12 +44,6 @@ export function AssignmentsResults({
   const { data: payload, isPending } = useMlsQuery<ResultsPayload>(
     ["assignments", "list", city ?? "", priceMax ?? "", page],
     async (): Promise<ResultsPayload> => {
-      if (USE_ASSIGNMENT_SAMPLES) {
-        return {
-          data: sampleAssignmentPage({ city, priceMax, page, pageSize: PAGE_SIZE }),
-          failed: false,
-        };
-      }
       try {
         const pageData = await getPublicAssignments({
           city,
@@ -75,8 +70,11 @@ export function AssignmentsResults({
   }
 
   const data = payload.data;
+  // Skip photoless rows so the grid never shows blank beige cards.
+  const results = data.results.filter(listingHasPhoto);
+  const empty = data.count === 0 || results.length === 0;
 
-  if (data.count === 0) {
+  if (empty) {
     const filtered = Boolean(city || priceMax);
     return (
       <EmptyState
@@ -102,7 +100,7 @@ export function AssignmentsResults({
         {data.count} {data.count === 1 ? "assignment" : "assignments"}
       </p>
       <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {data.results.map((listing) => (
+        {results.map((listing) => (
           <li key={listing.id}>
             <AssignmentCard listing={listing} />
           </li>
