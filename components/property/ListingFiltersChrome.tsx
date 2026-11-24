@@ -8,7 +8,7 @@ import { StatusTabs, type StatusTabItem } from "@/components/search/StatusTabs";
 import { getPropertyFacets } from "@/lib/api/properties";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
-import type { ListingQuery } from "@/lib/types/domain";
+import type { ListingQuery, PropertyFacets } from "@/lib/types/domain";
 import { buildListingHref } from "@/lib/utils/searchParams";
 import {
   backendStatusGroup,

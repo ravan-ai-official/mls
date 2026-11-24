@@ -274,8 +274,9 @@
   width: max-content;
   animation: marquee-scroll 45s linear infinite;
 }
-.marquee-track:hover,
-.marquee-track:focus-within {
+/* Hover only — focus-within stayed true after clicking a CTA (layout persists
+   across Next navigations), so the strip stayed frozen until a blur click. */
+.marquee-track:hover {
   animation-play-state: paused;
 }
 

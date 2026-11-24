@@ -50,6 +50,10 @@ export function AnnouncementBar({
                     href={item.cta.href}
                     tabIndex={pass === 0 ? 0 : -1}
                     className="text-[0.6875rem] font-semibold text-gold hover:underline"
+                    onClick={(event) => {
+                      // Drop focus so the layout marquee is not stuck paused after nav.
+                      event.currentTarget.blur();
+                    }}
                   >
                     {item.cta.label} →
                   </Link>

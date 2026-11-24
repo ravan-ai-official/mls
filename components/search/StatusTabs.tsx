@@ -5,8 +5,6 @@ import { Tabs, type TabItem } from "@/components/ui/Tabs";
 export interface StatusTabItem {
   id: string;
   label: string;
-  /** Optional trailing count; omit on listing status tabs. */
-  count?: number | null;
   href: string;
 }
 
@@ -18,7 +16,8 @@ export interface StatusTabItem {
  */
 export function StatusTabs({ items, value }: { items: StatusTabItem[]; value: string }) {
   const hrefs = new Map(items.map((item) => [item.id, item.href]));
-  const tabs: Array<TabItem<string>> = items.map(({ id, label, count }) => ({ id, label, count }));
+  // Never forward counts — For Sale / Sold / Open house are labels only.
+  const tabs: Array<TabItem<string>> = items.map(({ id, label }) => ({ id, label }));
   return (
     <Tabs
       items={tabs}

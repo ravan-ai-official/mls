@@ -71,21 +71,23 @@ function tabClasses(variant: Variant, active: boolean, size: "sm" | "md") {
 }
 
 function Label({ item, active, variant }: { item: TabItem<string>; active: boolean; variant: Variant }) {
+  // Segmented listing-status strip is labels only (no For Sale 56,797 style counts).
+  const count = variant !== "segmented" && typeof item.count === "number" ? item.count : null;
   return (
     <>
       {item.label}
-      {typeof item.count === "number" && (
+      {count !== null && (
         <span
           className={cn(
             "ml-1.5 tabular-nums",
-            active && (variant === "pill" || variant === "folder" || variant === "segmented")
+            active && (variant === "pill" || variant === "folder")
               ? "text-white/75"
               : active
                 ? "text-ink-subtle"
                 : "text-navy/45",
           )}
         >
-          {item.count.toLocaleString("en-CA")}
+          {count.toLocaleString("en-CA")}
         </span>
       )}
     </>
