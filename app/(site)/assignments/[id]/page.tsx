@@ -21,7 +21,7 @@ import { formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
 
 export const revalidate = 300;
 
-/** Null only for a genuine 404 (or a non-numeric id); other failures surface as errors. */
+/** Null for missing/invalid ids and upstream failures — never crash the whole page. */
 async function load(segment: string): Promise<PublicListing | null> {
   const id = Number(segment);
   if (!Number.isInteger(id) || id <= 0) return null;
@@ -30,7 +30,9 @@ async function load(segment: string): Promise<PublicListing | null> {
     return await getPublicAssignment(id);
   } catch (error) {
     if (error instanceof ApiError && error.isNotFound) return null;
-    throw error;
+    // Temporary listing-service outages should not take down the chrome.
+    console.error("Assignment load failed:", error);
+    return null;
   }
 }
 

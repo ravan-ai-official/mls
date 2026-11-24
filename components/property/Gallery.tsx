@@ -1,7 +1,7 @@
 "use client";
 
 import { SafeImage } from "@/components/ui/SafeImage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { useScrollLock } from "@/lib/hooks/useScrollLock";
 import type { PropertyImage } from "@/lib/types/domain";
@@ -23,9 +23,34 @@ export function Gallery({
 }) {
   const [index, setIndex] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  // URLs that failed to load — drop them so we never keep blank tiles in the set.
+  const [failedUrls, setFailedUrls] = useState<Set<string>>(() => new Set());
 
-  const count = images.length;
+  const photos = useMemo(
+    () => images.filter((image) => image.url && !failedUrls.has(image.url)),
+    [images, failedUrls],
+  );
+  const count = photos.length;
   useScrollLock(lightbox);
+
+  const markFailed = useCallback((url: string) => {
+    setFailedUrls((prev) => {
+      if (prev.has(url)) return prev;
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
+  }, []);
+
+  // Keep the lightbox index inside the surviving photo set; close if none left.
+  useEffect(() => {
+    if (count === 0) {
+      setIndex(0);
+      setLightbox(false);
+      return;
+    }
+    setIndex((current) => Math.min(current, count - 1));
+  }, [count]);
 
   const go = useCallback(
     (delta: number) => {
@@ -56,24 +81,18 @@ export function Gallery({
   useEffect(() => {
     if (!lightbox || count <= 1) return;
     for (const offset of [-2, -1, 1, 2]) {
-      const target = images[(index + offset + count) % count]?.url;
+      const target = photos[(index + offset + count) % count]?.url;
       if (!target || typeof window === "undefined") continue;
       const preload = new window.Image();
       preload.decoding = "async";
       preload.src = target;
     }
-  }, [lightbox, index, count, images]);
+  }, [lightbox, index, count, photos]);
 
-  if (count === 0) {
-    return (
-      <div
-        aria-hidden
-        className="h-[220px] rounded-surface border border-line bg-surface-alt sm:h-[360px] lg:h-[440px]"
-      />
-    );
-  }
+  // No usable photos — skip the gallery entirely (no blank tiles / placeholders).
+  if (count === 0) return null;
 
-  const current = images[index] ?? images[0];
+  const current = photos[index] ?? photos[0];
 
   return (
     <>
@@ -88,12 +107,13 @@ export function Gallery({
           aria-label={`View photo 1 of ${count} full screen`}
         >
           <SafeImage
-            src={images[0].url}
+            src={photos[0].url}
             alt={`${address} — main photo`}
             fill
             priority
             sizes="(max-width: 640px) 100vw, (max-width: 1280px) 70vw, 900px"
             className="object-cover transition-transform duration-500 hover:scale-[1.02]"
+            onError={() => markFailed(photos[0].url)}
           />
         </button>
 
@@ -101,7 +121,7 @@ export function Gallery({
           // A 2×2 thumbnail block, as in HomeAtlasUI: one hero photo with four
           // supporting shots reads as a gallery, where two read as an offcut.
           <div className="hidden h-full grid-cols-2 grid-rows-2 gap-2 sm:grid">
-            {images.slice(1, 5).map((image, i) => {
+            {photos.slice(1, 5).map((image, i) => {
               const shown = Math.min(count - 1, 4);
               const isLast = i === shown - 1;
               const remaining = count - 1 - shown;
@@ -127,6 +147,7 @@ export function Gallery({
                     fill
                     sizes="(max-width: 1280px) 30vw, 320px"
                     className="object-cover transition-transform duration-500 hover:scale-[1.02]"
+                    onError={() => markFailed(image.url)}
                   />
                   {isLast && remaining > 0 && (
                     <span className="absolute inset-0 flex items-center justify-center bg-ink/55 text-small font-semibold text-white">
@@ -171,6 +192,7 @@ export function Gallery({
               key={`${index}-${current.url}`}
               src={current.url}
               alt={`${address} — photo ${index + 1}`}
+              onUnavailable={() => markFailed(current.url)}
             />
           </div>
 
@@ -190,25 +212,28 @@ export function Gallery({
  * Native <img> keyed per slide. Avoids next/image holding the previous bitmap
  * while a new remote listing photo streams in.
  */
-function LightboxSlide({ src, alt }: { src: string; alt: string }) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const failed = failedSrc === src;
-
+function LightboxSlide({
+  src,
+  alt,
+  onUnavailable,
+}: {
+  src: string;
+  alt: string;
+  onUnavailable?: () => void;
+}) {
   return (
     <div className="flex h-full min-h-0 w-full items-center justify-center px-4">
       {/* eslint-disable-next-line @next/next/no-img-element -- lightbox needs instant src swaps */}
-      {!failed && (
-        <img
-          key={src}
-          src={src}
-          alt={alt}
-          decoding="async"
-          fetchPriority="high"
-          referrerPolicy="no-referrer"
-          onError={() => setFailedSrc(src)}
-          className="h-auto w-auto max-h-full max-w-full object-contain"
-        />
-      )}
+      <img
+        key={src}
+        src={src}
+        alt={alt}
+        decoding="async"
+        fetchPriority="high"
+        referrerPolicy="no-referrer"
+        onError={() => onUnavailable?.()}
+        className="h-auto w-auto max-h-full max-w-full object-contain"
+      />
     </div>
   );
 }

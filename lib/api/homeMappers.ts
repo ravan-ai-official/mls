@@ -235,7 +235,7 @@ export function mapSoldBelow(payload: unknown): SoldBelowRow[] {
     count?: unknown;
     results?: unknown;
   };
-  // Explicit empty envelope → hide the section; never fall back to mocks.
+  // Explicit empty envelope → empty rail (FE shows EmptyState); never mock.
   if (envelope.empty === true) return [];
   const count = toNumber(envelope.count);
   if (count === 0) return [];

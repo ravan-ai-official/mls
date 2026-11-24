@@ -17,6 +17,16 @@ type ResultsPayload = {
   failed: boolean;
 };
 
+/** Shareable filter URLs — built on the client so the page never passes a function prop. */
+export function buildAssignmentsHref(page: number, city?: string, priceMax?: number): string {
+  const query = new URLSearchParams();
+  if (city) query.set("city", city);
+  if (priceMax) query.set("priceMax", String(priceMax));
+  if (page > 1) query.set("page", String(page));
+  const qs = query.toString();
+  return qs ? `/assignments?${qs}` : "/assignments";
+}
+
 /**
  * Assignments grid. Fetches in the browser via `/api/mls/…` (or sample data).
  */
@@ -24,12 +34,10 @@ export function AssignmentsResults({
   city,
   priceMax,
   page,
-  buildPageHref,
 }: {
   city?: string;
   priceMax?: number;
   page: number;
-  buildPageHref: (page: number) => string;
 }) {
   const fallback: ResultsPayload = { data: null, failed: false };
   const { data: payload, isPending } = useMlsQuery<ResultsPayload>(
@@ -102,7 +110,11 @@ export function AssignmentsResults({
       </ul>
       {totalPages > 1 && (
         <div className="mt-8">
-          <Pagination page={page} totalPages={totalPages} buildHref={buildPageHref} />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            buildHref={(p) => buildAssignmentsHref(p, city, priceMax)}
+          />
         </div>
       )}
     </>

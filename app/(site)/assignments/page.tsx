@@ -103,12 +103,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
       <div className="container-page py-10">
         <PendingContent fallback={<AssignmentsGridSkeleton />}>
           <Suspense key={`${city}-${priceMax}-${page}`} fallback={<AssignmentsGridSkeleton />}>
-            <AssignmentsResults
-              city={city}
-              priceMax={priceMax}
-              page={page}
-              buildPageHref={(p) => href({ page: p })}
-            />
+            <AssignmentsResults city={city} priceMax={priceMax} page={page} />
           </Suspense>
         </PendingContent>
       </div>

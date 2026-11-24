@@ -14,13 +14,13 @@ type SafeImageProps = Omit<ImageProps, "src"> & {
 };
 
 /**
- * `next/image` that never shows a broken-image icon or "no photo" copy.
+ * `next/image` that never shows a broken-image icon.
  *
  * Feed photos (ddfcdn.realtor.ca / trreb-image.ampre.ca) often fail when run
  * through the Next image optimizer on Vercel, so MLS CDNs load `unoptimized`.
  * If an optimized remote still errors once, we retry unoptimized before
- * hiding the image. Failed / missing sources leave a blank surface so cards
- * keep their aspect ratio without fallback text.
+ * hiding the image. Failed / missing sources leave an empty layout slot —
+ * callers that care (gallery) should drop those URLs from the list via onError.
  */
 export function SafeImage({ src, alt, unoptimized, onError, referrerPolicy, className, ...props }: SafeImageProps) {
   // Remembers WHICH source failed, so a new `src` gets its own attempt.

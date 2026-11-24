@@ -11,6 +11,9 @@ import { cn } from "@/lib/utils/cn";
  * are never clipped. Estimates, schools and community only render data the
  * catalogue actually has — sample school ratings from the reference are not
  * reproduced. Climate Risk on Overview is location-based (Open-Meteo CMIP6).
+ *
+ * Visited panels stay mounted (hidden when inactive) so local UI state —
+ * e.g. mortgage calculator inputs on Comparables — survives tab switches.
  */
 export interface PropertyTab {
   id: string;
@@ -40,11 +43,25 @@ export function PropertyTabs({
   footnote?: ReactNode;
 }) {
   const visible = tabs.filter((tab) => tab.available !== false);
-  const [active, setActive] = useState(visible[0]?.id);
+  const initialId = visible[0]?.id;
+  const [active, setActive] = useState(initialId);
+  const [visited, setVisited] = useState<ReadonlySet<string>>(
+    () => new Set(initialId ? [initialId] : []),
+  );
 
   if (visible.length === 0) return null;
 
   const current = visible.find((tab) => tab.id === active) ?? visible[0];
+
+  function selectTab(id: string) {
+    setActive(id);
+    setVisited((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="mt-2 sm:mt-3">
@@ -65,7 +82,7 @@ export function PropertyTabs({
                   id={`tab-${tab.id}`}
                   aria-selected={selected}
                   aria-controls={`panel-${tab.id}`}
-                  onClick={() => setActive(tab.id)}
+                  onClick={() => selectTab(tab.id)}
                   className={cn(
                     "shrink-0 cursor-pointer whitespace-nowrap border-b-2 px-4 py-4 text-[13px] font-medium transition-colors sm:px-5",
                     selected
@@ -95,15 +112,25 @@ export function PropertyTabs({
               Several panel sections carry their own `mt-10` from when they
               were stacked down one long page. Inside a panel that margin is
               dead space, so the first child has it removed here.
+              Mount each visited panel once and hide inactive ones so inputs
+              (mortgage calculator, notes, …) are not reset on tab change.
             */}
-            <div
-              role="tabpanel"
-              id={`panel-${current.id}`}
-              aria-labelledby={`tab-${current.id}`}
-              className="[&>*:first-child]:mt-0 [&>section:first-child]:mt-0"
-            >
-              {current.content}
-            </div>
+            {visible.map((tab) => {
+              if (!visited.has(tab.id)) return null;
+              const selected = tab.id === current.id;
+              return (
+                <div
+                  key={tab.id}
+                  role="tabpanel"
+                  id={`panel-${tab.id}`}
+                  aria-labelledby={`tab-${tab.id}`}
+                  hidden={!selected}
+                  className="[&>*:first-child]:mt-0 [&>section:first-child]:mt-0"
+                >
+                  {tab.content}
+                </div>
+              );
+            })}
             {footnote}
           </div>
 

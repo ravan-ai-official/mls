@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { Section } from "@/components/ui/Section";
+import { EmptyState, PropertyGridSkeleton } from "@/components/ui/States";
 import { getSoldBelowPurchase } from "@/lib/api/home";
 import type { SoldBelowRow } from "@/lib/api/homeMappers";
 import { readClientVisitor } from "@/lib/personalize/clientVisitor";
@@ -14,10 +15,11 @@ import { buildListingHref } from "@/lib/utils/searchParams";
 
 /**
  * Sold-below rail from mls-backend `/api/home/sold-below-purchase/`.
- * Client fetch so Network shows the home-feed JSON.
+ * Client fetch so Network shows the home-feed JSON. Keeps the section visible
+ * with EmptyState when the feed has no displayable rows (same pattern as Featured).
  */
 export function SoldBelowLastPurchase({ content }: { content?: Record<string, unknown> }) {
-  const { data: rows } = useMlsQuery<SoldBelowRow[] | null>(
+  const { data: rows, isPending } = useMlsQuery<SoldBelowRow[] | null>(
     ["home", "sold-below"],
     async () => {
       const visitor = readClientVisitor();
@@ -28,27 +30,45 @@ export function SoldBelowLastPurchase({ content }: { content?: Record<string, un
     },
     null,
   );
-  if (!rows || rows.length === 0) return null;
+
+  const eyebrow = textOf(content, "eyebrow", "Buyer's opportunity");
+  const title = textOf(content, "title", "Sold Below Last Purchase");
+  const description = textOf(
+    content,
+    "description",
+    "Properties that recently sold below their previous purchase price — potential value opportunities",
+  );
+  const action = {
+    label: textOf(content, "actionLabel", "View All Sold Data"),
+    href: textOf(content, "actionHref", buildListingHref({ status: "Sold" })),
+  };
+
+  if (isPending && !rows) {
+    return (
+      <Section eyebrow={eyebrow} title={title}>
+        <PropertyGridSkeleton count={3} />
+      </Section>
+    );
+  }
+
+  // Live feed only — drop imageless rows so we never show beige placeholders.
+  const displayRows = (rows ?? []).filter((row) => Boolean(row.imageUrl));
 
   return (
-    <Section
-      eyebrow={textOf(content, "eyebrow", "Buyer's opportunity")}
-      title={textOf(content, "title", "Sold Below Last Purchase")}
-      description={textOf(
-        content,
-        "description",
-        "Properties that recently sold below their previous purchase price — potential value opportunities",
+    <Section eyebrow={eyebrow} title={title} description={description} action={action}>
+      {displayRows.length === 0 ? (
+        <EmptyState
+          title="No sold-below listings available"
+          description="We don't have recent homes that sold below their previous purchase right now."
+          action={action}
+        />
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {displayRows.map((row) => (
+            <SoldCard key={row.listingKey} row={row} />
+          ))}
+        </div>
       )}
-      action={{
-        label: textOf(content, "actionLabel", "View All Sold Data"),
-        href: textOf(content, "actionHref", buildListingHref({ status: "Sold" })),
-      }}
-    >
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map((row) => (
-          <SoldCard key={row.listingKey} row={row} />
-        ))}
-      </div>
     </Section>
   );
 }
@@ -73,7 +93,6 @@ function SoldCard({ row }: { row: SoldBelowRow }) {
       className="group overflow-hidden rounded-surface border border-line bg-surface transition-shadow hover:shadow-card-hover"
     >
       <div className="relative h-[180px] overflow-hidden bg-surface-alt">
-        {/* Missing image_url → generic house placeholder; never invent listing data. */}
         <SafeImage
           src={row.imageUrl}
           alt={row.address}

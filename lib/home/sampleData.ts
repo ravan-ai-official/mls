@@ -1,12 +1,9 @@
 /**
  * HomeAtlasUI sample data, ported verbatim from HomeAtlasUI/src/data/index.ts.
  *
- * The homepage sections that have no backend source yet (investor yields,
- * deals, sold-below-purchase, schools, incentives, market snapshot, news…)
- * render from this, per the product decision to treat the reference data as
- * correct until the endpoints in docs/HOMEPAGE_BACKEND_REQUIREMENTS.xlsx
- * exist. Live sections (listings, communities, precon, property types, blog)
- * never read from here.
+ * Legacy reference fixtures for sections that still lack a live feed.
+ * Sold-below, featured, investor picks, schools, precon, etc. use live APIs
+ * only — never inject sample cards when those feeds are empty.
  *
  * Sample records are not real MLS® listings, so sections built on them link
  * to searches (/listings?…), never to /property/<id>.
