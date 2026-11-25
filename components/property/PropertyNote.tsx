@@ -43,7 +43,7 @@ export function PropertyNote({ listingKey }: { listingKey: string }) {
   if (!user) {
     return (
       <section className="mt-10 rounded-surface border border-line bg-surface p-5">
-        <h2 className="text-h3 text-ink">Your notes</h2>
+        <h2 className="text-h3 text-ink">Notes</h2>
         <p className="mt-1.5 text-small text-ink-muted">
           Sign in to keep private notes on this home.
         </p>
@@ -56,7 +56,7 @@ export function PropertyNote({ listingKey }: { listingKey: string }) {
 
   return (
     <section className="mt-10 rounded-surface border border-line bg-surface p-5">
-      <h2 className="text-h3 text-ink">Your notes</h2>
+      <h2 className="text-h3 text-ink">Notes</h2>
       <p className="mt-1 text-caption text-ink-muted">
         Private to your account — never shown to anyone else.
       </p>

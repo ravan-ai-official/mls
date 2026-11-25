@@ -26,6 +26,7 @@ import {
   type PropertyStatus,
   type PropertySummary,
   type PropertyTypeFacet,
+  type PropertyWashroom,
   type UiPropertyType,
 } from "@/lib/types/domain";
 import {
@@ -473,14 +474,100 @@ function fact(label: string, value: string | number | null | undefined): Propert
   return { label, value: text };
 }
 
-function group(title: string, facts: Array<PropertyFact | null>) {
+function keepFacts(facts: Array<PropertyFact | null>): PropertyFact[] {
   // Omit unknown MLS fields entirely — never render a dash placeholder row.
-  const kept = facts.filter((f): f is PropertyFact => {
+  return facts.filter((f): f is PropertyFact => {
     if (f === null) return false;
     const value = f.value.trim();
     return value.length > 0 && value !== EMPTY;
   });
-  return kept.length > 0 ? { title, facts: kept } : null;
+}
+
+function groupColumns(
+  title: string,
+  left: Array<PropertyFact | null>,
+  right: Array<PropertyFact | null>,
+) {
+  const leftKept = keepFacts(left);
+  const rightKept = keepFacts(right);
+  if (leftKept.length === 0 && rightKept.length === 0) return null;
+  return {
+    title,
+    left: leftKept,
+    right: rightKept,
+    facts: [...leftKept, ...rightKept],
+  };
+}
+
+/** Decimal feet → `12'6"` so room dimensions always carry feet/inches units. */
+export function formatFeetInches(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/['′]|ft|feet|in|″|"/i.test(raw)) return raw;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return raw;
+  const feet = Math.floor(n);
+  let inches = Math.round((n - feet) * 12);
+  if (inches === 12) return `${feet + 1}'`;
+  if (inches === 0) return `${feet}'`;
+  return `${feet}'${inches}"`;
+}
+
+/**
+ * Room dimensions with feet/inches units. Prefers the feed’s dimension string;
+ * falls back to length × width.
+ */
+export function formatRoomDimensions(room: BackendRoom): string | null {
+  const dims = room.room_dimensions?.trim();
+  if (dims) {
+    if (/['′]|ft|feet|in|″|"/i.test(dims)) return dims;
+    const parts = dims.split(/[x×]/i).map((part) => part.trim()).filter(Boolean);
+    if (parts.length === 2) {
+      const a = formatFeetInches(parts[0]);
+      const b = formatFeetInches(parts[1]);
+      if (a && b) return `${a} × ${b}`;
+    }
+    const asFeet = formatFeetInches(dims);
+    return asFeet && asFeet !== dims ? asFeet : `${dims} ft`;
+  }
+  const length = formatFeetInches(room.room_length);
+  const width = formatFeetInches(room.room_width);
+  if (length && width) return `${length} × ${width}`;
+  return length ?? width;
+}
+
+/** Bathroom / washroom / powder rows for the Washroom Info table. */
+export function deriveWashrooms(rooms: BackendRoom[] | null | undefined): PropertyWashroom[] {
+  if (!rooms?.length) return [];
+  const out: PropertyWashroom[] = [];
+  for (const room of rooms) {
+    const type = (room.room_type || "").trim();
+    if (!type) continue;
+    if (!/bath|wash\s*room|powder/i.test(type)) continue;
+    const blob = `${type} ${room.room_description ?? ""}`;
+    const piecesMatch = blob.match(/(\d+)\s*[- ]?\s*(?:pc|pcs|piece)/i);
+    out.push({
+      count: 1,
+      pieces: piecesMatch ? Number(piecesMatch[1]) : null,
+      level: titleCase(room.room_level),
+    });
+  }
+  return out;
+}
+
+function deriveLaundryLevel(rooms: BackendRoom[] | null | undefined): string | null {
+  if (!rooms?.length) return null;
+  for (const room of rooms) {
+    if (!/laundry/i.test(room.room_type || "")) continue;
+    return titleCase(room.room_level);
+  }
+  return null;
+}
+
+function yesNoFromFlag(value: boolean | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  return value ? "Yes" : "No";
 }
 
 /** "4-year-new" / "built in 2022" in remarks when YearBuilt is blank. */
@@ -588,18 +675,6 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       : null,
   );
 
-  const listPriceLabel =
-    summary.price === null
-      ? null
-      : summary.isLease
-        ? formatLeasePrice(summary.price)
-        : formatPrice(summary.price);
-  const lastSoldLabel =
-    summary.closePrice === null
-      ? null
-      : summary.isLease
-        ? formatLeasePrice(summary.closePrice)
-        : formatPrice(summary.closePrice);
   const maintenanceLabel = assocFee
     ? `${formatPrice(assocFee)}${raw.association_fee_frequency ? ` / ${raw.association_fee_frequency.toLowerCase()}` : ""}`
     : null;
@@ -607,84 +682,149 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     daysOnMarket === null
       ? null
       : `${daysOnMarket} day${daysOnMarket === 1 ? "" : "s"}`;
+  const taxYear =
+    typeof raw.tax_year === "number" && Number.isFinite(raw.tax_year) ? raw.tax_year : null;
+  const taxLabel = taxAnnual
+    ? taxYear
+      ? `${formatPrice(taxAnnual)} / ${taxYear}`
+      : formatPrice(taxAnnual)
+    : null;
+  const ageLabel =
+    propertyAge === null
+      ? null
+      : `${propertyAge} year${propertyAge === 1 ? "" : "s"}`;
+  const dataSource =
+    titleCase(raw.origin_system_name) || titleCase(raw.list_aor);
+  const aboveGradeLabel =
+    sqftAboveGrade && sqftAboveGrade > 0
+      ? `${formatNumber(sqftAboveGrade)} sq ft`
+      : null;
+  const hasGarage =
+    garageSpaces !== null
+      ? garageSpaces > 0
+      : Boolean(raw.garage_size?.trim()) || /(garage|carport)/.test(parkingFeatures)
+        ? true
+        : null;
+  const fireplaceLabel =
+    typeof raw.fireplace_yn === "boolean"
+      ? raw.fireplace_yn
+        ? raw.fireplaces_total && raw.fireplaces_total > 0
+          ? `Yes (${raw.fireplaces_total})`
+          : "Yes"
+        : "No"
+      : raw.fireplaces_total != null
+        ? raw.fireplaces_total > 0
+          ? String(raw.fireplaces_total)
+          : "No"
+        : null;
+  const poolLabel = titleCase(raw.pool_features);
+  const exteriorLabel = titleCase(raw.construction_materials);
+  const laundryLevel = deriveLaundryLevel(raw.rooms);
+  const driveSpacesMatch = (raw.parking_features || "").match(
+    /(\d+)\s*(?:drive|driveway|parking\s*drive)/i,
+  );
+  const parkingDriveSpaces = driveSpacesMatch ? driveSpacesMatch[1] : null;
+  const inclusions =
+    typeof raw.inclusions === "string" && raw.inclusions.trim()
+      ? raw.inclusions.trim()
+      : null;
+  const washrooms = deriveWashrooms(raw.rooms);
 
-  // Only MLS-backed values — omit a row entirely when the feed has nothing.
+  // Listing Details — Overview / More details columns match the mockup order.
+  // Sparse MLS fields are omitted per column (no dash placeholders).
   const factGroups = [
-    group("Overview", [
-      fact("Municipality", summary.community),
-      fact("Community", summary.neighbourhood),
-      fact("Address", summary.address),
-      fact("Level", level),
-      fact("Unit #", unitNumber),
-      fact("Locker", locker === null ? null : locker ? "Yes" : "No"),
-      fact(
-        "POTL monthly fees",
-        potlMonthlyFees === null ? null : formatPrice(potlMonthlyFees),
-      ),
-      fact("Maintenance", maintenanceLabel),
-      fact("Included in maintenance costs", associationFeeIncludes),
-      fact("Property type", summary.type),
-      fact("Style", style),
-      fact(
-        "Lot frontage",
-        lotFrontage ? `${formatNumber(lotFrontage)} ft` : null,
-      ),
-      fact("Lot depth", lotDepth),
-      fact("List price", listPriceLabel),
-      fact("Last sold price", lastSoldLabel),
-      fact("Property taxes", taxAnnual ? formatPrice(taxAnnual) : null),
-      fact("Days on market", daysOnMarketLabel),
-      fact(
-        "Square feet above ground",
-        sqftAboveGrade && sqftAboveGrade > 0
-          ? `${formatNumber(sqftAboveGrade)} sq ft`
-          : sqftLabel,
-      ),
-      fact(
-        "Garage parking spaces",
-        garageSpaces === null ? null : formatNumber(garageSpaces),
-      ),
-      fact(
-        "Total parking spaces",
-        raw.parking_total === null || raw.parking_total === undefined
-          ? null
-          : formatNumber(raw.parking_total),
-      ),
-      fact("Year built", yearBuilt),
-      fact("Number of bedrooms", bedsLabel ?? summary.beds),
-      fact("Number of washrooms", summary.baths),
-      fact("Family room", familyRoom === null ? null : familyRoom ? "Yes" : "No"),
-      fact("Basement (finished/unfinished)", basement),
-      fact("Number of kitchens", kitchens),
-      fact("Rental items under contract", rentalItems),
-    ]),
-    group("More details", [
-      fact("Listing #", summary.mls),
-      fact("Status", statusLabel(summary.status)),
-      fact("Ownership / Title", ownership),
-      fact("Directions", titleCase(raw.directions)),
-      fact("Partial baths", raw.bathrooms_partial),
-      fact("Rooms", roomCount || null),
-      fact("Square footage", sqftLabel),
-      fact(
-        "Property age",
-        propertyAge === null
-          ? null
-          : `${propertyAge} year${propertyAge === 1 ? "" : "s"}`,
-      ),
-      fact("Number of floors", stories),
-      fact("Construction", titleCase(raw.construction_materials)),
-      fact("Flooring", titleCase(raw.flooring)),
-      fact("Garage type", titleCase(raw.garage_size)),
-      fact("Parking features", titleCase(raw.parking_features)),
-      fact("Lot size", raw.lot_size_dimensions),
-      fact("Zoning", titleCase(raw.zoning)),
-      fact("Water", titleCase(raw.water_source)),
-      fact("Sewer", titleCase(raw.sewer)),
-      fact("Cooling", titleCase(raw.cooling)),
-      fact("Heating", titleCase(raw.heating)),
-    ]),
-  ].filter((g): g is { title: string; facts: PropertyFact[] } => g !== null);
+    groupColumns(
+      "Overview",
+      [
+        fact("Listing #", summary.mls),
+        fact("Data source", dataSource),
+        fact("Ownership / Title", ownership),
+        // Area is only shown when it differs from Community (avoid duplicates).
+        fact(
+          "Area",
+          raw.city_region?.trim() &&
+            summary.neighbourhood &&
+            raw.city_region.trim().toLowerCase() !== summary.neighbourhood.toLowerCase()
+            ? titleCase(raw.city_region)
+            : null,
+        ),
+        fact("Address", summary.address),
+        fact("Postal code", summary.postalCode),
+        fact("Approx. age", ageLabel),
+      ],
+      [
+        fact("Status", statusLabel(summary.status)),
+        fact("Property tax/year", taxLabel),
+        fact("Property type", summary.type),
+        fact("Municipality", summary.community),
+        fact("Community", summary.neighbourhood),
+        fact("Size", sqftLabel),
+      ],
+    ),
+    groupColumns(
+      "More details",
+      [
+        fact(
+          "Lot frontage",
+          lotFrontage ? `${formatNumber(lotFrontage)} ft` : null,
+        ),
+        fact("Square feet above ground", aboveGradeLabel),
+        fact("Garage", yesNoFromFlag(hasGarage)),
+        fact(
+          "Garage parking spaces",
+          garageSpaces === null ? null : formatNumber(garageSpaces),
+        ),
+        fact("Rooms", roomCount || null),
+        fact("Number of bedrooms", bedsLabel ?? summary.beds),
+        fact("Number of kitchens", kitchens),
+        fact("Number of floors", stories),
+        fact("Locker", yesNoFromFlag(locker)),
+        fact("Maintenance", maintenanceLabel),
+        fact("Exterior", exteriorLabel),
+        fact("Fireplace", fireplaceLabel),
+        fact("Laundry level", laundryLevel),
+        fact("Water", titleCase(raw.water_source)),
+        fact("Heating", titleCase(raw.heating)),
+      ],
+      [
+        fact("Lot depth", lotDepth),
+        fact("CDOM", daysOnMarketLabel),
+        fact("Style", style),
+        fact("Basement", basement),
+        fact("Garage type", titleCase(raw.garage_size)),
+        fact(
+          "Total parking spaces",
+          raw.parking_total === null || raw.parking_total === undefined
+            ? null
+            : formatNumber(raw.parking_total),
+        ),
+        fact("Family room", yesNoFromFlag(familyRoom)),
+        fact("Number of washrooms", summary.baths),
+        fact("Year built", yearBuilt),
+        fact(
+          "POTL monthly fee",
+          potlMonthlyFees === null ? null : formatPrice(potlMonthlyFees),
+        ),
+        fact("Level", level),
+        fact("Unit #", unitNumber),
+        fact("Included in maintenance cost", associationFeeIncludes),
+        fact("Parking drive spaces", parkingDriveSpaces),
+        fact("Pool", poolLabel),
+        fact("Under contract", rentalItems),
+        fact("Sewer", titleCase(raw.sewer)),
+        fact("Cooling", titleCase(raw.cooling)),
+      ],
+    ),
+  ].filter(
+    (
+      g,
+    ): g is {
+      title: string;
+      left: PropertyFact[];
+      right: PropertyFact[];
+      facts: PropertyFact[];
+    } => g !== null,
+  );
 
   const features = collectFeatures(raw);
 
@@ -699,9 +839,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       .map((r) => ({
         name: titleCase(r.room_type),
         level: titleCase(r.room_level),
-        dimensions:
-          r.room_dimensions?.trim() ||
-          (r.room_length && r.room_width ? `${r.room_length} × ${r.room_width}` : null),
+        dimensions: formatRoomDimensions(r),
       }))
       .filter((r) => r.name !== null),
     unitNumber,
@@ -729,6 +867,8 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     propertyAge,
     potlMonthlyFees,
     rentalItems,
+    inclusions,
+    washrooms,
     features,
     factGroups,
     virtualTourUrl: httpUrl(raw.virtual_tour_url),

@@ -34,6 +34,9 @@ export interface BackendRoom {
   room_length: string | null;
   room_width: string | null;
   room_dimensions: string | null;
+  /** Present on some detail payloads; RoomSerializer may omit it. */
+  room_description?: string | null;
+  room_length_width_units?: string | null;
 }
 
 /** PropertySerializer — the list/search shape. */
@@ -140,9 +143,14 @@ export interface BackendPropertyDetail extends Omit<BackendPropertySummary, "med
   bathrooms_partial: number | null;
   stories: number | null;
   tax_annual_amount: string | null;
+  /** Assessment year for Property tax/year when the feed fills it. */
+  tax_year?: number | null;
   association_fee: string | null;
   association_fee_frequency: string | null;
   association_fee_includes: string | null;
+  /** Board / originating system — used as Data source when present. */
+  origin_system_name?: string | null;
+  list_aor?: string | null;
   heating: string | null;
   cooling: string | null;
   basement: string | null;

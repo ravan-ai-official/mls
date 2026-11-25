@@ -7,7 +7,10 @@ import {
   deriveRentalItems,
   deriveRoomSignals,
   deriveUnitNumber,
+  deriveWashrooms,
   deriveYearBuiltFromRemarks,
+  formatFeetInches,
+  formatRoomDimensions,
   mapPropertyDetail,
   mapPropertySummary,
   normalizeStatus,
@@ -272,17 +275,17 @@ describe("mapPropertyDetail listing fields", () => {
     expect(facts["Level"]).toBe("17");
     expect(facts["Unit #"]).toBe("1712");
     expect(facts["Locker"]).toBe("Yes");
-    expect(facts["Property taxes"]).toBe("$3,200");
+    expect(facts["Property tax/year"]).toBe("$3,200");
     expect(facts["Maintenance"]).toMatch(/\$650/);
-    expect(facts["Included in maintenance costs"]).toMatch(/Heat/i);
-    expect(facts["Days on market"]).toBe("14 days");
-    expect(facts["Rental items under contract"]).toBe("Hot Water Tank");
+    expect(facts["Included in maintenance cost"]).toMatch(/Heat/i);
+    expect(facts["CDOM"]).toBe("14 days");
+    expect(facts["Under contract"]).toBe("Hot Water Tank");
+    expect(detail.rentalItems).toBe("Hot Water Tank");
     expect(detail.features).toEqual(expect.arrayContaining(["Locker", "Party Room", "Fridge", "Stove"]));
     expect(detail.propertySubType).toBe("Condo Apartment");
     // Unknown MLS fields are omitted — never shown as "—".
-    expect(facts).not.toHaveProperty("POTL monthly fees");
+    expect(facts).not.toHaveProperty("POTL monthly fee");
     expect(facts).not.toHaveProperty("Lot depth");
-    expect(facts).not.toHaveProperty("Last sold price");
     expect(Object.values(facts).some((value) => value === "—")).toBe(false);
     vi.useRealTimers();
   });
@@ -309,9 +312,47 @@ describe("mapPropertyDetail listing fields", () => {
       detail.factGroups.flatMap((g) => g.facts.map((f) => [f.label, f.value])),
     );
     expect(facts["Year built"]).toBe("2022");
-    expect(facts["Property age"]).toBe("4 years");
+    expect(facts["Approx. age"]).toBe("4 years");
     expect(facts).not.toHaveProperty("Unit #");
     expect(facts).not.toHaveProperty("Maintenance");
     vi.useRealTimers();
+  });
+
+  it("formats room dimensions with feet/inches and derives washroom rows", () => {
+    expect(formatFeetInches(12.5)).toBe(`12'6"`);
+    expect(formatRoomDimensions({
+      room_type: "Living",
+      room_level: "Main",
+      room_length: "14.5",
+      room_width: "12",
+      room_dimensions: null,
+    })).toBe(`14'6" × 12'`);
+    expect(deriveWashrooms([
+      {
+        room_type: "Bathroom",
+        room_level: "Main",
+        room_length: null,
+        room_width: null,
+        room_dimensions: null,
+        room_description: "2 Pc",
+      },
+      {
+        room_type: "5 Pc Bath",
+        room_level: "2nd",
+        room_length: null,
+        room_width: null,
+        room_dimensions: null,
+      },
+      {
+        room_type: "Bedroom",
+        room_level: "2nd",
+        room_length: null,
+        room_width: null,
+        room_dimensions: null,
+      },
+    ])).toEqual([
+      { count: 1, pieces: 2, level: "Main" },
+      { count: 1, pieces: 5, level: "2nd" },
+    ]);
   });
 });

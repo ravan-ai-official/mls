@@ -1,14 +1,14 @@
-import type { PropertyDetail } from "@/lib/types/domain";
+import type { PropertyDetail, PropertyFact } from "@/lib/types/domain";
 import type { ListingEngagement } from "@/lib/api/neighbourhood";
 
-/** Key Facts card — HomeAtlasUI overview, filled from the listing feed. */
+/** Listing Details card — Overview / More details two-column fact grids. */
 export function KeyFacts({ groups }: { groups: PropertyDetail["factGroups"] }) {
   if (groups.length === 0) return null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line">
       <div className="border-b border-line bg-surface-alt px-4 py-4 sm:px-6">
-        <h2 className="text-[18px] font-semibold text-ink">Key Facts</h2>
+        <h2 className="text-[18px] font-semibold text-ink">Listing Details</h2>
       </div>
       {groups.map((group) => (
         <div key={group.title}>
@@ -17,20 +17,43 @@ export function KeyFacts({ groups }: { groups: PropertyDetail["factGroups"] }) {
               {group.title}
             </p>
           </div>
-          <dl className="grid sm:grid-cols-2">
-            {group.facts.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-baseline justify-between gap-3 border-b border-line-soft px-4 py-3 text-[13px] sm:px-6"
-              >
-                <dt className="text-ink-muted">{item.label}</dt>
-                <dd className="text-right font-medium text-ink">{item.value}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="grid sm:grid-cols-2">
+            <FactColumn facts={group.left} />
+            <FactColumn facts={group.right} borderOnMobile />
+          </div>
         </div>
       ))}
     </div>
+  );
+}
+
+function FactColumn({
+  facts,
+  borderOnMobile = false,
+}: {
+  facts: PropertyFact[];
+  /** Right column: top border on stacked mobile so columns separate cleanly. */
+  borderOnMobile?: boolean;
+}) {
+  if (facts.length === 0) return <div className="hidden sm:block" />;
+  return (
+    <dl
+      className={
+        borderOnMobile
+          ? "border-t border-line sm:border-t-0 sm:border-l sm:border-line"
+          : undefined
+      }
+    >
+      {facts.map((item) => (
+        <div
+          key={item.label}
+          className="flex items-baseline justify-between gap-3 border-b border-line-soft px-4 py-3 text-[13px] sm:px-6"
+        >
+          <dt className="text-ink-muted">{item.label}</dt>
+          <dd className="text-right font-medium text-ink">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

@@ -342,20 +342,6 @@ export default async function PropertyPage({
                       <Suspense fallback={null}>
                         <DemandPanel listingKey={property.id} />
                       </Suspense>
-                      {hasLocation ? (
-                        <Suspense fallback={<SectionSkeleton label="Loading climate risk" />}>
-                          <ClimateRiskPanel
-                            latitude={property.latitude ?? 0}
-                            longitude={property.longitude ?? 0}
-                          />
-                        </Suspense>
-                      ) : (
-                        <ClimateRisk
-                          risks={[]}
-                          unavailable
-                          emptyMessage="This listing has no map coordinates yet, so climate projections cannot be calculated."
-                        />
-                      )}
                       {property.description && (
                         <section>
                           <h2 className="mb-3 text-[18px] font-semibold text-ink">Description</h2>
@@ -390,7 +376,9 @@ export default async function PropertyPage({
                                 <tr className="border-b border-line text-left text-ink-muted">
                                   <th scope="col" className="px-4 py-3 font-medium sm:px-6">Room</th>
                                   <th scope="col" className="px-4 py-3 font-medium sm:px-6">Level</th>
-                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">Dimensions</th>
+                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
+                                    Dimensions (ft / in)
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -405,6 +393,85 @@ export default async function PropertyPage({
                             </table>
                           </div>
                         </section>
+                      )}
+                      {property.washrooms.length > 0 && (
+                        <section className="overflow-hidden rounded-2xl border border-line">
+                          <div className="border-b border-line bg-surface-alt px-4 py-4 sm:px-6">
+                            <h2 className="text-[18px] font-semibold text-ink">Washroom Info</h2>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[360px] text-[13px]">
+                              <thead>
+                                <tr className="border-b border-line text-left text-ink-muted">
+                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
+                                    # of Washrooms
+                                  </th>
+                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
+                                    Pieces
+                                  </th>
+                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
+                                    Level
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {property.washrooms.map((row, index) => (
+                                  <tr
+                                    key={`${row.level}-${row.pieces}-${index}`}
+                                    className="border-b border-line-soft"
+                                  >
+                                    <td className="px-4 py-3 font-medium text-ink sm:px-6">
+                                      {row.count}
+                                    </td>
+                                    <td className="px-4 py-3 text-ink-muted sm:px-6">
+                                      {row.pieces ?? ""}
+                                    </td>
+                                    <td className="px-4 py-3 text-ink-muted sm:px-6">
+                                      {row.level ?? ""}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+                      )}
+                      {(property.inclusions || property.rentalItems) && (
+                        <section className="rounded-2xl border border-line p-4 sm:p-6">
+                          <h2 className="mb-3 text-[18px] font-semibold text-ink">Inclusions</h2>
+                          {property.inclusions ? (
+                            <p className="text-[14px] leading-relaxed text-ink-muted">
+                              <span className="font-medium text-ink">Inclusions: </span>
+                              {property.inclusions}
+                            </p>
+                          ) : null}
+                          {property.rentalItems ? (
+                            <p
+                              className={
+                                property.inclusions
+                                  ? "mt-3 text-[14px] leading-relaxed text-ink-muted"
+                                  : "text-[14px] leading-relaxed text-ink-muted"
+                              }
+                            >
+                              <span className="font-medium text-ink">Rental Items: </span>
+                              {property.rentalItems}
+                            </p>
+                          ) : null}
+                        </section>
+                      )}
+                      {hasLocation ? (
+                        <Suspense fallback={<SectionSkeleton label="Loading climate risk" />}>
+                          <ClimateRiskPanel
+                            latitude={property.latitude ?? 0}
+                            longitude={property.longitude ?? 0}
+                          />
+                        </Suspense>
+                      ) : (
+                        <ClimateRisk
+                          risks={[]}
+                          unavailable
+                          emptyMessage="This listing has no map coordinates yet, so climate projections cannot be calculated."
+                        />
                       )}
                       <PropertyNote listingKey={property.id} />
                     </div>

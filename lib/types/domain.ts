@@ -89,6 +89,15 @@ export interface PropertyRoom {
   dimensions: string | null;
 }
 
+/** One washroom row for the Overview “Washroom Info” table. */
+export interface PropertyWashroom {
+  /** Usually 1 — how many washrooms share this pieces/level combo. */
+  count: number;
+  /** Piece count (e.g. 4 for a 4-piece bath). Null when the feed omits it. */
+  pieces: number | null;
+  level: string | null;
+}
+
 export interface PropertyImage {
   url: string;
   category: string | null;
@@ -133,10 +142,23 @@ export interface PropertyDetail extends PropertySummary {
   propertyAge: number | null;
   potlMonthlyFees: number | null;
   rentalItems: string | null;
+  /** Full MLS inclusions text for the Overview Inclusions section. */
+  inclusions: string | null;
+  /** Washroom rows derived from bathroom room entries. */
+  washrooms: PropertyWashroom[];
   /** Amenity / feature chips from MLS interior, exterior, building, etc. */
   features: string[];
-  /** Grouped facts for the detail spec sections; empty groups are dropped. */
-  factGroups: Array<{ title: string; facts: PropertyFact[] }>;
+  /**
+   * Listing Details groups. Each group is two columns so Overview / More
+   * details can keep the mockup’s left/right field order when rows are sparse.
+   */
+  factGroups: Array<{
+    title: string;
+    left: PropertyFact[];
+    right: PropertyFact[];
+    /** Flat union of left+right — handy for tests and simple consumers. */
+    facts: PropertyFact[];
+  }>;
   /** http(s) virtual-tour link from the feed. Absent when the listing has none. */
   virtualTourUrl: string | null;
 }

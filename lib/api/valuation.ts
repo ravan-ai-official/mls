@@ -119,6 +119,8 @@ export interface ValuationComp {
   /** Close date for sold; off-market date for proxy; listed date for active. */
   eventDate: string | null;
   daysOnMarket: number | null;
+  /** Primary photo — mainly for active_listing suggestion cards. */
+  imageUrl: string | null;
   details: AvmDetails;
 }
 
@@ -263,6 +265,7 @@ function mapComp(comp: Record<string, unknown>): ValuationComp {
     source,
     eventDate: typeof comp.event_date === "string" ? comp.event_date : null,
     daysOnMarket: typeof comp.days_on_market === "number" ? comp.days_on_market : null,
+    imageUrl: typeof comp.image_url === "string" ? comp.image_url.trim() || null : null,
     details: mapAvmDetails(comp.details),
   };
 }

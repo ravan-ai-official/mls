@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { SafeImage } from "@/components/ui/SafeImage";
 import type { AvmDetails, ValuationComp, ValuationResult } from "@/lib/api/valuation";
 import { cn } from "@/lib/utils/cn";
 import { EMPTY, formatDate, formatNumber, formatPrice } from "@/lib/utils/format";
@@ -84,11 +86,7 @@ const ROWS: Row[] = [
         <>
           {formatPrice(c.comp.closePrice ?? c.comp.price)}
           <span className="block text-caption text-ink-subtle">
-            {c.comp.source === "sold"
-              ? "Sold (close price)"
-              : c.comp.source === "sold_proxy"
-                ? "Last asking (off market)"
-                : "List price (active)"}
+            {c.comp.source === "sold_proxy" ? "Last asking (off market)" : "Sold (close price)"}
           </span>
         </>
       ),
@@ -103,11 +101,7 @@ const ROWS: Row[] = [
           {dash(c.comp.eventDate)}
           {c.comp.eventDate && (
             <span className="block text-caption text-ink-subtle">
-              {c.comp.source === "sold"
-                ? "Closed"
-                : c.comp.source === "sold_proxy"
-                  ? "Left market"
-                  : "Listed"}
+              {c.comp.source === "sold_proxy" ? "Left market" : "Closed"}
             </span>
           )}
         </>
@@ -169,17 +163,20 @@ const ROWS: Row[] = [
  * on narrow screens; the first column stays pinned.
  */
 export function AvmReport({ result }: { result: ValuationResult }) {
-  const soldPreferred = [
+  // Sold comparison table: sold + sold_proxy only — never fall back to for-sale rows.
+  const soldComps = [
     ...result.comps.filter((c) => c.source === "sold"),
     ...result.comps.filter((c) => c.source === "sold_proxy"),
-  ];
-  const comps = (soldPreferred.length > 0 ? soldPreferred : result.comps).slice(0, AVM_COMP_COLUMNS);
+  ].slice(0, AVM_COMP_COLUMNS);
   const columns: Column[] = [
     { kind: "subject", details: result.subjectDetails },
-    ...comps.map((comp) => ({ kind: "comp" as const, comp, details: comp.details })),
+    ...soldComps.map((comp) => ({ kind: "comp" as const, comp, details: comp.details })),
   ];
-  const anyProxy = comps.some((comp) => comp.source === "sold_proxy");
-  const active = result.activeComps.slice(0, 5);
+  const anyProxy = soldComps.some((comp) => comp.source === "sold_proxy");
+  // For-sale suggestions come only from active_comps (active_listing), never comps[].
+  const active = result.activeComps
+    .filter((c) => c.source === "active_listing")
+    .slice(0, 5);
   const hedonic = result.breakdown.filter((b) => b.source !== "ai" && b.delta !== 0).slice(0, 8);
   const aiAdj = result.breakdown.filter((b) => b.source === "ai").slice(0, 8);
 
@@ -265,93 +262,87 @@ export function AvmReport({ result }: { result: ValuationResult }) {
         </section>
       )}
 
-      {comps.length > 0 && (
-        <section className="rounded-surface border border-line bg-surface p-5 sm:p-6 lg:p-8">
-          <h3 className="text-h3 text-navy">Comparable information</h3>
-          <p className="mt-1 text-caption text-ink-muted">
-            Your home beside the {comps.length} closest sold comparables used in this estimate
-            {result.comps.length > comps.length ? ` (of ${formatNumber(result.comps.length)})` : ""}.
+      <section className="rounded-surface border border-line bg-surface p-5 sm:p-6 lg:p-8">
+        <h3 className="text-h3 text-navy">Comparable information</h3>
+        {soldComps.length === 0 ? (
+          <p className="mt-3 text-small text-ink-muted">
+            Not enough nearby solds to compare yet.
           </p>
-          <div className="mt-4 overflow-x-auto rounded-control border border-line">
-            <table className="w-full min-w-[960px] text-left text-small lg:min-w-full">
-              <thead>
-                <tr className="bg-surface-alt">
-                  <th
-                    scope="col"
-                    className="sticky left-0 z-10 bg-surface-alt px-3 py-2.5 text-caption font-semibold uppercase tracking-wide text-ink-muted"
-                  >
-                    <span className="sr-only">Feature</span>
-                  </th>
-                  {columns.map((column, index) => (
+        ) : (
+          <>
+            <p className="mt-1 text-caption text-ink-muted">
+              Your home beside the {soldComps.length} closest sold comparables used in this
+              estimate.
+            </p>
+            <div className="mt-4 overflow-x-auto rounded-control border border-line">
+              <table className="w-full min-w-[960px] text-left text-small lg:min-w-full">
+                <thead>
+                  <tr className="bg-surface-alt">
                     <th
-                      key={index}
                       scope="col"
-                      className={cn(
-                        "px-3 py-2.5 text-caption font-semibold uppercase tracking-wide",
-                        column.kind === "subject" ? "bg-navy text-white" : "text-ink-muted",
-                      )}
+                      className="sticky left-0 z-10 bg-surface-alt px-3 py-2.5 text-caption font-semibold uppercase tracking-wide text-ink-muted"
                     >
-                      {column.kind === "subject" ? "Your home" : `Comparable ${index}`}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {ROWS.map((row) => (
-                  <tr key={row.label}>
-                    <th
-                      scope="row"
-                      className="sticky left-0 z-10 whitespace-nowrap bg-surface-alt px-3 py-2 align-top text-caption font-semibold text-ink"
-                    >
-                      {row.label}
+                      <span className="sr-only">Feature</span>
                     </th>
                     {columns.map((column, index) => (
-                      <td
+                      <th
                         key={index}
+                        scope="col"
                         className={cn(
-                          "px-3 py-2 align-top text-ink-soft",
-                          column.kind === "subject" && "bg-navy/5 font-medium text-ink",
+                          "px-3 py-2.5 text-caption font-semibold uppercase tracking-wide",
+                          column.kind === "subject" ? "bg-navy text-white" : "text-ink-muted",
                         )}
                       >
-                        {row.value(column)}
-                      </td>
+                        {column.kind === "subject" ? "Your home" : `Comparable ${index}`}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-3 text-caption text-ink-subtle">
-            {anyProxy
-              ? "“Last asking (off market)” is the final list price before a home left the market, not a confirmed sale price. "
-              : ""}
-            Dashes mark details the listing does not include.
-          </p>
-        </section>
-      )}
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {ROWS.map((row) => (
+                    <tr key={row.label}>
+                      <th
+                        scope="row"
+                        className="sticky left-0 z-10 whitespace-nowrap bg-surface-alt px-3 py-2 align-top text-caption font-semibold text-ink"
+                      >
+                        {row.label}
+                      </th>
+                      {columns.map((column, index) => (
+                        <td
+                          key={index}
+                          className={cn(
+                            "px-3 py-2 align-top text-ink-soft",
+                            column.kind === "subject" && "bg-navy/5 font-medium text-ink",
+                          )}
+                        >
+                          {row.value(column)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-caption text-ink-subtle">
+              {anyProxy
+                ? "“Last asking (off market)” is the final list price before a home left the market, not a confirmed sale price. "
+                : ""}
+              Dashes mark details the listing does not include.
+            </p>
+          </>
+        )}
+      </section>
 
       {active.length > 0 && (
         <section className="rounded-surface border border-line bg-surface p-5 sm:p-6 lg:p-8">
           <h3 className="text-h3 text-navy">Currently for sale</h3>
           <p className="mt-1 text-caption text-ink-muted">
-            Nearby active listings — asking prices and days on market, not sale comps.
+            Similar homes for sale nearby — asking prices and days on market, not sold comps.
           </p>
           <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {active.map((comp) => (
-              <li
-                key={comp.listingKey ?? `${comp.address}-${comp.price}`}
-                className="rounded-control border border-line bg-surface-alt/40 px-4 py-3 text-small"
-              >
-                <p className="font-medium text-ink">{comp.address || "Nearby listing"}</p>
-                <p className="mt-1 text-caption text-ink-muted">
-                  {[comp.beds != null ? `${comp.beds} bed` : null, comp.baths != null ? `${comp.baths} bath` : null, comp.livingArea != null ? `${formatNumber(comp.livingArea)} sqft` : null]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-                <p className="mt-3 font-medium text-ink">{formatPrice(comp.listPrice ?? comp.price)}</p>
-                <p className="text-caption text-ink-muted">
-                  {comp.daysOnMarket != null ? `${comp.daysOnMarket} days on market` : "Active"}
-                </p>
+              <li key={comp.listingKey ?? `${comp.address}-${comp.price}`}>
+                <ActiveListingCard comp={comp} />
               </li>
             ))}
           </ul>
@@ -359,6 +350,57 @@ export function AvmReport({ result }: { result: ValuationResult }) {
       )}
     </div>
   );
+}
+
+function ActiveListingCard({ comp }: { comp: ValuationComp }) {
+  const href = comp.listingKey ? `/property/${encodeURIComponent(comp.listingKey)}` : null;
+  const facts = [
+    comp.beds != null ? `${comp.beds} bed` : null,
+    comp.baths != null ? `${comp.baths} bath` : null,
+    comp.livingArea != null ? `${formatNumber(comp.livingArea)} sqft` : null,
+  ].filter(Boolean);
+  const body = (
+    <>
+      {comp.imageUrl ? (
+        <div className="relative h-[140px] w-full shrink-0 bg-surface-alt">
+          <SafeImage
+            src={comp.imageUrl}
+            alt={comp.address ? `Photo of ${comp.address}` : "Listing photo"}
+            fill
+            sizes="(max-width: 640px) 100vw, 20vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          />
+        </div>
+      ) : null}
+      <div className="flex flex-1 flex-col p-4">
+        <p className="line-clamp-2 text-small font-medium text-ink">
+          {comp.address || "Nearby listing"}
+        </p>
+        {comp.city ? <p className="mt-0.5 text-caption text-ink-muted">{comp.city}</p> : null}
+        {facts.length > 0 ? (
+          <p className="mt-1 text-caption text-ink-muted">{facts.join(" · ")}</p>
+        ) : null}
+        <p className="mt-3 text-small font-semibold text-ink">
+          {formatPrice(comp.listPrice ?? comp.price)}
+        </p>
+        <p className="mt-0.5 text-caption text-ink-muted">
+          {comp.daysOnMarket != null ? `${comp.daysOnMarket} days on market` : "Active"}
+        </p>
+      </div>
+    </>
+  );
+
+  const className =
+    "group flex h-full flex-col overflow-hidden rounded-control border border-line bg-surface shadow-card transition-shadow hover:shadow-card-hover";
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return <article className={className}>{body}</article>;
 }
 
 function InsightCard({
