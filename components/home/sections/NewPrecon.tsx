@@ -13,7 +13,10 @@ import { readClientVisitor } from "@/lib/personalize/clientVisitor";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { textOf } from "@/lib/site/read";
 
+// 8 cards max; request one extra slot so the deals cache key differs from a
+// stale Redis entry that still holds the empty "test-precon" snapshot (300s TTL).
 const PRECON_DEALS_LIMIT = 8;
+const PRECON_DEALS_FETCH_LIMIT = 9;
 
 type PreconPayload = {
   items: PreconProject[];
@@ -52,7 +55,7 @@ export function NewPrecon({ content }: { content?: Record<string, unknown> }) {
         : {};
 
       const feed = await getPreconDeals({
-        limit: PRECON_DEALS_LIMIT,
+        limit: PRECON_DEALS_FETCH_LIMIT,
         fill: true,
         deals: hasHistory ? deals : undefined,
         cache: "no-store",
