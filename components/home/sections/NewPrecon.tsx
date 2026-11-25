@@ -4,7 +4,7 @@ import { PreconCard } from "@/components/precon/PreconCard";
 import { Section } from "@/components/ui/Section";
 import {
   buildPreconDealsHref,
-  getPreconProjects,
+  getPreconDeals,
   type PreconDealsQuery,
   type PreconProject,
 } from "@/lib/api/preconstruction";
@@ -21,6 +21,11 @@ type PreconPayload = {
   viewAllHref: string;
 };
 
+/**
+ * Homepage Pre-construction deals rail.
+ * Live staged feed: GET /api/mls/precon-properties/deals/ (pins → history/IP → newest).
+ * Never invents IP city — only forwards real search-history filters.
+ */
 export function NewPrecon({ content }: { content?: Record<string, unknown> }) {
   const { data, isPending } = useMlsQuery<PreconPayload | null>(
     ["home", "precon-deals"],
@@ -35,6 +40,7 @@ export function NewPrecon({ content }: { content?: Record<string, unknown> }) {
         historyCities.length > 0 ||
         Boolean(last.bedsMin || last.bathsMin || last.priceMin || last.priceMax);
 
+      // History filters only. No history → call with limit/fill so backend can IP-fill.
       const deals: PreconDealsQuery = hasHistory
         ? {
             cities: historyCities.length > 0 ? historyCities : undefined,
@@ -45,18 +51,14 @@ export function NewPrecon({ content }: { content?: Record<string, unknown> }) {
           }
         : {};
 
-      const feed = await getPreconProjects({
+      const feed = await getPreconDeals({
         limit: PRECON_DEALS_LIMIT,
-        deals,
+        fill: true,
+        deals: hasHistory ? deals : undefined,
         cache: "no-store",
-      }).catch(() => ({
-        items: [] as PreconProject[],
-        total: 0,
-        hasSearchHistory: false,
-        cities: [] as string[],
-      }));
+      }).catch(() => null);
 
-      if (feed.items.length === 0) return null;
+      if (!feed || feed.items.length === 0) return null;
 
       const citiesLabel = (feed.cities.length > 0 ? feed.cities : historyCities).join(", ");
       const description =

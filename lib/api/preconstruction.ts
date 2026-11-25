@@ -43,6 +43,8 @@ export function salesStageLabel(stage: PreconSalesStage | null): string | null {
   return stage ? SALES_STAGE_LABELS[stage] : null;
 }
 
+export type PreconDealSource = "pinned" | "history" | "local" | "newest" | string;
+
 export interface PreconProject {
   id: number;
   title: string;
@@ -58,6 +60,8 @@ export interface PreconProject {
   image: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Present on `/deals/` rows — which stage filled this slot (debug/UI). */
+  dealSource?: PreconDealSource | null;
 }
 
 interface BackendPrecon {
@@ -76,9 +80,11 @@ interface BackendPrecon {
   latitude: string | number | null;
   longitude: string | number | null;
   featured_image_url: string | null;
+  deal_source?: string | null;
 }
 
 function mapPrecon(raw: BackendPrecon): PreconProject {
+  const dealSource = raw.deal_source?.trim() || null;
   return {
     id: raw.id,
     title: raw.title?.trim() || `Project #${raw.id}`,
@@ -97,6 +103,7 @@ function mapPrecon(raw: BackendPrecon): PreconProject {
     image: raw.featured_image_url?.trim() || null,
     latitude: toNumber(raw.latitude),
     longitude: toNumber(raw.longitude),
+    dealSource,
   };
 }
 
@@ -109,17 +116,11 @@ export type PreconDealsQuery = {
   priceMax?: number;
 };
 
-/** Query params for GET /precon-properties/ featured deals + View all href. */
-export function toPreconDealsParams(
+function historyFilterParams(
   query: PreconDealsQuery = {},
-  options: { pageSize?: number; page?: number } = {},
 ): Record<string, string | number | undefined> {
   const cities = (query.cities ?? []).map((city) => city.trim()).filter(Boolean);
   return {
-    ordering: "featured",
-    exclude_stage: "sold_out",
-    page_size: options.pageSize,
-    page: options.page,
     ...(cities.length === 1
       ? { city: cities[0] }
       : cities.length > 1
@@ -129,6 +130,35 @@ export function toPreconDealsParams(
     baths_min: query.bathsMin,
     price_min: query.priceMin,
     price_max: query.priceMax,
+  };
+}
+
+/**
+ * Query params for the catalog list + View all href.
+ * Homepage rail uses `getPreconDeals` instead — do not invent IP city here.
+ */
+export function toPreconDealsParams(
+  query: PreconDealsQuery = {},
+  options: { pageSize?: number; page?: number } = {},
+): Record<string, string | number | undefined> {
+  return {
+    ordering: "featured",
+    exclude_stage: "sold_out",
+    page_size: options.pageSize,
+    page: options.page,
+    ...historyFilterParams(query),
+  };
+}
+
+/** Params for GET /precon-properties/deals/ (staged pins → history/IP → newest). */
+export function toPreconDealsApiParams(
+  query: PreconDealsQuery = {},
+  options: { limit?: number; fill?: boolean } = {},
+): Record<string, string | number | boolean | undefined> {
+  return {
+    limit: options.limit ?? 8,
+    fill: options.fill !== false,
+    ...historyFilterParams(query),
   };
 }
 
@@ -144,12 +174,80 @@ export function buildPreconDealsHref(query: PreconDealsQuery = {}): string {
   return qs ? `/preconstruction?${qs}` : "/preconstruction";
 }
 
+export type PreconDealsFeed = {
+  items: PreconProject[];
+  total: number;
+  pinnedCount: number;
+  historyCount: number;
+  localCount: number;
+  newestCount: number;
+  hasSearchHistory: boolean;
+  cities: string[];
+};
+
+/**
+ * Homepage Pre-construction deals rail.
+ * GET /api/mls/precon-properties/deals/ — pins first, then search history or
+ * backend IP-local fill, then newest. Never invent IP city from the browser.
+ */
+export async function getPreconDeals(
+  options: RequestOptions & {
+    limit?: number;
+    fill?: boolean;
+    /** Search-history filters only. Omit entirely when the visitor has none. */
+    deals?: PreconDealsQuery;
+  } = {},
+): Promise<PreconDealsFeed> {
+  const { limit = 8, fill = true, deals, ...rest } = options;
+  const history = deals ?? {};
+  const personalized = Boolean(
+    history.cities?.length ||
+      history.bedsMin ||
+      history.bathsMin ||
+      history.priceMin ||
+      history.priceMax,
+  );
+
+  const data = await apiFetch<{
+    count?: number;
+    pinned_count?: number;
+    history_count?: number;
+    local_count?: number;
+    newest_count?: number;
+    has_search_history?: boolean;
+    cities?: string[];
+    results?: BackendPrecon[];
+  }>(`${MLS}/precon-properties/deals/`, {
+    revalidate: personalized ? 60 : 300,
+    ...rest,
+    params: {
+      ...toPreconDealsApiParams(history, { limit, fill }),
+      ...rest.params,
+    },
+  });
+
+  const rows = data.results ?? [];
+  return {
+    items: rows.map(mapPrecon),
+    total: data.count ?? rows.length,
+    pinnedCount: data.pinned_count ?? 0,
+    historyCount: data.history_count ?? 0,
+    localCount: data.local_count ?? 0,
+    newestCount: data.newest_count ?? 0,
+    hasSearchHistory: Boolean(data.has_search_history) || personalized,
+    cities: Array.isArray(data.cities)
+      ? data.cities.filter((row): row is string => typeof row === "string" && row.trim().length > 0)
+      : [],
+  };
+}
+
+/** Catalog / map list — not the staged homepage deals rail. */
 export async function getPreconProjects(
   options: RequestOptions & {
     limit?: number;
     page?: number;
     city?: string;
-    /** Search-history filters for the featured deals rail. Never pass IP city. */
+    /** Optional catalog filters (View all /preconstruction). Never pass IP city. */
     deals?: PreconDealsQuery;
   } = {},
 ): Promise<{

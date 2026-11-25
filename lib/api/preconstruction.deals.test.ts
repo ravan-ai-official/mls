@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildPreconDealsHref, toPreconDealsParams } from "@/lib/api/preconstruction";
+import {
+  buildPreconDealsHref,
+  toPreconDealsApiParams,
+  toPreconDealsParams,
+} from "@/lib/api/preconstruction";
 
 describe("precon deals params", () => {
-  it("sends featured ordering without inventing cities", () => {
+  it("catalog View all keeps featured ordering without inventing cities", () => {
     expect(toPreconDealsParams({}, { pageSize: 8 })).toEqual({
       ordering: "featured",
       exclude_stage: "sold_out",
@@ -12,6 +16,28 @@ describe("precon deals params", () => {
       baths_min: undefined,
       price_min: undefined,
       price_max: undefined,
+    });
+  });
+
+  it("deals API sends limit+fill and history filters only", () => {
+    expect(toPreconDealsApiParams({}, { limit: 8 })).toEqual({
+      limit: 8,
+      fill: true,
+      beds_min: undefined,
+      baths_min: undefined,
+      price_min: undefined,
+      price_max: undefined,
+    });
+    expect(
+      toPreconDealsApiParams(
+        { cities: ["Oakville"], bedsMin: 2 },
+        { limit: 8, fill: true },
+      ),
+    ).toMatchObject({
+      limit: 8,
+      fill: true,
+      city: "Oakville",
+      beds_min: 2,
     });
   });
 
@@ -37,9 +63,7 @@ describe("precon deals params", () => {
     expect(buildPreconDealsHref({})).toBe(
       "/preconstruction?ordering=featured&exclude_stage=sold_out",
     );
-    expect(
-      buildPreconDealsHref({ cities: ["Brampton"], bedsMin: 3 }),
-    ).toBe(
+    expect(buildPreconDealsHref({ cities: ["Brampton"], bedsMin: 3 })).toBe(
       "/preconstruction?ordering=featured&exclude_stage=sold_out&city=Brampton&beds_min=3",
     );
   });
