@@ -467,35 +467,24 @@ export function deriveRentalItems(
   return titleCase(text);
 }
 
-function fact(label: string, value: string | number | null | undefined): PropertyFact | null {
-  if (value === null || value === undefined) return null;
+/** Always keep the row; missing MLS values render as "-". */
+function fact(label: string, value: string | number | null | undefined): PropertyFact {
+  if (value === null || value === undefined) return { label, value: "-" };
   const text = String(value).trim();
-  if (!text || text === EMPTY) return null;
+  if (!text || text === EMPTY || text === "-") return { label, value: "-" };
   return { label, value: text };
-}
-
-function keepFacts(facts: Array<PropertyFact | null>): PropertyFact[] {
-  // Omit unknown MLS fields entirely — never render a dash placeholder row.
-  return facts.filter((f): f is PropertyFact => {
-    if (f === null) return false;
-    const value = f.value.trim();
-    return value.length > 0 && value !== EMPTY;
-  });
 }
 
 function groupColumns(
   title: string,
-  left: Array<PropertyFact | null>,
-  right: Array<PropertyFact | null>,
+  left: PropertyFact[],
+  right: PropertyFact[],
 ) {
-  const leftKept = keepFacts(left);
-  const rightKept = keepFacts(right);
-  if (leftKept.length === 0 && rightKept.length === 0) return null;
   return {
     title,
-    left: leftKept,
-    right: rightKept,
-    facts: [...leftKept, ...rightKept],
+    left,
+    right,
+    facts: [...left, ...right],
   };
 }
 
@@ -731,7 +720,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
   const washrooms = deriveWashrooms(raw.rooms);
 
   // Listing Details — Overview / More details columns match the mockup order.
-  // Sparse MLS fields are omitted per column (no dash placeholders).
+  // Missing values show "-" (temporary; omit-empty can be restored later).
   const factGroups = [
     groupColumns(
       "Overview",
@@ -739,15 +728,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
         fact("Listing #", summary.mls),
         fact("Data source", dataSource),
         fact("Ownership / Title", ownership),
-        // Area is only shown when it differs from Community (avoid duplicates).
-        fact(
-          "Area",
-          raw.city_region?.trim() &&
-            summary.neighbourhood &&
-            raw.city_region.trim().toLowerCase() !== summary.neighbourhood.toLowerCase()
-            ? titleCase(raw.city_region)
-            : null,
-        ),
+        fact("Area", titleCase(raw.city_region) || null),
         fact("Address", summary.address),
         fact("Postal code", summary.postalCode),
         fact("Approx. age", ageLabel),
@@ -758,6 +739,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
         fact("Property type", summary.type),
         fact("Municipality", summary.community),
         fact("Community", summary.neighbourhood),
+        fact("Listing brokerage", null),
         fact("Size", sqftLabel),
       ],
     ),
@@ -768,6 +750,8 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
           "Lot frontage",
           lotFrontage ? `${formatNumber(lotFrontage)} ft` : null,
         ),
+        fact("Original list price", null),
+        fact("Fronting on", null),
         fact("Square feet above ground", aboveGradeLabel),
         fact("Garage", yesNoFromFlag(hasGarage)),
         fact(
@@ -777,6 +761,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
         fact("Rooms", roomCount || null),
         fact("Number of bedrooms", bedsLabel ?? summary.beds),
         fact("Number of kitchens", kitchens),
+        fact("Link", null),
         fact("Number of floors", stories),
         fact("Locker", yesNoFromFlag(locker)),
         fact("Maintenance", maintenanceLabel),
@@ -815,16 +800,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
         fact("Cooling", titleCase(raw.cooling)),
       ],
     ),
-  ].filter(
-    (
-      g,
-    ): g is {
-      title: string;
-      left: PropertyFact[];
-      right: PropertyFact[];
-      facts: PropertyFact[];
-    } => g !== null,
-  );
+  ];
 
   const features = collectFeatures(raw);
 
