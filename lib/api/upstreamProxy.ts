@@ -69,7 +69,11 @@ export async function proxyUpstream(
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25_000);
+  // Home evaluation needs longer than list/filter calls: AMPRE sold comps +
+  // geocode + optional AI CMA. Keep other MLS routes snappy.
+  const slowValuation =
+    method === "POST" && targetPath.replace(/\/+$/, "").endsWith("valuation/estimate");
+  const timer = setTimeout(() => controller.abort(), slowValuation ? 55_000 : 25_000);
 
   try {
     const upstreamRes = await fetch(upstream, {

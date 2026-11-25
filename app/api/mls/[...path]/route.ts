@@ -3,6 +3,8 @@ import { proxyUpstream } from "@/lib/api/upstreamProxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Valuation estimate (AMPRE + AI) can exceed the default serverless budget. */
+export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 

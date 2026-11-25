@@ -294,6 +294,9 @@ export async function estimateValue(
   const data = await apiFetch<BackendValuationEstimate & { confidence?: string }>(
     `${MLS}/valuation/estimate/`,
     {
+      // AMPRE comps + optional geocode/AI often exceed the default 15s abort;
+      // that cancel shows in DevTools as provisional headers and zero response.
+      timeoutMs: 55_000,
       ...options,
       method: "POST",
       body: {
