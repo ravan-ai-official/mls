@@ -11,8 +11,11 @@ import { boolOf, textOf } from "@/lib/site/read";
  * Featured MLS rail — exactly three cards. "View all" opens /featured-listings
  * (same feed, longer), not the filtered /listings catalogue.
  */
+const FEATURED_VIEW_ALL = "/featured-listings";
+
 export function FeaturedListings({ content }: { content?: Record<string, unknown> }) {
-  const viewAllHref = textOf(content, "actionHref", "/featured-listings");
+  // Always the dedicated rail page — never CMS `/listings` (full catalogue).
+  const viewAllHref = FEATURED_VIEW_ALL;
   const viewAllLabel = textOf(content, "actionLabel", "View All");
   const { data, isPending } = useMlsQuery(
     ["home", "featured", HOME_RAIL_LIMIT],

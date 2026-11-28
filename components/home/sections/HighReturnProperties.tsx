@@ -15,8 +15,11 @@ const DEFAULT_BASIS =
  * High Return Properties — exactly three investor cards.
  * "View All" opens /high-return (same investor-picks feed, longer).
  */
+const HIGH_RETURN_VIEW_ALL = "/high-return";
+
 export function HighReturnProperties({ content }: { content?: Record<string, unknown> }) {
-  const viewAllHref = textOf(content, "actionHref", "/high-return");
+  // Always the dedicated rail page — never CMS `/listings` (full catalogue).
+  const viewAllHref = HIGH_RETURN_VIEW_ALL;
   const viewAllLabel = textOf(content, "actionLabel", "View All");
   const { data: feed } = useMlsQuery(
     ["home", "investor-picks", HOME_RAIL_LIMIT],
