@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useMemo,
   useState,
   type Dispatch,
   type FormEvent,
@@ -10,7 +9,6 @@ import {
   type SetStateAction,
 } from "react";
 import { createPortal } from "react-dom";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import {
   Field,
@@ -31,12 +29,9 @@ import { SaveSearchButton } from "@/components/search/SaveSearchButton";
 import { Modal } from "@/components/ui/Modal";
 import { SideSheet } from "@/components/ui/SideSheet";
 import { Tabs } from "@/components/ui/Tabs";
-import { getPropertyFacets } from "@/lib/api/properties";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { cn } from "@/lib/utils/cn";
-import { listingQueryFromSearch } from "@/lib/queries/properties";
-import { backendStatusGroup } from "@/lib/utils/status";
 import {
   BASEMENT_OPTIONS,
   BUILDING_OPTIONS,
@@ -179,70 +174,6 @@ function emptyDraft(transaction: ListingTransaction = "sale"): Draft {
   };
 }
 
-/** Build URL params from a sheet draft so we can preview facet counts live. */
-function draftToSearchParams(draft: Draft, current: URLSearchParams): URLSearchParams {
-  const next = new URLSearchParams(current.toString());
-  const setOrDelete = (key: string, value: string | null | undefined) => {
-    if (value === null || value === undefined || value === "") next.delete(key);
-    else next.set(key, value);
-  };
-
-  setOrDelete("transaction_type", draft.transaction === "sale" ? null : draft.transaction);
-  setOrDelete(
-    "status",
-    draft.transaction === "sold"
-      ? "Sold"
-      : draft.status && draft.status.toLowerCase() !== "active"
-        ? draft.status
-        : null,
-  );
-  setOrDelete("price_min", draft.priceMin || null);
-  setOrDelete("price_max", draft.priceMax || null);
-  setOrDelete("bedrooms", draft.beds || null);
-  setOrDelete("beds_min", draft.beds || null);
-  setOrDelete("bathrooms", draft.baths || null);
-  setOrDelete("baths_min", draft.baths || null);
-  setOrDelete("type", draft.homeType || null);
-  next.delete("home_type");
-  setOrDelete("sort", draft.sort || null);
-  setOrDelete("city", draft.city.trim() || null);
-  setOrDelete("postal_code", parsePostalList(draft.postal).codes.join(",") || null);
-  setOrDelete("sqft_min", draft.sqftMin || null);
-  setOrDelete("sqft_max", draft.sqftMax || null);
-  setOrDelete("garages_min", draft.garages || null);
-  setOrDelete("stories_min", draft.floors || null);
-  setOrDelete("basement", draft.basement || null);
-  setOrDelete("year_built_min", draft.yearBuiltMin || null);
-  setOrDelete("year_built_max", draft.yearBuiltMax || null);
-  setOrDelete("stories_max", draft.floorsMax || null);
-  setOrDelete("maintenance_fee_min", draft.feeMin || null);
-  setOrDelete("maintenance_fee_max", draft.feeMax || null);
-  setOrDelete(
-    "listed_since",
-    draft.transaction === "sold" ? null : draft.listedSince || null,
-  );
-  setOrDelete("structure_type", draft.building || null);
-  setOrDelete("common_interest", draft.ownership || null);
-  setOrDelete(
-    "keywords",
-    draft.keywords
-      .split(",")
-      .map((word) => word.trim())
-      .filter(Boolean)
-      .join(",") || null,
-  );
-  setOrDelete(
-    "sold_within_days",
-    draft.transaction === "sold" ? draft.soldWithinDays || null : null,
-  );
-  setOrDelete(
-    "has_open_house",
-    draft.transaction === "sold" ? null : draft.openHouse || null,
-  );
-  next.delete("page");
-  return canonicalizeListingParams(next);
-}
-
 function paramGet(params: URLSearchParams, ...keys: string[]): string {
   for (const key of keys) {
     const value = params.get(key);
@@ -267,7 +198,6 @@ function resolveHomeTypeFromParams(params: URLSearchParams): string {
             "Semi-Detached": "semi",
             Townhome: "townhouse",
             Condo: "condo",
-            Luxury: "",
           }[type] === homeTypeRaw.toLowerCase()),
       ) ?? homeTypeRaw
     : "";
@@ -337,10 +267,8 @@ function sameDraft(a: Draft, b: Draft) {
  * Panel edits are draft-only until Show homes; bar dropdowns update the URL live.
  */
 export function ListingFilters({
-  resultCount,
   schema = DEFAULT_FILTER_SCHEMA,
 }: {
-  resultCount: number;
   schema?: FilterSchema;
 }) {
   const { navigate } = usePendingNavigation();
@@ -353,7 +281,6 @@ export function ListingFilters({
   const [draft, setDraft] = useState<Draft>(() => draftFromParams(params));
   const [postalError, setPostalError] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search, 400);
-  const debouncedDraft = useDebouncedValue(draft, 350);
 
   const paramKey = params.toString();
   const [lastParamKey, setLastParamKey] = useState(paramKey);
@@ -649,28 +576,6 @@ export function ListingFilters({
   const listingQuery = parseListingSearch(params);
   const resetDraft = () => setDraft(emptyDraft(draft.transaction));
 
-  const draftFacetQuery = useMemo(
-    () => listingQueryFromSearch(draftToSearchParams(debouncedDraft, params)),
-    [debouncedDraft, params],
-  );
-
-  const draftFacetKey = buildListingQueryString(draftFacetQuery);
-  const { data: draftFacets, isFetching: draftCountLoading } = useQuery({
-    queryKey: ["listings", "facets", "draft", draftFacetKey],
-    queryFn: () => getPropertyFacets(draftFacetQuery, { cache: "no-store" }),
-    enabled: sheetOpen && panelTab === "filters",
-    placeholderData: keepPreviousData,
-    staleTime: 30_000,
-  });
-
-  const liveCount = (() => {
-    if (!draftFacets) return resultCount;
-    if (draftFacetQuery.openHouse) return draftFacets.openHouse ?? resultCount;
-    const group = backendStatusGroup(draftFacetQuery.status);
-    if (group) return draftFacets.statusGroup?.[group] ?? resultCount;
-    return draftFacets.statusGroup?.active ?? resultCount;
-  })();
-
   const filterFooter =
     panelTab === "ai" ? null : (
       <div className="flex items-center gap-2">
@@ -683,16 +588,8 @@ export function ListingFilters({
         >
           Reset
         </Button>
-        <Button
-          variant="primary"
-          size="md"
-          className="flex-1"
-          onClick={applySheet}
-          loading={draftCountLoading && dirty}
-        >
-          {liveCount > 0
-            ? `Show ${liveCount.toLocaleString("en-CA")} ${liveCount === 1 ? "home" : "homes"}`
-            : "Show homes"}
+        <Button variant="primary" size="md" className="flex-1" onClick={applySheet}>
+          Show homes
         </Button>
       </div>
     );

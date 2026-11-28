@@ -40,7 +40,6 @@ const DEFAULT_PROPERTY_TYPES: HeroOption[] = [
   { value: "Semi-Detached", label: "Semi-Detached" },
   { value: "Townhome", label: "Townhome" },
   { value: "Condo", label: "Condo" },
-  { value: "Luxury", label: "Luxury" },
 ];
 
 const DEFAULT_SALE_PRICES: HeroOption[] = [

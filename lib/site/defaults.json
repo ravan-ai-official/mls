@@ -33,8 +33,7 @@
             { "value": "Detached", "label": "Detached" },
             { "value": "Semi-Detached", "label": "Semi-Detached" },
             { "value": "Townhome", "label": "Townhome" },
-            { "value": "Condo", "label": "Condo" },
-            { "value": "Luxury", "label": "Luxury" }
+            { "value": "Condo", "label": "Condo" }
           ],
           "salePrices": [
             { "value": "", "label": "Price" },
@@ -152,7 +151,7 @@
             {
               "icon": "luxury",
               "label": "Luxury",
-              "href": "/listings?type=Luxury"
+              "href": "/listings?sqft_min=3500"
             },
             {
               "icon": "openHouse",

@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { cn } from "@/lib/utils/cn";
@@ -189,53 +190,57 @@ export function Gallery({
         )}
       </div>
 
-      {lightbox && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Photo ${index + 1} of ${count} for ${address}`}
-          className="fixed inset-0 z-[250] flex h-dvh max-h-dvh flex-col overflow-hidden bg-ink/95"
-        >
-          <div className="flex shrink-0 items-center justify-between px-5 py-4 text-white">
-            <p className="text-small tabular-nums">
-              {index + 1} / {count}
-            </p>
-            <button
-              type="button"
-              onClick={() => setLightbox(false)}
-              className="rounded-full p-2 transition-colors hover:bg-white/10"
-              aria-label="Close gallery"
-              autoFocus
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-
-          {/* min-h-0 is required so the flex child can shrink below the image's
-              intrinsic height — otherwise tall flyers push the nav off-screen. */}
+      {/* Portal to body so z-index beats the sticky navbar (z-520+), same as Modal. */}
+      {lightbox &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="min-h-0 flex-1 touch-pan-y"
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Photo ${index + 1} of ${count} for ${address}`}
+            className="fixed inset-0 z-[600] flex h-dvh max-h-dvh flex-col overflow-hidden bg-ink/95"
           >
-            <LightboxSlide
-              key={`${index}-${current.url}`}
-              src={current.url}
-              alt={`${address} — photo ${index + 1}`}
-              onUnavailable={() => markFailed(current.url)}
-            />
-          </div>
-
-          {count > 1 && (
-            <div className="flex shrink-0 items-center justify-between px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-              <GalleryNav label="Previous photo" onClick={() => go(-1)} direction="left" />
-              <GalleryNav label="Next photo" onClick={() => go(1)} direction="right" />
+            <div className="flex shrink-0 items-center justify-between px-5 py-4 text-white">
+              <p className="text-small tabular-nums">
+                {index + 1} / {count}
+              </p>
+              <button
+                type="button"
+                onClick={() => setLightbox(false)}
+                className="rounded-full p-2 transition-colors hover:bg-white/10"
+                aria-label="Close gallery"
+                autoFocus
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* min-h-0 is required so the flex child can shrink below the image's
+                intrinsic height — otherwise tall flyers push the nav off-screen. */}
+            <div
+              className="min-h-0 flex-1 touch-pan-y"
+              onTouchStart={onTouchStart}
+              onTouchEnd={onTouchEnd}
+            >
+              <LightboxSlide
+                key={`${index}-${current.url}`}
+                src={current.url}
+                alt={`${address} — photo ${index + 1}`}
+                onUnavailable={() => markFailed(current.url)}
+              />
+            </div>
+
+            {count > 1 && (
+              <div className="flex shrink-0 items-center justify-between px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+                <GalleryNav label="Previous photo" onClick={() => go(-1)} direction="left" />
+                <GalleryNav label="Next photo" onClick={() => go(1)} direction="right" />
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

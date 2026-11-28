@@ -27,11 +27,14 @@ export type UiPropertyType = (typeof UI_PROPERTY_TYPES)[number];
 /**
  * Property types a search can filter by. "Rental" is a transaction
  * (`ListingQuery.transaction` / `tx=rent`). "Open Houses" is the open-house
- * flag (`openHouse=1` / `has_open_house=1`), not a structure type.
+ * flag (`openHouse=1` / `has_open_house=1`). "Luxury" is a homepage size
+ * shortcut (≥3500 sq ft), not a structure type — not offered in filter chips.
  */
 export const SEARCH_PROPERTY_TYPES = UI_PROPERTY_TYPES.filter(
-  (type): type is Exclude<UiPropertyType, "Rental" | "Open Houses"> =>
-    type !== "Rental" && type !== "Open Houses",
+  (
+    type,
+  ): type is Exclude<UiPropertyType, "Rental" | "Open Houses" | "Luxury"> =>
+    type !== "Rental" && type !== "Open Houses" && type !== "Luxury",
 );
 
 /** For sale / For rent / Sold — backend `transaction_type`. */

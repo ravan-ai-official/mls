@@ -59,8 +59,8 @@ const TILES: Array<{
   {
     icon: "luxury",
     label: "Luxury",
-    // For-sale ≥3500 sq ft (type=Luxury → LUXURY_MIN_SQFT; default transaction is sale).
-    href: "/listings?type=Luxury",
+    // For-sale ≥3500 sq ft — size filter only, not a home type.
+    href: "/listings?sqft_min=3500",
     Icon: IconLuxury,
     uiType: "Luxury",
   },
