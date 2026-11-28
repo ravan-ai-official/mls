@@ -199,7 +199,7 @@ export function HighReturnBrowse() {
       ) : (
         <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {picks.map((pick) => (
-            <li key={pick.listingKey}>
+            <li key={pick.listingKey} className="h-full min-w-0">
               <HighReturnCard pick={pick} tone="light" />
             </li>
           ))}

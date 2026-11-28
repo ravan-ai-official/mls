@@ -152,7 +152,7 @@
             {
               "icon": "luxury",
               "label": "Luxury",
-              "href": "/listings?sqftMin=3501"
+              "href": "/listings?type=Luxury"
             },
             {
               "icon": "openHouse",

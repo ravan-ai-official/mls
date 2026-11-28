@@ -48,9 +48,11 @@ export function HighReturnProperties({ content }: { content?: Record<string, unk
       action={{ label: viewAllLabel, href: viewAllHref }}
     >
       <p className="-mt-3 mb-6 text-caption text-white/50 sm:-mt-5 sm:mb-8">{caption}</p>
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {feed.picks.slice(0, HOME_RAIL_LIMIT).map((pick) => (
-          <HighReturnCard key={pick.listingKey} pick={pick} tone="dark" />
+          <div key={pick.listingKey} className="min-w-0">
+            <HighReturnCard pick={pick} tone="dark" />
+          </div>
         ))}
       </div>
     </Section>

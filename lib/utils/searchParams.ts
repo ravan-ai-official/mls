@@ -202,7 +202,7 @@ export function buildListingQueryString(
   if (query.soldWithinDays) {
     params.set("sold_within_days", String(query.soldWithinDays));
   }
-  // Luxury is a size band (>3500 sq ft); keep the URL in sync when type=Luxury.
+  // Luxury is a size band (≥3500 sq ft); keep the URL in sync when type=Luxury.
   const sqftMin =
     query.type === "Luxury" ? Math.max(query.sqftMin ?? 0, LUXURY_MIN_SQFT) : query.sqftMin;
   if (sqftMin) params.set("sqft_min", String(sqftMin));

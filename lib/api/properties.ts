@@ -10,7 +10,7 @@
  * (2026-09). This feed's `property_sub_type` is "Single Family" for 4,114 of
  * 4,622 rows, so it cannot tell a condo from a house; `home_type` reads
  * `structure_type` + `property_attached_yn` instead. "Luxury" is a living-area
- * band (effective sqft > 3500 → `sqft_min=3501`), not a structure or price
+ * band (effective sqft ≥ 3500 → `sqft_min=3500`), not a structure or price
  * floor. Only a type with no server mapping still falls back to the windowed
  * client-side match (disclosed in the UI as "About N").
  */
@@ -54,11 +54,10 @@ export const HOME_TYPE_PARAM: Readonly<Record<string, string>> = {
   Condo: "condo",
 };
 /**
- * Luxury = effective living area strictly greater than 3500 sq ft.
- * Listing API uses gte, so pass 3501 (matches backend Coalesce(above_grade,
- * living_area, building_area_total) > 3500).
+ * Luxury = effective living area ≥ 3500 sq ft.
+ * Listing API uses gte on Coalesce(above_grade, living_area, building_area_total).
  */
-export const LUXURY_MIN_SQFT = 3501;
+export const LUXURY_MIN_SQFT = 3500;
 
 function typeIsServerSide(type: string): boolean {
   return type in HOME_TYPE_PARAM || type === "Luxury";

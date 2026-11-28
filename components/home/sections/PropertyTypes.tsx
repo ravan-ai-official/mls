@@ -59,7 +59,8 @@ const TILES: Array<{
   {
     icon: "luxury",
     label: "Luxury",
-    href: "/listings?sqftMin=3501",
+    // For-sale ≥3500 sq ft (type=Luxury → LUXURY_MIN_SQFT; default transaction is sale).
+    href: "/listings?type=Luxury",
     Icon: IconLuxury,
     uiType: "Luxury",
   },
@@ -112,10 +113,13 @@ export function PropertyTypes({ content }: { content?: Record<string, unknown> }
       tileKeys(tile)
         .map((key) => customByIcon.get(key))
         .find(Boolean) ?? undefined;
+    // Luxury must stay for-sale ≥3500 sq ft regardless of CMS href.
+    const href =
+      tile.uiType === "Luxury" ? tile.href : override?.href || tile.href;
     return {
       ...tile,
       label: override?.label || tile.label,
-      href: override?.href || tile.href,
+      href,
     };
   });
 

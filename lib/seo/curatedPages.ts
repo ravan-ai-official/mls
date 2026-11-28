@@ -159,11 +159,11 @@ export const DEFAULT_FIXED_PAGES: CuratedPage[] = [
   {
     slug: "luxury-homes",
     label: "Luxury homes (3500+ sq ft)",
-    h1: "Luxury homes over 3,500 sq ft",
-    description: "Homes for sale with more than 3,500 sq ft of living area across the GTA.",
+    h1: "Luxury homes 3,500+ sq ft",
+    description: "Homes for sale with 3,500+ sq ft of living area across the GTA.",
     group: "By type",
-    // type=Luxury applies LUXURY_MIN_SQFT (3501) in toBackendParams; sqftMin keeps URLs explicit.
-    query: { ...FOR_SALE, type: "Luxury", sqftMin: 3501 },
+    // type=Luxury applies LUXURY_MIN_SQFT (3500) in toBackendParams; sqftMin keeps URLs explicit.
+    query: { ...FOR_SALE, type: "Luxury", sqftMin: 3500 },
   },
   {
     slug: "3-bedroom-houses",
