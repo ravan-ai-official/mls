@@ -120,6 +120,7 @@ type Draft = DetailDraft & {
   baths: string;
   homeType: string;
   sort: string;
+  status: string;
 };
 
 type PanelTab = "filters" | "ai";
@@ -174,6 +175,7 @@ function emptyDraft(transaction: ListingTransaction = "sale"): Draft {
     baths: "",
     homeType: "",
     sort: "newest",
+    status: transaction === "sold" ? "Sold" : "Active",
   };
 }
 
@@ -186,7 +188,14 @@ function draftToSearchParams(draft: Draft, current: URLSearchParams): URLSearchP
   };
 
   setOrDelete("transaction_type", draft.transaction === "sale" ? null : draft.transaction);
-  setOrDelete("status", draft.transaction === "sold" ? "Sold" : null);
+  setOrDelete(
+    "status",
+    draft.transaction === "sold"
+      ? "Sold"
+      : draft.status && draft.status.toLowerCase() !== "active"
+        ? draft.status
+        : null,
+  );
   setOrDelete("price_min", draft.priceMin || null);
   setOrDelete("price_max", draft.priceMax || null);
   setOrDelete("bedrooms", draft.beds || null);
@@ -295,6 +304,10 @@ function draftFromParams(params: URLSearchParams): Draft {
     baths: paramGet(params, "bathrooms", "baths_min", "baths"),
     homeType: resolveHomeTypeFromParams(params),
     sort: params.get("sort") ?? (hasSemantic ? RELEVANCE_SORT.value : "newest"),
+    status:
+      transaction === "sold"
+        ? "Sold"
+        : paramGet(params, "status") || "Active",
   };
 }
 
@@ -314,6 +327,7 @@ function sameDraft(a: Draft, b: Draft) {
     a.baths === b.baths &&
     a.homeType === b.homeType &&
     a.sort === b.sort &&
+    a.status === b.status &&
     PANEL_FIELDS.every((field) => a[field.draft] === b[field.draft])
   );
 }
@@ -459,6 +473,7 @@ export function ListingFilters({
         transaction: next,
         priceMin: keepMin ? current.priceMin : "",
         priceMax: keepMax ? current.priceMax : "",
+        status: next === "sold" ? "Sold" : "Active",
         openHouse: next === "sold" ? "" : current.openHouse,
         soldWithinDays: next === "sold" ? current.soldWithinDays : "",
         listedSince: next === "sold" ? "" : current.listedSince,
@@ -502,7 +517,12 @@ export function ListingFilters({
     rememberPlace(nextCity);
     update({
       transaction_type: draft.transaction === "sale" ? null : draft.transaction,
-      status: draft.transaction === "sold" ? "Sold" : null,
+      status:
+        draft.transaction === "sold"
+          ? "Sold"
+          : draft.status && draft.status.toLowerCase() !== "active"
+            ? draft.status
+            : null,
       price_min: priceMin || null,
       price_max: priceMax || null,
       bedrooms: draft.beds || null,
@@ -822,7 +842,7 @@ export function ListingFilters({
               <p className="mt-1 text-caption text-ink-muted">
                 {dirty
                   ? "Edit freely, then tap Show homes."
-                  : `${resultCount.toLocaleString("en-CA")} matching ${resultCount === 1 ? "home" : "homes"}`}
+                  : "City, size, parking, basement, status and more."}
               </p>
             </div>
             <FilterFields
@@ -1256,12 +1276,16 @@ function FilterFields({
   postalError: string | null;
   clearPostalError: () => void;
 }) {
+  // Core fields always match map-search Filters (API schema must not hide them).
+  // Schema still gates extras: fees, listed-since, building, ownership, keywords.
   const show = (field: Parameters<typeof isSheetFieldVisible>[2]) =>
     isSheetFieldVisible(schema, transaction, field);
+  const isRent = transaction === "rent";
+  const isSold = transaction === "sold";
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      {show("city") ? (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="City" htmlFor="sheet-city">
           <Input
             id="sheet-city"
@@ -1270,9 +1294,7 @@ function FilterFields({
             onChange={(event) => setDraft((d) => ({ ...d, city: event.target.value }))}
           />
         </Field>
-      ) : null}
 
-      {show("postal_code") ? (
         <Field
           label="Postal code"
           htmlFor="sheet-postal"
@@ -1293,33 +1315,31 @@ function FilterFields({
             }}
           />
         </Field>
-      ) : null}
+      </div>
 
-      {show("sqft") ? (
-        <fieldset>
-          <legend className="text-small font-medium text-ink">Size (sq ft)</legend>
-          <div className="mt-1.5 grid grid-cols-2 gap-3">
-            <NumericInput
-              aria-label="Minimum square feet"
-              min={0}
-              max={100000}
-              placeholder="No min"
-              value={draft.sqftMin}
-              onChange={(event) => setDraft((d) => ({ ...d, sqftMin: event.target.value }))}
-            />
-            <NumericInput
-              aria-label="Maximum square feet"
-              min={0}
-              max={100000}
-              placeholder="No max"
-              value={draft.sqftMax}
-              onChange={(event) => setDraft((d) => ({ ...d, sqftMax: event.target.value }))}
-            />
-          </div>
-        </fieldset>
-      ) : null}
+      <fieldset>
+        <legend className="text-small font-medium text-ink">Size (sq ft)</legend>
+        <div className="mt-1.5 grid grid-cols-2 gap-3">
+          <NumericInput
+            aria-label="Minimum square feet"
+            min={0}
+            max={100000}
+            placeholder="No min"
+            value={draft.sqftMin}
+            onChange={(event) => setDraft((d) => ({ ...d, sqftMin: event.target.value }))}
+          />
+          <NumericInput
+            aria-label="Maximum square feet"
+            min={0}
+            max={100000}
+            placeholder="No max"
+            value={draft.sqftMax}
+            onChange={(event) => setDraft((d) => ({ ...d, sqftMax: event.target.value }))}
+          />
+        </div>
+      </fieldset>
 
-      {show("garages") ? (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <ChipField
           label="Garages"
           value={draft.garages}
@@ -1327,9 +1347,6 @@ function FilterFields({
           suffix="+"
           onChange={(garages) => setDraft((d) => ({ ...d, garages }))}
         />
-      ) : null}
-
-      {show("storeys") ? (
         <ChipField
           label="Floors"
           value={draft.floors}
@@ -1337,46 +1354,68 @@ function FilterFields({
           suffix="+"
           onChange={(floors) => setDraft((d) => ({ ...d, floors }))}
         />
-      ) : null}
+      </div>
 
-      {show("basement") ? (
+      <div className="space-y-1.5">
+        <span className="block text-small font-medium text-ink">Basement</span>
+        <div className="flex flex-wrap gap-2">
+          {BASEMENT_OPTIONS.map((option) => (
+            <ChipToggle
+              key={option.value || "any"}
+              active={draft.basement === option.value}
+              onClick={() => setDraft((d) => ({ ...d, basement: option.value }))}
+            >
+              {option.label}
+            </ChipToggle>
+          ))}
+        </div>
+      </div>
+
+      <YearBuiltFields
+        yearBuiltMin={draft.yearBuiltMin}
+        yearBuiltMax={draft.yearBuiltMax}
+        onAgeChange={(age) => {
+          const years = propertyAgeToYears(age);
+          setDraft((d) => ({
+            ...d,
+            yearBuiltMin: years.min != null ? String(years.min) : "",
+            yearBuiltMax: years.max != null ? String(years.max) : "",
+          }));
+        }}
+        onYearMaxChange={(yearBuiltMax) =>
+          setDraft((d) => ({
+            ...d,
+            // Age and “built before” are either/or — a typed year clears the age range.
+            yearBuiltMin: "",
+            yearBuiltMax,
+          }))
+        }
+      />
+
+      {!isSold ? (
         <div className="space-y-1.5">
-          <span className="block text-small font-medium text-ink">Basement</span>
+          <span className="block text-small font-medium text-ink">Listing status</span>
           <div className="flex flex-wrap gap-2">
-            {BASEMENT_OPTIONS.map((option) => (
+            {STATUS_TABS.filter((tab) => tab.group !== "sold").map((tab) => (
               <ChipToggle
-                key={option.value || "any"}
-                active={draft.basement === option.value}
-                onClick={() => setDraft((d) => ({ ...d, basement: option.value }))}
+                key={tab.param}
+                active={
+                  tab.group === "active"
+                    ? !draft.status || draft.status.toLowerCase() === "active"
+                    : draft.status.toLowerCase() === tab.param.toLowerCase()
+                }
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    status: tab.param,
+                  }))
+                }
               >
-                {option.label}
+                {statusLabel(tab.param, isRent)}
               </ChipToggle>
             ))}
           </div>
         </div>
-      ) : null}
-
-      {show("year_built") ? (
-        <YearBuiltFields
-          yearBuiltMin={draft.yearBuiltMin}
-          yearBuiltMax={draft.yearBuiltMax}
-          onAgeChange={(age) => {
-            const years = propertyAgeToYears(age);
-            setDraft((d) => ({
-              ...d,
-              yearBuiltMin: years.min != null ? String(years.min) : "",
-              yearBuiltMax: years.max != null ? String(years.max) : "",
-            }));
-          }}
-          onYearMaxChange={(yearBuiltMax) =>
-            setDraft((d) => ({
-              ...d,
-              // Age and “built before” are either/or — a typed year clears the age range.
-              yearBuiltMin: "",
-              yearBuiltMax,
-            }))
-          }
-        />
       ) : null}
 
       {show("storeys") ? (
@@ -1521,7 +1560,7 @@ function FilterFields({
         </div>
       ) : null}
 
-      {show("open_houses") ? (
+      {!isSold ? (
         <div className="space-y-1.5">
           <span className="block text-small font-medium text-ink">Open house</span>
           <div className="flex flex-wrap gap-2">
@@ -1538,6 +1577,14 @@ function FilterFields({
       ) : null}
     </div>
   );
+}
+
+function statusLabel(status: string, rent: boolean): string {
+  const tab = STATUS_TABS.find((t) => t.param.toLowerCase() === status.toLowerCase());
+  if (!tab) return status;
+  if (rent && tab.group === "active") return "For Lease";
+  if (rent && tab.group === "sold") return "Leased";
+  return tab.label;
 }
 
 /** Property age dropdown + optional “built in or before” — mutually exclusive. */

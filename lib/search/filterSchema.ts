@@ -248,10 +248,14 @@ function asVisibility(
   fallback: FilterSchema["sheet_visibility_by_transaction"]["sale"],
 ): FilterSchema["sheet_visibility_by_transaction"]["sale"] {
   if (!raw || typeof raw !== "object") return fallback;
-  const show = Array.isArray((raw as { show?: unknown }).show)
+  // Union API `show` with defaults so a sparse backend list cannot hide core sheet fields.
+  const apiShow = Array.isArray((raw as { show?: unknown }).show)
     ? ((raw as { show: unknown[] }).show.filter(
         (item): item is SheetFieldKey => typeof item === "string",
       ) as SheetFieldKey[])
+    : null;
+  const show = apiShow
+    ? Array.from(new Set([...(fallback.show ?? []), ...apiShow]))
     : fallback.show;
   const hide = Array.isArray((raw as { hide?: unknown }).hide)
     ? ((raw as { hide: unknown[] }).hide.filter(
