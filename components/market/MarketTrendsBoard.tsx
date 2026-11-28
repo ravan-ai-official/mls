@@ -98,6 +98,7 @@ const emptySold = (city: string, community: string | null): SoldTrends => ({
   months: [],
   communities: [],
   community,
+  soldLocked: false,
   unavailable: true,
   generatedAt: null,
   stale: false,

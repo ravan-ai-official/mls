@@ -7,6 +7,7 @@ export const EMPTY_LISTINGS = {
   previousOffset: null,
   approximate: false,
   truncated: false,
+  soldLocked: false,
 };
 
 /** ~km box around a point for peer searches when the comps API is unavailable. */

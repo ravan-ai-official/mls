@@ -4,8 +4,14 @@ import { notFound } from "next/navigation";
 import { cache, Suspense } from "react";
 import { BackToListingsLink } from "@/components/property/BackToListingsLink";
 import { ExpandableText } from "@/components/property/ExpandableText";
-import { Gallery } from "@/components/property/Gallery";
 import { InquiryForm } from "@/components/property/InquiryForm";
+import {
+  SoldDetailGate,
+  SoldLockedPriceContext,
+} from "@/components/sold/SoldDetailGate";
+import { SoldLockedGallery } from "@/components/sold/SoldLockedGallery";
+import { SoldPropertyLeadPrice } from "@/components/sold/SoldPropertyLeadPrice";
+import { SoldSessionRefresh } from "@/components/sold/SoldSessionRefresh";
 import { ListingShareActions, ListingWhatsAppCard } from "@/components/property/ListingShareActions";
 import { KeyFacts } from "@/components/property/KeyFacts";
 import { EstimatesPanel } from "@/components/property/EstimatesPanel";
@@ -28,7 +34,7 @@ import { ViewTracker } from "@/components/property/ViewTracker";
 import { PropertyGridSkeleton, Skeleton, UnavailableNote } from "@/components/ui/States";
 import { ApiError } from "@/lib/api/client";
 import { getProperty } from "@/lib/api/properties";
-import { statusLabel } from "@/lib/api/mappers";
+import { ACCESS_COOKIE } from "@/lib/auth/session";
 import {
   EMPTY,
   formatDate,
@@ -40,6 +46,7 @@ import type { PropertyDetail } from "@/lib/types/domain";
 import { absoluteUrl, JsonLd } from "@/components/seo/JsonLd";
 import { propertyJsonLd } from "@/lib/seo/jsonld";
 import { propertyPath } from "@/lib/seo/urls";
+import { cookies } from "next/headers";
 
 export const revalidate = 300;
 
@@ -52,7 +59,13 @@ export const revalidate = 300;
 /** Shared across generateMetadata + page so the detail is fetched once per request. */
 const load = cache(async (listingKey: string): Promise<PropertyDetail | null> => {
   try {
-    return await getProperty(decodeURIComponent(listingKey));
+    const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+    return await getProperty(decodeURIComponent(listingKey), {
+      // Auth cookie unlocks sold fields; never cache personalized sold payloads.
+      token: token || undefined,
+      cache: token ? "no-store" : undefined,
+      revalidate: token ? undefined : 300,
+    });
   } catch (error) {
     if (error instanceof ApiError && error.isNotFound) return null;
     throw error;
@@ -78,9 +91,12 @@ export async function generateMetadata({
   }
   if (!property) return { title: "Listing not found" };
 
-  const price = property.isLease
-    ? formatLeasePrice(property.price)
-    : formatPrice(property.price);
+  const price =
+    property.status === "sold" && (property.soldLocked || property.closePrice == null)
+      ? "Sold"
+      : property.isLease
+        ? formatLeasePrice(property.price)
+        : formatPrice(property.price);
 
   return {
     title: `${property.address} — ${price}`,
@@ -108,29 +124,19 @@ export default async function PropertyPage({
   ].join(", ");
 
   const shareUrl = absoluteUrl(propertyPath(property.id));
-  const priceLabel =
-    property.price === null
-      ? EMPTY
-      : property.isLease
-        ? formatLeasePrice(property.price)
-        : formatPrice(property.price);
-  const soldClose = property.status === "sold" ? property.closePrice : null;
-  const headlinePrice =
-    soldClose !== null
-      ? property.isLease
-        ? formatLeasePrice(soldClose)
-        : formatPrice(soldClose)
-      : priceLabel;
-  const overAsk =
-    soldClose !== null && property.price
-      ? ((soldClose - property.price) / property.price) * 100
-      : null;
+  // Never use close_price in SSR chrome for sold/anonymous — client gate +
+  // SoldSessionRefresh reveal dollars after auth.
+  const soldClose =
+    property.status === "sold" && !property.soldLocked ? property.closePrice : null;
   const similarHref = property.community
     ? `/listings?city=${encodeURIComponent(property.community)}`
     : "/listings";
   const hasLocation = property.latitude !== null && property.longitude !== null;
+  // Sold listings: no $/sqft from close or list while locked (avoids leaking sold $).
   const priceBasis =
-    soldClose !== null ? soldClose : property.price;
+    property.status === "sold"
+      ? soldClose
+      : property.price;
   const pricePerSqft =
     priceBasis !== null && property.sqft !== null && property.sqft > 0
       ? Math.round(priceBasis / property.sqft)
@@ -174,6 +180,9 @@ export default async function PropertyPage({
   return (
     <article className="min-w-0 overflow-x-clip pb-8">
       <JsonLd data={propertyJsonLd(property)} />
+      <SoldSessionRefresh
+        active={property.status === "sold" || property.soldLocked}
+      />
       {/* Records the view for popularity counts and "Recently Viewed". */}
       <ViewTracker
         listingKey={property.id}
@@ -194,69 +203,33 @@ export default async function PropertyPage({
       </div>
 
       <PropertyTabs
-        hero={<Gallery images={property.images} address={property.address} />}
+        hero={
+          <SoldLockedGallery
+            images={property.images}
+            address={property.address}
+            status={property.status}
+            soldLocked={property.soldLocked}
+          />
+        }
         lead={
+      <SoldDetailGate status={property.status} soldLocked={property.soldLocked}>
       <header>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2rem]">
-              {headlinePrice}
-              {overAsk !== null && (
-                <span
-                  className={`ml-3 inline-flex rounded-full px-3 py-1 align-middle text-[13px] font-semibold ${
-                    overAsk >= 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"
-                  }`}
-                >
-                  {overAsk >= 0 ? "+" : ""}
-                  {overAsk.toFixed(1)}% {overAsk >= 0 ? "over asking" : "below asking"}
-                </span>
-              )}
-            </p>
-            <h1 className="mt-1 text-[15px] font-medium text-ink">{property.address}</h1>
-            <p className="text-[13px] text-ink-muted">{location || EMPTY}</p>
-          </div>
-          <div className="text-left sm:text-right">
-            <p className="text-[12px] text-ink-muted">
-              {property.status === "sold"
-                ? "Asking price"
-                : property.status === "active"
-                  ? "MLS®"
-                  : "Status"}
-            </p>
-            <p
-              className={
-                property.status === "sold"
-                  ? "text-[18px] font-medium text-ink-muted line-through"
-                  : property.status === "active"
-                    ? "text-[18px] font-semibold text-navy"
-                    : "text-[18px] font-semibold text-ink-muted"
-              }
-            >
-              {property.status === "sold"
-                ? priceLabel
-                : property.status === "active"
-                  ? property.mls
-                  : statusLabel(property.status)}
-            </p>
-            {property.status === "active" && (
-              <p className="text-[12px] text-ink-muted">Listed</p>
-            )}
-            {property.status !== "active" && property.status !== "sold" && (
-              <p className="text-[12px] text-ink-muted">MLS® {property.mls}</p>
-            )}
-          </div>
-        </div>
+        <SoldPropertyLeadPrice
+          status={property.status}
+          soldLocked={property.soldLocked}
+          closePrice={property.closePrice}
+          listPrice={property.price}
+          isLease={property.isLease}
+          mls={property.mls}
+        />
+        <h1 className="mt-1 text-[15px] font-medium text-ink">{property.address}</h1>
+        <p className="text-[13px] text-ink-muted">{location || EMPTY}</p>
 
-        {priceContext.length > 0 && (
-          <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-b border-line-soft pb-3 text-[13px] text-ink-muted">
-            {priceContext.map((item) => (
-              <div key={item.label} className="inline-flex items-baseline gap-1.5">
-                <dt>{item.label}</dt>
-                <dd className="font-medium text-ink">{item.value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
+        <SoldLockedPriceContext
+          status={property.status}
+          soldLocked={property.soldLocked}
+          items={priceContext}
+        />
 
         <dl className="mt-4 flex flex-wrap gap-2 sm:gap-3">
           {property.bedsLabel || property.beds !== null ? (
@@ -315,6 +288,7 @@ export default async function PropertyPage({
           />
         </div>
       </header>
+      </SoldDetailGate>
         }
         actions={
           <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
@@ -475,7 +449,12 @@ export default async function PropertyPage({
                   label: "Listing History",
                   content: (
                     <Suspense fallback={<SectionSkeleton label="Loading price history" />}>
-                      <PriceHistorySection listingKey={property.id} listingId={property.mls} />
+                      <PriceHistorySection
+                        listingKey={property.id}
+                        listingId={property.mls}
+                        soldLocked={property.soldLocked}
+                        status={property.status}
+                      />
                     </Suspense>
                   ),
                 },
@@ -493,7 +472,12 @@ export default async function PropertyPage({
                   label: "Comparables",
                   content: (
                     <Suspense fallback={<PropertyGridSkeleton count={2} />}>
-                      <ComparablesSection property={property} />
+                      <ComparablesSection
+                        property={property}
+                        lockSoldComps={
+                          property.status === "sold" || property.soldLocked
+                        }
+                      />
                     </Suspense>
                   ),
                 },
@@ -525,6 +509,9 @@ export default async function PropertyPage({
                         postalCode={property.postalCode}
                         latitude={property.latitude}
                         longitude={property.longitude}
+                        gateSoldTrends={
+                          property.status === "sold" || property.soldLocked
+                        }
                       />
                     </Suspense>
                   ),

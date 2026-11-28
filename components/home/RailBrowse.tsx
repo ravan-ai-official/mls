@@ -5,14 +5,17 @@ import type { ReactNode } from "react";
 import { HighReturnCard } from "@/components/home/HighReturnCard";
 import { ProfitableInvestmentCard } from "@/components/home/ProfitableInvestmentCard";
 import { PropertyCard } from "@/components/property/PropertyCard";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { SoldLockedEmptyState } from "@/components/sold/SoldLockedOverlay";
 import { Eyebrow } from "@/components/ui/Badge";
 import { EmptyState, PropertyGridSkeleton } from "@/components/ui/States";
-import { getInvestorPicks, getProfitableInvestments } from "@/lib/api/home";
-import type { InvestorPick, ProfitableInvestmentRow } from "@/lib/api/homeMappers";
+import { getProfitableInvestments } from "@/lib/api/home";
+import type { InvestorPick, InvestorPicksFeed, ProfitableInvestmentsFeed } from "@/lib/api/homeMappers";
 import {
   HOME_RAIL_LIMIT,
   RAIL_PAGE_LIMIT,
-  loadFeaturedRail,
+  loadFeaturedListingsPage,
+  loadHighReturnPage,
   loadTodaysNewRail,
 } from "@/lib/home/rails";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
@@ -96,11 +99,14 @@ function PropertyGrid({
   );
 }
 
-/** Dedicated /featured-listings page — same feed as the homepage rail, longer. */
+/**
+ * Dedicated /featured-listings — `featured-properties/?limit=48` only.
+ * No Buy/Rent tabs, listing filters, or exclusive/new catalogue fallbacks.
+ */
 export function FeaturedListingsBrowse() {
   const { data, isPending } = useMlsQuery(
     ["rail", "featured", RAIL_PAGE_LIMIT],
-    () => loadFeaturedRail(RAIL_PAGE_LIMIT),
+    () => loadFeaturedListingsPage(RAIL_PAGE_LIMIT),
     { listings: [], description: "Hand-picked homes from the HomeAtlas team." },
   );
   const listings = data?.listings ?? [];
@@ -155,14 +161,23 @@ export function TodaysNewBrowse() {
   );
 }
 
-/** Dedicated /high-return page — investor picks with yield metrics. */
+/**
+ * Dedicated /high-return — `investor-picks/?limit=48` only.
+ * Same HighReturnCard as the homepage rail; no Buy/Rent listing filters.
+ */
 export function HighReturnBrowse() {
+  const emptyFeed: InvestorPicksFeed = {
+    picks: [],
+    pinnedCount: 0,
+    basisNote: null,
+    generatedAt: null,
+  };
   const { data: feed, isPending } = useMlsQuery(
     ["rail", "investor-picks", RAIL_PAGE_LIMIT],
-    () => getInvestorPicks(RAIL_PAGE_LIMIT),
-    null,
+    () => loadHighReturnPage(RAIL_PAGE_LIMIT),
+    emptyFeed,
   );
-  const picks: InvestorPick[] = feed?.picks ?? [];
+  const picks: InvestorPick[] = (feed?.picks ?? []).slice(0, RAIL_PAGE_LIMIT);
 
   return (
     <RailPageShell
@@ -177,7 +192,7 @@ export function HighReturnBrowse() {
         <PropertyGridSkeleton count={HOME_RAIL_LIMIT} />
       ) : picks.length === 0 ? (
         <EmptyState
-          title="No investor picks right now"
+          title="No high return properties right now"
           description="Yield estimates will appear here when comparable rents are available."
           action={{ label: "Browse listings", href: "/listings" }}
         />
@@ -196,14 +211,14 @@ export function HighReturnBrowse() {
 
 /** Dedicated /profitable-investments page — sold-above re-sales, no filter chrome. */
 export function ProfitableInvestmentsBrowse() {
-  const { data: rows, isPending } = useMlsQuery(
-    ["rail", "profitable-investments", RAIL_PAGE_LIMIT],
+  const { user } = useAuth();
+  const { data: feed, isPending, refetch } = useMlsQuery<ProfitableInvestmentsFeed | null>(
+    ["rail", "profitable-investments", RAIL_PAGE_LIMIT, user?.id ?? "anon"],
     () => getProfitableInvestments(RAIL_PAGE_LIMIT, { cache: "no-store" }),
     null,
   );
-  const displayRows: ProfitableInvestmentRow[] = (rows ?? []).filter((row) =>
-    Boolean(row.imageUrl),
-  );
+  const locked = Boolean(!user || feed?.soldLocked);
+  const displayRows = (feed?.rows ?? []).filter((row) => Boolean(row.imageUrl));
 
   return (
     <RailPageShell
@@ -211,8 +226,10 @@ export function ProfitableInvestmentsBrowse() {
       title="Profitable Investments"
       description="Homes that sold again for more than their previous sale price in the last 12 months."
     >
-      {isPending && !rows ? (
+      {isPending && !feed ? (
         <PropertyGridSkeleton count={HOME_RAIL_LIMIT} />
+      ) : locked && displayRows.length === 0 ? (
+        <SoldLockedEmptyState onUnlocked={() => void refetch()} />
       ) : displayRows.length === 0 ? (
         <EmptyState
           title="No profitable re-sales available"
@@ -223,7 +240,10 @@ export function ProfitableInvestmentsBrowse() {
         <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {displayRows.map((row) => (
             <li key={row.listingKey}>
-              <ProfitableInvestmentCard row={row} />
+              <ProfitableInvestmentCard
+                row={row}
+                locked={locked || row.soldLocked}
+              />
             </li>
           ))}
         </ul>

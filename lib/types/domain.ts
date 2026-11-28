@@ -81,6 +81,11 @@ export interface PropertySummary {
   closePrice: number | null;
   /** close_date — the true close date (G3), preferred over statusChangedAt. */
   closeDate: string | null;
+  /**
+   * API sold gate for anonymous users. When true (or when the client has no
+   * session on a sold row), UI must not show close prices.
+   */
+  soldLocked: boolean;
   /** previous_list_price — drives the "Price Drop" badge (G7). */
   previousListPrice: number | null;
   priceChangedAt: string | null;

@@ -1,8 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { SafeImage } from "@/components/ui/SafeImage";
+import { SoldLockedOverlay } from "@/components/sold/SoldLockedOverlay";
 import type { ProfitableInvestmentRow } from "@/lib/api/homeMappers";
 import { formatPrice } from "@/lib/utils/format";
+import { cn } from "@/lib/utils/cn";
 
 function compactGain(amount: number): string {
   const abs = Math.abs(amount);
@@ -14,10 +18,21 @@ function compactGain(amount: number): string {
 }
 
 /** Sold-above card — mirrors Sold Below, with gain instead of loss. */
-export function ProfitableInvestmentCard({ row }: { row: ProfitableInvestmentRow }) {
-  const pct = ((row.gainAmount / row.previousClosePrice) * 100).toFixed(1);
+export function ProfitableInvestmentCard({
+  row,
+  locked = false,
+}: {
+  row: ProfitableInvestmentRow;
+  locked?: boolean;
+}) {
+  const pct =
+    !locked && row.previousClosePrice > 0
+      ? ((row.gainAmount / row.previousClosePrice) * 100).toFixed(1)
+      : null;
   const href = `/property/${encodeURIComponent(row.listingKey)}`;
-  const bottomLine = `Sold ${compactGain(row.gainAmount)} above previous purchase`;
+  const bottomLine = locked
+    ? "Sign in to view sold data"
+    : `Sold ${compactGain(row.gainAmount)} above previous purchase`;
 
   return (
     <Link
@@ -30,27 +45,39 @@ export function ProfitableInvestmentCard({ row }: { row: ProfitableInvestmentRow
           alt={row.address}
           fill
           sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
+          className={cn(
+            "object-cover transition-transform duration-500 group-hover:scale-105",
+            locked && "blur-sm scale-105",
+          )}
         />
-        <Badge tone="navy" className="absolute left-3 top-3 font-bold">
-          {pct}% above last purchase
-        </Badge>
+        {locked ? (
+          <SoldLockedOverlay dense />
+        ) : (
+          <Badge tone="navy" className="absolute left-3 top-3 font-bold">
+            {pct}% above last purchase
+          </Badge>
+        )}
       </div>
       <div className="p-4">
         <div className="mb-1 flex items-start justify-between gap-2">
           <div>
-            <p className="text-h3 text-ink">{formatPrice(row.closePrice)}</p>
-            <p className="text-caption text-ink-muted line-through">
-              Prev: {formatPrice(row.previousClosePrice)}
-            </p>
+            <p className="text-h3 text-ink">{locked ? "Sold" : formatPrice(row.closePrice)}</p>
+            {!locked && (
+              <p className="text-caption text-ink-muted line-through">
+                Prev: {formatPrice(row.previousClosePrice)}
+              </p>
+            )}
           </div>
-          <Badge tone="gold" className="shrink-0 px-2 py-0.5 font-bold">
-            Gained {formatPrice(row.gainAmount)}
-          </Badge>
+          {!locked && (
+            <Badge tone="gold" className="shrink-0 px-2 py-0.5 font-bold">
+              Gained {formatPrice(row.gainAmount)}
+            </Badge>
+          )}
         </div>
         <p className="truncate text-small font-medium text-ink">{row.address}</p>
         <p className="mt-0.5 text-caption text-ink-muted">
-          {row.city} · {bottomLine}
+          {row.city ? `${row.city} · ` : ""}
+          {bottomLine}
         </p>
       </div>
     </Link>

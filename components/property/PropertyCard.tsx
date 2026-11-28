@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils/cn";
 import { PropertyBadgePill } from "@/components/ui/Badge";
 import { SaveButton } from "@/components/property/SaveButton";
 import { CompareButton } from "@/components/property/CompareButton";
+import { SoldLockedOverlay } from "@/components/sold/SoldLockedOverlay";
+import { useSoldLock } from "@/components/sold/useSoldLock";
 import { rememberListingsScroll } from "@/lib/hooks/useListingsScrollRestore";
 import type { PropertySummary } from "@/lib/types/domain";
 import {
@@ -71,15 +73,21 @@ export function PropertyCard({
 
   const location = [neighbourhood, community].filter(Boolean).join(", ");
 
+  const { locked: soldLocked, closePrice: revealedClose } = useSoldLock({
+    soldLocked: property.soldLocked,
+    status,
+    closePrice,
+  });
+
   // A sold card leads with what the home ACTUALLY sold for (API_GAPS G10), not
   // the asking price — the two differ, and showing the ask under a "Sold" badge
-  // reads as the sale price. Falls back to list price when the feed has no
-  // close_price on the row.
+  // reads as the sale price. Locked sold rows hide dollars entirely.
   const isSold = status === "sold";
-  const headlinePrice = isSold && closePrice !== null ? closePrice : price;
+  const headlinePrice =
+    soldLocked ? null : isSold && revealedClose !== null ? revealedClose : price;
   const overAskPct =
-    isSold && closePrice !== null && price !== null && price > 0
-      ? ((closePrice - price) / price) * 100
+    !soldLocked && isSold && revealedClose !== null && price !== null && price > 0
+      ? ((revealedClose - price) / price) * 100
       : null;
   // close_date is a true close date; status_change_timestamp is only a proxy.
   const soldOn = closeDate ?? statusChangedAt;
@@ -90,7 +98,7 @@ export function PropertyCard({
       layoutId={layout ? `listing-shell-${id}` : undefined}
       transition={LAYOUT_SPRING}
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-surface border border-line bg-surface",
+        "group relative z-0 flex h-full flex-col overflow-hidden rounded-surface border border-line bg-surface",
         "shadow-card transition-shadow duration-200 hover:shadow-card-hover",
         // The inner <a> carries the focus ring itself; a focus-within ring here
         // lit the entire card whenever the save button was focused too.
@@ -100,25 +108,32 @@ export function PropertyCard({
       onPointerEnter={prefetch}
       onFocusCapture={prefetch}
     >
-      {/* Photo, full-bleed across the top of the card. */}
-      <motion.div
-        layout={layout || undefined}
-        layoutId={layout ? `listing-photo-${id}` : undefined}
-        transition={LAYOUT_SPRING}
-        className="relative h-[210px] w-full shrink-0 bg-surface-alt"
-      >
-        <SafeImage
-          src={image}
-          alt={`Photo of ${address}`}
-          fill
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          priority={priority}
-          className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-        />
+      {/* Outer clip box — Framer layoutId lives inside so sold overlay stays clipped. */}
+      <div className="relative isolate h-[210px] w-full shrink-0 overflow-hidden bg-surface-alt">
+        <motion.div
+          layout={layout || undefined}
+          layoutId={layout ? `listing-photo-${id}` : undefined}
+          transition={LAYOUT_SPRING}
+          className="absolute inset-0"
+        >
+          <SafeImage
+            src={image}
+            alt={`Photo of ${address}`}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            priority={priority}
+            className={cn(
+              "object-cover transition-transform duration-300 group-hover:scale-[1.03]",
+              soldLocked && "blur-[2px] scale-105",
+            )}
+          />
+        </motion.div>
 
-        {badge && (
+        {badge && !soldLocked && (
           <PropertyBadgePill badge={badge} className="absolute left-3 top-3 z-10" />
         )}
+
+        {soldLocked && <SoldLockedOverlay dense className="rounded-t-surface" />}
 
         {status === "active" && (
           <>
@@ -135,7 +150,7 @@ export function PropertyCard({
             />
           </>
         )}
-      </motion.div>
+      </div>
 
       <div className="flex flex-1 flex-col p-5">
         <motion.p
@@ -144,13 +159,15 @@ export function PropertyCard({
           transition={LAYOUT_SPRING}
           className="text-h2 text-ink"
         >
-          {headlinePrice === null
-            ? EMPTY
-            : isLease
-              ? formatLeasePrice(headlinePrice)
-              : formatPrice(headlinePrice)}
+          {soldLocked
+            ? "Sold"
+            : headlinePrice === null
+              ? EMPTY
+              : isLease
+                ? formatLeasePrice(headlinePrice)
+                : formatPrice(headlinePrice)}
         </motion.p>
-        {isSold && closePrice !== null && price !== null && (
+        {isSold && !soldLocked && revealedClose !== null && price !== null && (
           <p className="mt-0.5 text-caption text-ink-muted">
             List {formatPrice(price)}
             {overAskPct !== null && Math.abs(overAskPct) >= 0.1 && (
@@ -166,6 +183,11 @@ export function PropertyCard({
             )}
           </p>
         )}
+        {soldLocked && (
+          <p className="mt-0.5 text-caption text-ink-muted">
+            Sign in to unlock sold price and history
+          </p>
+        )}
 
         <h3 className="mt-1 text-small font-medium text-ink">
           {/* Stretched link: the whole card is the click target, but only this
@@ -173,7 +195,7 @@ export function PropertyCard({
           <Link
             href={href}
             onClick={rememberListingsScroll}
-            aria-label={`${address}${headlinePrice === null ? "" : `, ${isSold ? "sold for " : ""}${isLease ? formatLeasePrice(headlinePrice) : formatPrice(headlinePrice)}`}`}
+            aria-label={`${address}${soldLocked ? ", sold" : headlinePrice === null ? "" : `, ${isSold ? "sold for " : ""}${isLease ? formatLeasePrice(headlinePrice) : formatPrice(headlinePrice)}`}`}
             className="outline-none before:absolute before:inset-0 before:rounded-surface focus-visible:before:outline-1 focus-visible:before:outline-offset-2 focus-visible:before:outline-navy/40"
           >
             {address}

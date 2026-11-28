@@ -28,7 +28,14 @@ const EMPTY_COMPS: ComparablesPayload = {
 /**
  * Comparables tab — comps + engagement fetched in the browser via `/api/mls/…`.
  */
-export function ComparablesSection({ property }: { property: PropertyDetail }) {
+export function ComparablesSection({
+  property,
+  lockSoldComps = false,
+}: {
+  property: PropertyDetail;
+  /** When the parent listing is a locked sold home — hide sold-comp dollars. */
+  lockSoldComps?: boolean;
+}) {
   const { data = EMPTY_COMPS } = useMlsQuery<ComparablesPayload>(
     ["property", "comparables", property.id],
     async () => {
@@ -102,6 +109,7 @@ export function ComparablesSection({ property }: { property: PropertyDetail }) {
       engagement={data.engagement}
       price={property.price}
       annualTax={property.taxAnnualAmount}
+      lockSoldComps={lockSoldComps || property.soldLocked || property.status === "sold"}
     />
   );
 }

@@ -4,6 +4,7 @@ import { HighReturnCard } from "@/components/home/HighReturnCard";
 import { Section } from "@/components/ui/Section";
 import { getInvestorPicks } from "@/lib/api/home";
 import { HOME_RAIL_LIMIT } from "@/lib/home/rails";
+import { readClientVisitor } from "@/lib/personalize/clientVisitor";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { textOf } from "@/lib/site/read";
 
@@ -19,7 +20,13 @@ export function HighReturnProperties({ content }: { content?: Record<string, unk
   const viewAllLabel = textOf(content, "actionLabel", "View All");
   const { data: feed } = useMlsQuery(
     ["home", "investor-picks", HOME_RAIL_LIMIT],
-    () => getInvestorPicks(HOME_RAIL_LIMIT),
+    () => {
+      const visitor = readClientVisitor();
+      return getInvestorPicks(HOME_RAIL_LIMIT, {
+        cities: visitor.cities?.length ? visitor.cities : undefined,
+        cache: "no-store",
+      });
+    },
     null,
   );
   if (feed === null || !feed || feed.picks.length === 0) return null;

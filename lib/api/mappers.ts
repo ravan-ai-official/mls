@@ -398,6 +398,7 @@ export function mapPropertySummary(raw: BackendPropertySummary): PropertySummary
     listedAt: raw.original_entry_timestamp ?? null,
     closePrice: toNumber(raw.close_price),
     closeDate: raw.close_date ?? null,
+    soldLocked: raw.sold_locked === true,
     previousListPrice: toNumber(raw.previous_list_price),
     priceChangedAt: raw.price_change_timestamp ?? null,
     nextOpenHouse:

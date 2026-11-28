@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { MortgageCalculator } from "@/components/property/MortgageCalculator";
+import { SoldLockedEmptyState, SoldLockedOverlay } from "@/components/sold/SoldLockedOverlay";
+import { useSoldLock } from "@/components/sold/useSoldLock";
 import type { ListingEngagement } from "@/lib/api/neighbourhood";
 import type { PropertySummary } from "@/lib/types/domain";
 import { propertyPath } from "@/lib/seo/urls";
@@ -29,6 +31,7 @@ export function ComparablesBoard({
   engagement,
   price,
   annualTax,
+  lockSoldComps = false,
 }: {
   sold: PropertySummary[];
   sale: PropertySummary[];
@@ -36,9 +39,21 @@ export function ComparablesBoard({
   engagement: ListingEngagement | null;
   price: number | null;
   annualTax?: number | null;
+  /** Parent listing is locked sold — sold-comp dollars stay hidden. */
+  lockSoldComps?: boolean;
 }) {
+  const { locked: soldTabLocked } = useSoldLock({
+    soldLocked: lockSoldComps,
+    status: lockSoldComps ? "sold" : undefined,
+  });
   const [tab, setTab] = useState<TabId>(
-    sold.length > 0 ? "sold" : sale.length > 0 ? "sale" : rent.length > 0 ? "rent" : "sold",
+    sold.length > 0 && !soldTabLocked
+      ? "sold"
+      : sale.length > 0
+        ? "sale"
+        : rent.length > 0
+          ? "rent"
+          : "sold",
   );
   const items = tab === "sold" ? sold : tab === "rent" ? rent : sale;
   const heat = engagement
@@ -64,12 +79,17 @@ export function ComparablesBoard({
             </button>
           ))}
         </div>
-        {items.length === 0 ? (
+        {tab === "sold" && soldTabLocked ? (
+          <SoldLockedEmptyState
+            title="Sign in to view sold comparables"
+            description="Sold comparable prices are available after you sign in."
+          />
+        ) : items.length === 0 ? (
           <p className="text-[13px] text-ink-muted">No listings in this group right now.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {items.slice(0, 4).map((item) => (
-              <ComparableCard key={item.id} property={item} />
+              <ComparableCard key={item.id} property={item} forceLockSold={soldTabLocked} />
             ))}
           </div>
         )}
@@ -110,12 +130,30 @@ function rentMedian(items: PropertySummary[]): number | null {
   return prices.length % 2 === 0 ? Math.round((prices[mid - 1] + prices[mid]) / 2) : prices[mid];
 }
 
-function ComparableCard({ property }: { property: PropertySummary }) {
+function ComparableCard({
+  property,
+  forceLockSold = false,
+}: {
+  property: PropertySummary;
+  forceLockSold?: boolean;
+}) {
+  const { locked, closePrice } = useSoldLock({
+    soldLocked: property.soldLocked || forceLockSold,
+    status: property.status,
+    closePrice: property.closePrice,
+  });
+  const hideSold = locked && property.status === "sold";
   const price =
-    property.status === "sold" && property.closePrice !== null
-      ? property.closePrice
-      : property.price;
-  const label = property.isLease ? formatLeasePrice(price) : formatPrice(price);
+    !hideSold && property.status === "sold" && closePrice !== null
+      ? closePrice
+      : hideSold
+        ? null
+        : property.price;
+  const label = hideSold
+    ? "Sold"
+    : property.isLease
+      ? formatLeasePrice(price)
+      : formatPrice(price);
   const status =
     property.status === "sold" ? "Sold" : property.isLease ? "For Rent" : "For Sale";
 
@@ -124,11 +162,20 @@ function ComparableCard({ property }: { property: PropertySummary }) {
       href={propertyPath(property.id)}
       className="overflow-hidden rounded-xl border border-line transition-shadow hover:shadow-card"
     >
-      <div className="relative h-36 bg-surface-alt">
-        <SafeImage src={property.image} alt="" fill sizes="(max-width: 640px) 100vw, 320px" className="object-cover" />
-        <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white">
-          {status} · {label}
-        </span>
+      <div className="relative isolate h-36 overflow-hidden bg-surface-alt">
+        <SafeImage
+          src={property.image}
+          alt=""
+          fill
+          sizes="(max-width: 640px) 100vw, 320px"
+          className={cn("object-cover", hideSold && "blur-[2px] scale-105")}
+        />
+        {hideSold && <SoldLockedOverlay dense message="Sign in for sold $" />}
+        {!hideSold && (
+          <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white">
+            {status} · {label}
+          </span>
+        )}
       </div>
       <div className="p-4">
         <p className="mb-1 text-[13px] font-semibold text-ink">{property.address}</p>
@@ -136,7 +183,8 @@ function ComparableCard({ property }: { property: PropertySummary }) {
           {property.beds ?? EMPTY}bd · {property.baths ?? EMPTY}ba
           {property.sqft ? ` · ${formatNumber(property.sqft)} sqft` : ""}
         </p>
-        {property.type && <p className="text-[11px] font-medium text-navy">{property.type}</p>}
+        <p className="text-[12px] font-semibold text-ink">{label}</p>
+        {property.type && <p className="mt-1 text-[11px] font-medium text-navy">{property.type}</p>}
       </div>
     </Link>
   );

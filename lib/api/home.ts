@@ -24,8 +24,8 @@ import {
   type NeighbourActivityItem,
   type Partner,
   type PriceDropDeal,
-  type ProfitableInvestmentRow,
-  type SoldBelowRow,
+  type ProfitableInvestmentsFeed,
+  type SoldBelowFeed,
 } from "./homeMappers";
 
 const HOME = "/api/home";
@@ -58,11 +58,40 @@ async function get<T>(
 
 const CONTENT_TAGS = ["home-content"];
 
-export function getInvestorPicks(limit = 3): Promise<InvestorPicksFeed | null> {
+/** Max rows the investor-picks View All endpoint returns. */
+export const INVESTOR_PICKS_MAX = 48;
+
+/**
+ * Homepage High Return rail + `/high-return` View All.
+ * Always `GET /api/home/investor-picks/` — never MLS filter/catalogue search.
+ */
+export function getInvestorPicks(
+  limit = 3,
+  options: {
+    cities?: string[];
+    headers?: Record<string, string>;
+    cache?: RequestCache;
+  } = {},
+): Promise<InvestorPicksFeed | null> {
+  const { cities, headers, cache } = options;
+  const capped = Math.min(Math.max(1, limit), INVESTOR_PICKS_MAX);
   // Cold rank can score hundreds of sale rows against rental comps.
-  return get("investor-picks/", FEED_REVALIDATE, mapInvestorPicks, { limit }, undefined, {
-    timeoutMs: 15_000,
-  });
+  return get(
+    "investor-picks/",
+    cities?.length || cache === "no-store" ? 60 : FEED_REVALIDATE,
+    mapInvestorPicks,
+    {
+      limit: capped,
+      city: cities?.[0],
+      cities: cities?.length ? cities.join(",") : undefined,
+    },
+    undefined,
+    {
+      headers,
+      cache,
+      timeoutMs: 15_000,
+    },
+  );
 }
 
 export function getMarketDeals(limit = 4): Promise<PriceDropDeal[] | null> {
@@ -72,7 +101,7 @@ export function getMarketDeals(limit = 4): Promise<PriceDropDeal[] | null> {
 export function getSoldBelowPurchase(
   limit = 3,
   options: { cities?: string[]; headers?: Record<string, string>; cache?: RequestCache } = {},
-): Promise<SoldBelowRow[] | null> {
+): Promise<SoldBelowFeed | null> {
   const { cities, headers, cache } = options;
   return get(
     "sold-below-purchase/",
@@ -96,7 +125,7 @@ export function getSoldBelowPurchase(
 export function getProfitableInvestments(
   limit = 3,
   options: { headers?: Record<string, string>; cache?: RequestCache } = {},
-): Promise<ProfitableInvestmentRow[] | null> {
+): Promise<ProfitableInvestmentsFeed | null> {
   const { headers, cache } = options;
   return get(
     "profitable-investments/",

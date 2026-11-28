@@ -130,7 +130,7 @@ describe("mapSoldBelow", () => {
   };
 
   it("maps complete rows and skips incomplete ones", () => {
-    const rows = mapSoldBelow({
+    const feed = mapSoldBelow({
       results: [
         valid,
         { listing_key: "S2", close_price: null, previous_close_price: 5 },
@@ -142,19 +142,52 @@ describe("mapSoldBelow", () => {
       empty: false,
       computed_at: null,
     });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
+    expect(feed.rows).toHaveLength(1);
+    expect(feed.soldLocked).toBe(false);
+    expect(feed.rows[0]).toMatchObject({
       listingKey: "S1",
       lossAmount: 100000,
       previousCloseDate: "2021-04-01",
       imageUrl: null,
+      soldLocked: false,
     });
   });
 
   it("returns no rows when the envelope is empty", () => {
-    expect(mapSoldBelow({ results: [], count: 0, empty: true, source: "none" })).toEqual([]);
-    expect(mapSoldBelow({ results: [valid], count: 0, empty: false })).toEqual([]);
-    expect(mapSoldBelow({ empty: true, results: [valid], count: 1 })).toEqual([]);
+    expect(mapSoldBelow({ results: [], count: 0, empty: true, source: "none" })).toEqual({
+      soldLocked: false,
+      rows: [],
+    });
+    expect(mapSoldBelow({ results: [valid], count: 0, empty: false })).toEqual({
+      soldLocked: false,
+      rows: [],
+    });
+    expect(mapSoldBelow({ empty: true, results: [valid], count: 1 })).toEqual({
+      soldLocked: false,
+      rows: [],
+    });
+  });
+
+  it("keeps locked stubs when sold_locked is set", () => {
+    const feed = mapSoldBelow({
+      sold_locked: true,
+      count: 1,
+      empty: false,
+      results: [
+        {
+          listing_key: "S9",
+          address: "1 Locked St",
+          city: "Toronto",
+          close_price: null,
+          sold_locked: true,
+          image_url: "https://cdn.example/s9.jpg",
+        },
+      ],
+    });
+    expect(feed.soldLocked).toBe(true);
+    expect(feed.rows).toHaveLength(1);
+    expect(feed.rows[0].soldLocked).toBe(true);
+    expect(feed.rows[0].closePrice).toBe(0);
   });
 });
 
@@ -172,7 +205,7 @@ describe("mapProfitableInvestments", () => {
   };
 
   it("maps complete gain rows and skips losses or incomplete rows", () => {
-    const rows = mapProfitableInvestments({
+    const feed = mapProfitableInvestments({
       results: [
         valid,
         { ...valid, listing_key: "P2", gain_amount: 0 },
@@ -182,20 +215,25 @@ describe("mapProfitableInvestments", () => {
       count: 4,
       empty: false,
     });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
+    expect(feed.rows).toHaveLength(1);
+    expect(feed.soldLocked).toBe(false);
+    expect(feed.rows[0]).toMatchObject({
       listingKey: "P1",
       gainAmount: 200_000,
       previousClosePrice: 1_000_000,
       imageUrl: "https://cdn.example/p1.jpg",
+      soldLocked: false,
     });
   });
 
   it("returns no rows when the envelope is empty", () => {
     expect(
       mapProfitableInvestments({ results: [], count: 0, empty: true, source: "none" }),
-    ).toEqual([]);
-    expect(mapProfitableInvestments({ empty: true, results: [valid], count: 1 })).toEqual([]);
+    ).toEqual({ soldLocked: false, rows: [] });
+    expect(mapProfitableInvestments({ empty: true, results: [valid], count: 1 })).toEqual({
+      soldLocked: false,
+      rows: [],
+    });
   });
 });
 

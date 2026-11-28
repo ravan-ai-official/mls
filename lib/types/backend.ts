@@ -105,6 +105,11 @@ export interface BackendPropertySummary {
   /** G3/G10 — true close price and date on sold rows. */
   close_price?: string | null;
   close_date?: string | null;
+  /**
+   * Anonymous sold gate — sensitive sold fields are null when true.
+   * Authenticated JWT responses omit this or set false.
+   */
+  sold_locked?: boolean | null;
   /** G7 — previous list price, for the "Price Drop" badge. */
   previous_list_price?: string | null;
   price_change_timestamp?: string | null;
@@ -261,6 +266,9 @@ export interface BackendListResponse<T> {
   previous: number | null;
   results: T[];
   fallback_applied?: boolean;
+  /** Anonymous sold search — sold prices redacted on rows. */
+  sold_locked?: boolean | null;
+  sold_login_required?: boolean | null;
 }
 
 export interface BackendPropertyTypeFacet {

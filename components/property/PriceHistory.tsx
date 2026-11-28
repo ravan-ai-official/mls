@@ -1,3 +1,7 @@
+"use client";
+
+import { SoldLockedEmptyState } from "@/components/sold/SoldLockedOverlay";
+import { useSoldLock } from "@/components/sold/useSoldLock";
 import { statusLabel, normalizeStatus } from "@/lib/api/mappers";
 import type { PriceSnapshot } from "@/lib/api/neighbourhood";
 import { EMPTY, formatDate, formatPrice } from "@/lib/utils/format";
@@ -7,14 +11,24 @@ import { cn } from "@/lib/utils/cn";
  * Buy/Sell history table from HomeAtlasUI.
  * Prefer API history[] fields: date_start, date_end, price, event, listing_id.
  * Never put event/status text in the Date End column.
+ * Sold event prices stay hidden for anonymous users.
  */
 export function PriceHistory({
   snapshots,
   listingId,
+  soldLocked = false,
+  status,
 }: {
   snapshots: PriceSnapshot[];
   listingId: string;
+  /** When the parent listing is a locked sold home. */
+  soldLocked?: boolean;
+  status?: string;
 }) {
+  const { locked: hideSoldPrices } = useSoldLock({
+    soldLocked,
+    status,
+  });
   const ordered = [...snapshots].sort((a, b) =>
     (a.dateStart ?? a.recordedAt ?? "") < (b.dateStart ?? b.recordedAt ?? "") ? -1 : 1,
   );
@@ -23,6 +37,24 @@ export function PriceHistory({
     const previous = ordered[index - 1];
     return previous?.listPrice != null && row.listPrice != null && row.listPrice !== previous.listPrice;
   });
+
+  if (hideSoldPrices && (soldLocked || status === "sold")) {
+    return (
+      <div className="space-y-6">
+        <div className="overflow-hidden rounded-2xl border border-line">
+          <div className="border-b border-line bg-surface-alt px-4 py-4 sm:px-6">
+            <h2 className="text-[18px] font-semibold text-ink">Buy/Sell History</h2>
+          </div>
+          <div className="p-4 sm:p-6">
+            <SoldLockedEmptyState
+              title="Sign in to view sold history"
+              description="Sold prices in this listing’s history are available after you sign in."
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -52,12 +84,15 @@ export function PriceHistory({
                   const end = row.dateEnd ? formatDate(row.dateEnd) : EMPTY;
                   const eventText = row.event ?? row.status;
                   const rowListingId = row.listingId || listingId || EMPTY;
+                  const isSoldEvent = normalizeStatus(eventText ?? "") === "sold";
                   return (
                     <tr key={`${start}-${index}`} className="border-b border-line-soft">
                       <td className="px-4 py-4 sm:px-6">{formatDate(start)}</td>
                       <td className="px-4 py-4 text-ink-muted sm:px-6">{end}</td>
                       <td className="px-4 py-4 font-semibold text-navy sm:px-6">
-                        {formatPrice(row.listPrice)}
+                        {hideSoldPrices && isSoldEvent
+                          ? "Sign in to view"
+                          : formatPrice(row.listPrice)}
                       </td>
                       <td className="px-4 py-4 sm:px-6">
                         <EventBadge event={eventText} />

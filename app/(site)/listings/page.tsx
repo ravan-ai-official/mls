@@ -32,13 +32,14 @@ export default async function ListingsPage({ searchParams }: PageProps<"/listing
     <PendingNavigationProvider>
       <ListingsScrollRestore />
       <div className="container-page pb-24 pt-4 sm:pb-8 sm:py-8 md:pb-8">
-        <div className="sticky top-[72px] z-30 -mx-4 border-b border-line bg-surface px-4 py-3 sm:-mx-8 sm:px-8 lg:top-20">
+        {/* Above listing cards / sold overlays (z-10); below site navbar (z-520). */}
+        <div className="sticky top-[72px] z-40 -mx-4 border-b border-line bg-surface px-4 py-3 sm:-mx-8 sm:px-8 lg:top-20">
           <Suspense fallback={<div className="h-12" />}>
             <ListingFiltersChrome />
           </Suspense>
         </div>
 
-        <div className="mt-4 sm:mt-6">
+        <div className="relative z-0 mt-4 isolate sm:mt-6">
           <PendingContent fallback={<PropertyGridSkeleton />}>
             <Suspense fallback={<PropertyGridSkeleton />}>
               <ListingsResults isStaff={isStaff} />

@@ -114,10 +114,19 @@ export function AuthProvider({
   const lastUserId = useRef(userId);
   useEffect(() => {
     if (lastUserId.current === userId) return;
+    const previous = lastUserId.current;
     lastUserId.current = userId;
     const keep = (query: Query) => userId !== null && query.queryKey[1] === userId;
     void queryClient.cancelQueries({ queryKey: qk.meRoot, predicate: (q) => !keep(q) });
     queryClient.removeQueries({ queryKey: qk.meRoot, predicate: (q) => !keep(q) });
+    // Anonymous sold caches must not stick after sign-in — refetch list/map/rails.
+    if (previous === null && userId !== null) {
+      void queryClient.invalidateQueries({ queryKey: qk.properties.all });
+      void queryClient.invalidateQueries({ queryKey: ["map"] });
+      void queryClient.invalidateQueries({ queryKey: ["home"] });
+      void queryClient.invalidateQueries({ queryKey: ["property"] });
+      void queryClient.invalidateQueries({ queryKey: ["listings"] });
+    }
   }, [userId, queryClient]);
 
   // Run the queued continuation once a user appears. An effect (not the

@@ -8,6 +8,8 @@ import { SafeImage } from "@/components/ui/SafeImage";
 import { Skeleton } from "@/components/ui/States";
 import { CompareButton } from "@/components/property/CompareButton";
 import { SaveButton } from "@/components/property/SaveButton";
+import { SoldLockedOverlay } from "@/components/sold/SoldLockedOverlay";
+import { useSoldLock } from "@/components/sold/useSoldLock";
 import type { PropertySummary } from "@/lib/types/domain";
 import { cn } from "@/lib/utils/cn";
 import { EMPTY, formatLeasePrice, formatNumber, formatPrice } from "@/lib/utils/format";
@@ -15,9 +17,15 @@ import { EMPTY, formatLeasePrice, formatNumber, formatPrice } from "@/lib/utils/
 const propertyHref = (id: string) => `/property/${encodeURIComponent(id)}`;
 
 /** Sold homes lead with what they sold for, as on <PropertyCard>. */
-function headlinePrice(property: PropertySummary): string {
+function headlinePrice(
+  property: PropertySummary,
+  opts: { locked: boolean; closePrice: number | null },
+): string {
+  if (opts.locked) return "Sold";
   const value =
-    property.status === "sold" && property.closePrice !== null ? property.closePrice : property.price;
+    property.status === "sold" && opts.closePrice !== null
+      ? opts.closePrice
+      : property.price;
   if (value === null) return EMPTY;
   return property.isLease ? formatLeasePrice(value) : formatPrice(value);
 }
@@ -55,7 +63,12 @@ export const MapListingCard = forwardRef<
 >(function MapListingCard({ property, active, onActivate, onShowOnMap }, ref) {
   const router = useRouter();
   const { id, address, image, badge, photosCount, status } = property;
-  const price = headlinePrice(property);
+  const { locked, closePrice } = useSoldLock({
+    soldLocked: property.soldLocked,
+    status,
+    closePrice: property.closePrice,
+  });
+  const price = headlinePrice(property, { locked, closePrice });
   const details = specs(property);
   const href = propertyHref(id);
   const prefetch = () => {
@@ -85,11 +98,15 @@ export const MapListingCard = forwardRef<
           alt={`Photo of ${address}`}
           fill
           sizes="112px"
-          className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          className={cn(
+            "object-cover transition-transform duration-300 group-hover:scale-[1.03]",
+            locked && "blur-sm scale-105",
+          )}
         />
+        {locked && <SoldLockedOverlay dense message="Sign in for sold $" />}
         {/* photos_count is the feed's figure; with no imported photo it would
             label a placeholder "40 photos". */}
-        {image && photosCount > 1 && (
+        {image && photosCount > 1 && !locked && (
           <span className="absolute bottom-1 right-1 rounded bg-ink/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white">
             {photosCount} photos
           </span>
@@ -157,7 +174,12 @@ export function MapPreviewCard({
   /** Hover preview — no close control, lighter chrome. */
   ephemeral?: boolean;
 }) {
-  const price = headlinePrice(property);
+  const { locked, closePrice } = useSoldLock({
+    soldLocked: property.soldLocked,
+    status: property.status,
+    closePrice: property.closePrice,
+  });
+  const price = headlinePrice(property, { locked, closePrice });
   const details = specs(property);
 
   return (
@@ -175,8 +197,9 @@ export function MapPreviewCard({
             alt={`Photo of ${property.address}`}
             fill
             sizes="112px"
-            className="object-cover"
+            className={cn("object-cover", locked && "blur-sm scale-105")}
           />
+          {locked && !ephemeral && <SoldLockedOverlay dense message="Sign in for sold $" />}
         </div>
         <div className={cn("min-w-0 flex-1 py-3 pl-3", ephemeral ? "pr-3" : "pr-9")}>
           <p className="text-small font-semibold text-ink">{price}</p>

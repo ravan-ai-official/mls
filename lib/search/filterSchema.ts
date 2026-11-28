@@ -39,6 +39,10 @@ export interface FilterSchema {
     ListingTransaction,
     { show?: SheetFieldKey[]; hide?: SheetFieldKey[] }
   >;
+  /** From filter-schema `ui.sold_login_required` — sold search needs auth. */
+  ui?: {
+    sold_login_required?: boolean;
+  };
 }
 
 function price(value: number, label: string): FilterSchemaPriceOption {
@@ -90,6 +94,9 @@ export const DEFAULT_FILTER_SCHEMA: FilterSchema = {
     bedrooms: [1, 2, 3, 4, 5],
     bathrooms: [1, 2, 3, 4],
     sold_within_days: [7, 30, 90, 180, 365],
+  },
+  ui: {
+    sold_login_required: true,
   },
   sheet_visibility_by_transaction: {
     sale: {
@@ -269,6 +276,10 @@ export function normalizeFilterSchema(raw: unknown): FilterSchema {
       ? (visibility as Record<string, unknown>)
       : {};
 
+  const uiRaw = (raw as { ui?: unknown }).ui;
+  const uiObj =
+    uiRaw && typeof uiRaw === "object" ? (uiRaw as Record<string, unknown>) : null;
+
   return {
     option_sets: {
       price_sale:
@@ -287,6 +298,12 @@ export function normalizeFilterSchema(raw: unknown): FilterSchema {
         sets.sold_within_days,
         DEFAULT_FILTER_SCHEMA.option_sets.sold_within_days,
       ),
+    },
+    ui: {
+      sold_login_required:
+        typeof uiObj?.sold_login_required === "boolean"
+          ? uiObj.sold_login_required
+          : DEFAULT_FILTER_SCHEMA.ui?.sold_login_required,
     },
     sheet_visibility_by_transaction: {
       sale: asVisibility(

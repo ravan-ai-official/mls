@@ -139,6 +139,7 @@ function emptyList() {
     previousOffset: null,
     approximate: false,
     truncated: false,
+    soldLocked: false,
   };
 }
 

@@ -117,7 +117,8 @@ export function AiAssistant() {
   return (
     <div
       className={cn(
-        "pointer-events-none fixed right-4 z-[60] flex flex-col items-end gap-3 sm:right-6",
+        // Above site navbar (z-520/530); below modals/sheets (z-600).
+        "pointer-events-none fixed right-4 z-[540] flex flex-col items-end gap-3 sm:right-6",
         // Default clears the bottom edge; property/precon mobile CTAs publish
         // --mobile-cta-height so the FAB sits above the bar until lg.
         "bottom-[calc(5.5rem+var(--compare-tray-height,0px))]",

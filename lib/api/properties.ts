@@ -180,6 +180,8 @@ export interface ListingsResult extends Paginated<PropertySummary> {
   approximate: boolean;
   /** True when the client-side window was exhausted and results may be missing. */
   truncated: boolean;
+  /** Top-level sold gate from filter/ — anonymous sold search. */
+  soldLocked: boolean;
 }
 
 /** Listings filter often needs >15s from Vercel when the feed is under load. */
@@ -241,6 +243,8 @@ export async function searchProperties(
   if (!needsClientFiltering(query)) {
     const params = toBackendParams(query, pageSize, offset);
     const data = await fetchListingsPage(params, opts);
+    const soldLocked =
+      data.sold_locked === true || data.sold_login_required === true;
     return {
       items: (data.results ?? []).map(mapPropertySummary),
       total: data.count ?? 0,
@@ -248,6 +252,7 @@ export async function searchProperties(
       previousOffset: data.previous,
       approximate: false,
       truncated: false,
+      soldLocked,
     };
   }
 
@@ -289,6 +294,8 @@ export async function searchProperties(
     previousOffset: offset > 0 ? Math.max(0, offset - pageSize) : null,
     approximate: true,
     truncated: (data.count ?? 0) > fetched,
+    soldLocked:
+      data.sold_locked === true || data.sold_login_required === true,
   };
 }
 

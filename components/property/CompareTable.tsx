@@ -70,12 +70,12 @@ export const COMPARE_ROWS: Array<{
   {
     label: "Last sold price",
     value: (p) =>
-      p.closePrice === null
+      p.soldLocked || p.closePrice === null
         ? EMPTY
         : p.isLease
           ? formatLeasePrice(p.closePrice)
           : formatPrice(p.closePrice),
-    numeric: (p) => p.closePrice,
+    numeric: (p) => (p.soldLocked ? null : p.closePrice),
     lowerIsBetter: true,
   },
   {

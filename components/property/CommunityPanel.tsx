@@ -30,6 +30,8 @@ import {
   REFERENCE_DISTRIBUTIONS,
   REFERENCE_INSIGHT_METRICS,
 } from "@/lib/demo/neighbourhoodInsights";
+import { SoldLockedEmptyState } from "@/components/sold/SoldLockedOverlay";
+import { useSoldLock } from "@/components/sold/useSoldLock";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { formatPrice } from "@/lib/utils/format";
 
@@ -56,13 +58,20 @@ export function CommunityPanel({
   postalCode,
   latitude,
   longitude,
+  gateSoldTrends = false,
 }: {
   city: string | null;
   neighbourhood?: string | null;
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** When viewing a locked sold listing — hide sold-price trend dollars. */
+  gateSoldTrends?: boolean;
 }) {
+  const { locked: soldTrendsLocked } = useSoldLock({
+    soldLocked: gateSoldTrends,
+    status: gateSoldTrends ? "sold" : undefined,
+  });
   const fsa = postalCode?.replace(/\s/g, "").slice(0, 3) ?? "";
   const emptyAmenities: AmenitiesByCategory = {
     groceries: [],
@@ -76,6 +85,7 @@ export function CommunityPanel({
     months: [],
     communities: [],
     community: neighbourhood ?? null,
+    soldLocked: false,
     unavailable: true,
     generatedAt: null,
     stale: false,
@@ -197,7 +207,12 @@ export function CommunityPanel({
             Closed sales, active inventory and new listings
             {placeLabel !== "this area" ? ` in ${placeLabel}` : city ? ` in ${city}` : ""}.
           </p>
-          {soldTrends.unavailable && activityRows.every((row) => row.sold === 0) ? (
+          {soldTrendsLocked || soldTrends.soldLocked ? (
+            <SoldLockedEmptyState
+              title="Sign in to view sold market activity"
+              description="Closed-sale figures for this community are available after you sign in."
+            />
+          ) : soldTrends.unavailable && activityRows.every((row) => row.sold === 0) ? (
             <p className="rounded-control bg-surface-alt px-4 py-8 text-center text-small text-ink-muted">
               Sold, active and new listing figures are temporarily unavailable for this area.
             </p>

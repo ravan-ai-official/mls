@@ -1,10 +1,13 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { ProfitableInvestmentCard } from "@/components/home/ProfitableInvestmentCard";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { SoldLockedEmptyState } from "@/components/sold/SoldLockedOverlay";
 import { Section } from "@/components/ui/Section";
 import { EmptyState, PropertyGridSkeleton } from "@/components/ui/States";
 import { getProfitableInvestments } from "@/lib/api/home";
-import type { ProfitableInvestmentRow } from "@/lib/api/homeMappers";
+import type { ProfitableInvestmentsFeed } from "@/lib/api/homeMappers";
 import { HOME_RAIL_LIMIT } from "@/lib/home/rails";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import { textOf } from "@/lib/site/read";
@@ -14,8 +17,10 @@ import { textOf } from "@/lib/site/read";
  * close in the last 12 months. Opposite of Sold Below Last Purchase.
  */
 export function ProfitableInvestments({ content }: { content?: Record<string, unknown> }) {
-  const { data: rows, isPending } = useMlsQuery<ProfitableInvestmentRow[] | null>(
-    ["home", "profitable-investments", HOME_RAIL_LIMIT],
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: feed, isPending } = useMlsQuery<ProfitableInvestmentsFeed | null>(
+    ["home", "profitable-investments", HOME_RAIL_LIMIT, user?.id ?? "anon"],
     () => getProfitableInvestments(HOME_RAIL_LIMIT, { cache: "no-store" }),
     null,
   );
@@ -32,7 +37,11 @@ export function ProfitableInvestments({ content }: { content?: Record<string, un
     href: textOf(content, "actionHref", "/profitable-investments"),
   };
 
-  if (isPending && !rows) {
+  const refetch = () => {
+    void queryClient.invalidateQueries({ queryKey: ["home", "profitable-investments"] });
+  };
+
+  if (isPending && !feed) {
     return (
       <Section eyebrow={eyebrow} title={title}>
         <PropertyGridSkeleton count={HOME_RAIL_LIMIT} />
@@ -40,13 +49,16 @@ export function ProfitableInvestments({ content }: { content?: Record<string, un
     );
   }
 
-  const displayRows = (rows ?? [])
+  const locked = Boolean(!user || feed?.soldLocked);
+  const displayRows = (feed?.rows ?? [])
     .filter((row) => Boolean(row.imageUrl))
     .slice(0, HOME_RAIL_LIMIT);
 
   return (
     <Section eyebrow={eyebrow} title={title} description={description} action={action}>
-      {displayRows.length === 0 ? (
+      {locked && displayRows.length === 0 ? (
+        <SoldLockedEmptyState onUnlocked={refetch} />
+      ) : displayRows.length === 0 ? (
         <EmptyState
           title="No profitable re-sales available"
           description="We don't have recent homes that sold above their previous purchase right now."
@@ -55,7 +67,11 @@ export function ProfitableInvestments({ content }: { content?: Record<string, un
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {displayRows.map((row) => (
-            <ProfitableInvestmentCard key={row.listingKey} row={row} />
+            <ProfitableInvestmentCard
+              key={row.listingKey}
+              row={row}
+              locked={locked || row.soldLocked}
+            />
           ))}
         </div>
       )}

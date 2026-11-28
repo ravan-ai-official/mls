@@ -21,8 +21,10 @@ import {
   MapResultsPanel,
   type SheetSnap,
 } from "@/components/map/MapResultsPanel";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { useWatched } from "@/components/providers/WatchedProvider";
 import { Spinner } from "@/components/ui/Button";
+import { isSoldDataLocked } from "@/lib/sold/gate";
 import { cn } from "@/lib/utils/cn";
 
 const LIST_PANEL_EASE = [0.22, 1, 0.36, 1] as const;
@@ -83,19 +85,27 @@ const DEFAULT_ZOOM = 11;
 
 /**
  * Price pin — rounded pill; fill follows status / price / DOM color mode.
+ * Locked sold pins show "Sold" with no dollar amount.
  */
 function priceIcon(
   property: PropertySummary,
   active: boolean,
   pinMode: PinColorMode,
+  soldLocked: boolean,
 ) {
   const label =
-    property.status === "sold" && property.closePrice !== null
-      ? formatPriceCompact(property.closePrice)
-      : property.price === null
-        ? EMPTY
-        : formatPriceCompact(property.price);
-  const bg = pinFillColor(property, pinMode, active);
+    soldLocked && property.status === "sold"
+      ? "Sold"
+      : property.status === "sold" && property.closePrice !== null
+        ? formatPriceCompact(property.closePrice)
+        : property.price === null
+          ? EMPTY
+          : formatPriceCompact(property.price);
+  const forColor =
+    soldLocked && property.status === "sold"
+      ? { ...property, closePrice: null }
+      : property;
+  const bg = pinFillColor(forColor, pinMode, active);
   return L.divIcon({
     className: "",
     html: `<span style="background:${bg};border:2px solid #fff;border-radius:7px;min-width:58px;height:25px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:500;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.25);white-space:nowrap">${label}</span>`,
@@ -228,7 +238,9 @@ export function MapSearch() {
   const params = useSearchParams();
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const { user } = useAuth();
   const { isComparing } = useWatched();
+  const hideSoldPrices = !user;
   const [map, setMap] = useState<L.Map | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -717,9 +729,15 @@ export function MapSearch() {
                   }}
                 />
               ))
-            : mappable.map((property) => (
+            : mappable.map((property) => {
+                const pinLocked = isSoldDataLocked({
+                  isAuthenticated: !hideSoldPrices,
+                  soldLocked: property.soldLocked,
+                  status: property.status,
+                });
+                return (
                 <Marker
-                  key={`${property.id}-${prefs.pinMode}-${isComparing(property.id) ? "c" : ""}`}
+                  key={`${property.id}-${prefs.pinMode}-${pinLocked ? "lock" : "open"}-${isComparing(property.id) ? "c" : ""}`}
                   position={[property.latitude as number, property.longitude as number]}
                   icon={priceIcon(
                     property,
@@ -727,6 +745,7 @@ export function MapSearch() {
                       property.id === selectedId ||
                       isComparing(property.id),
                     prefs.pinMode,
+                    pinLocked,
                   )}
                   zIndexOffset={
                     property.id === activeId ||
@@ -758,7 +777,8 @@ export function MapSearch() {
                     },
                   }}
                 />
-              ))}
+                );
+              })}
         </MapContainer>
 
         <div

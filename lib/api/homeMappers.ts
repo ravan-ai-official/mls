@@ -222,25 +222,38 @@ export interface SoldBelowRow {
   previousCloseDate: string;
   lossAmount: number;
   imageUrl: string | null;
+  soldLocked: boolean;
 }
+
+export type SoldBelowFeed = {
+  soldLocked: boolean;
+  rows: SoldBelowRow[];
+};
 
 /**
  * Maps mls-backend `/api/home/sold-below-purchase/`. Drops incomplete rows so
  * the homepage never invents addresses/prices — mirrors `_is_complete_sold_below_row`.
+ * Anonymous stubs may set `sold_locked` with redacted prices.
  */
-export function mapSoldBelow(payload: unknown): SoldBelowRow[] {
-  if (!payload || typeof payload !== "object") return [];
+export function mapSoldBelow(payload: unknown): SoldBelowFeed {
+  if (!payload || typeof payload !== "object") {
+    return { soldLocked: false, rows: [] };
+  }
   const envelope = payload as {
     empty?: unknown;
     count?: unknown;
     results?: unknown;
+    sold_locked?: unknown;
+    sold_login_required?: unknown;
   };
+  const soldLocked =
+    envelope.sold_locked === true || envelope.sold_login_required === true;
   // Explicit empty envelope → empty rail (FE shows EmptyState); never mock.
-  if (envelope.empty === true) return [];
+  if (envelope.empty === true) return { soldLocked, rows: [] };
   const count = toNumber(envelope.count);
-  if (count === 0) return [];
+  if (count === 0) return { soldLocked, rows: [] };
 
-  return results(payload).flatMap((raw): SoldBelowRow[] => {
+  const rows = results(payload).flatMap((raw): SoldBelowRow[] => {
     const r = record(raw);
     const listingKey = str(r.listing_key);
     const address = str(r.address);
@@ -250,6 +263,29 @@ export function mapSoldBelow(payload: unknown): SoldBelowRow[] {
     const closePrice = toNumber(r.close_price);
     const previousClosePrice = toNumber(r.previous_close_price);
     const lossAmount = toNumber(r.loss_amount);
+    const rowLocked = r.sold_locked === true || soldLocked;
+
+    if (rowLocked) {
+      if (!listingKey || !address) return [];
+      return [
+        {
+          listingKey,
+          address,
+          city: city || "",
+          propertySubType: str(r.property_sub_type),
+          bedrooms: int(r.bedrooms),
+          bathrooms: int(r.bathrooms),
+          closePrice: 0,
+          closeDate: closeDate || "",
+          previousClosePrice: 0,
+          previousCloseDate: previousCloseDate || "",
+          lossAmount: 0,
+          imageUrl: safeUrl(r.image_url),
+          soldLocked: true,
+        },
+      ];
+    }
+
     if (
       !listingKey ||
       !address ||
@@ -279,9 +315,12 @@ export function mapSoldBelow(payload: unknown): SoldBelowRow[] {
         previousCloseDate,
         lossAmount,
         imageUrl: safeUrl(r.image_url),
+        soldLocked: false,
       },
     ];
   });
+
+  return { soldLocked: soldLocked || rows.some((row) => row.soldLocked), rows };
 }
 
 /* ---------------------------------------------- profitable investments */
@@ -299,24 +338,36 @@ export interface ProfitableInvestmentRow {
   previousCloseDate: string;
   gainAmount: number;
   imageUrl: string | null;
+  soldLocked: boolean;
 }
+
+export type ProfitableInvestmentsFeed = {
+  soldLocked: boolean;
+  rows: ProfitableInvestmentRow[];
+};
 
 /**
  * Maps mls-backend `/api/home/profitable-investments/`.
  * Keeps only complete gain rows (latest sale above previous close).
  */
-export function mapProfitableInvestments(payload: unknown): ProfitableInvestmentRow[] {
-  if (!payload || typeof payload !== "object") return [];
+export function mapProfitableInvestments(payload: unknown): ProfitableInvestmentsFeed {
+  if (!payload || typeof payload !== "object") {
+    return { soldLocked: false, rows: [] };
+  }
   const envelope = payload as {
     empty?: unknown;
     count?: unknown;
     results?: unknown;
+    sold_locked?: unknown;
+    sold_login_required?: unknown;
   };
-  if (envelope.empty === true) return [];
+  const soldLocked =
+    envelope.sold_locked === true || envelope.sold_login_required === true;
+  if (envelope.empty === true) return { soldLocked, rows: [] };
   const count = toNumber(envelope.count);
-  if (count === 0) return [];
+  if (count === 0) return { soldLocked, rows: [] };
 
-  return results(payload).flatMap((raw): ProfitableInvestmentRow[] => {
+  const rows = results(payload).flatMap((raw): ProfitableInvestmentRow[] => {
     const r = record(raw);
     const listingKey = str(r.listing_key);
     const address = str(r.address);
@@ -326,6 +377,29 @@ export function mapProfitableInvestments(payload: unknown): ProfitableInvestment
     const closePrice = toNumber(r.close_price);
     const previousClosePrice = toNumber(r.previous_close_price);
     const gainAmount = toNumber(r.gain_amount);
+    const rowLocked = r.sold_locked === true || soldLocked;
+
+    if (rowLocked) {
+      if (!listingKey || !address) return [];
+      return [
+        {
+          listingKey,
+          address,
+          city: city || "",
+          propertySubType: str(r.property_sub_type),
+          bedrooms: int(r.bedrooms),
+          bathrooms: int(r.bathrooms),
+          closePrice: 0,
+          closeDate: closeDate || "",
+          previousClosePrice: 0,
+          previousCloseDate: previousCloseDate || "",
+          gainAmount: 0,
+          imageUrl: safeUrl(r.image_url),
+          soldLocked: true,
+        },
+      ];
+    }
+
     if (
       !listingKey ||
       !address ||
@@ -355,9 +429,12 @@ export function mapProfitableInvestments(payload: unknown): ProfitableInvestment
         previousCloseDate,
         gainAmount,
         imageUrl: safeUrl(r.image_url),
+        soldLocked: false,
       },
     ];
   });
+
+  return { soldLocked: soldLocked || rows.some((row) => row.soldLocked), rows };
 }
 
 /* ------------------------------------------------------ market snapshot */

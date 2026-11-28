@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils/cn";
 import { PropertyBadgePill } from "@/components/ui/Badge";
 import { SaveButton } from "@/components/property/SaveButton";
 import { CompareButton } from "@/components/property/CompareButton";
+import { SoldLockedOverlay } from "@/components/sold/SoldLockedOverlay";
+import { useSoldLock } from "@/components/sold/useSoldLock";
 import { rememberListingsScroll } from "@/lib/hooks/useListingsScrollRestore";
 import type { PropertySummary } from "@/lib/types/domain";
 import {
@@ -67,12 +69,19 @@ export function PropertyRow({
 
   const location = [neighbourhood, community].filter(Boolean).join(", ");
 
+  const { locked: soldLocked, closePrice: revealedClose } = useSoldLock({
+    soldLocked: property.soldLocked,
+    status,
+    closePrice,
+  });
+
   // Sold rows lead with the actual sale price, matching <PropertyCard>.
   const isSold = status === "sold";
-  const headlinePrice = isSold && closePrice !== null ? closePrice : price;
+  const headlinePrice =
+    soldLocked ? null : isSold && revealedClose !== null ? revealedClose : price;
   const overAskPct =
-    isSold && closePrice !== null && price !== null && price > 0
-      ? ((closePrice - price) / price) * 100
+    !soldLocked && isSold && revealedClose !== null && price !== null && price > 0
+      ? ((revealedClose - price) / price) * 100
       : null;
   const soldOn = closeDate ?? statusChangedAt;
 
@@ -89,24 +98,31 @@ export function PropertyRow({
       onPointerEnter={prefetch}
       onFocusCapture={prefetch}
     >
-      <motion.div
-        layout={layout || undefined}
-        layoutId={layout ? `listing-photo-${id}` : undefined}
-        transition={LAYOUT_SPRING}
-        className="relative h-48 w-full shrink-0 bg-surface-alt sm:h-auto sm:w-44 sm:self-stretch"
-      >
-        <SafeImage
-          src={image}
-          alt={`Photo of ${address}`}
-          fill
-          sizes="(max-width: 640px) 100vw, 176px"
-          priority={priority}
-          className="object-cover"
-        />
-        {badge && (
+      {/* Outer clip box stays free of Framer layout transforms so the sold
+          overlay cannot escape the photo column. */}
+      <div className="relative isolate h-48 w-full shrink-0 overflow-hidden bg-surface-alt sm:h-auto sm:min-h-[10.5rem] sm:w-44 sm:self-stretch">
+        <motion.div
+          layout={layout || undefined}
+          layoutId={layout ? `listing-photo-${id}` : undefined}
+          transition={LAYOUT_SPRING}
+          className="absolute inset-0"
+        >
+          <SafeImage
+            src={image}
+            alt={`Photo of ${address}`}
+            fill
+            sizes="(max-width: 640px) 100vw, 176px"
+            priority={priority}
+            className={cn("object-cover", soldLocked && "blur-[2px] scale-105")}
+          />
+        </motion.div>
+        {badge && !soldLocked && (
           <PropertyBadgePill badge={badge} className="absolute left-2 top-2 z-10" />
         )}
-      </motion.div>
+        {soldLocked && (
+          <SoldLockedOverlay dense message="Sign in to view" className="gap-1.5 px-2" />
+        )}
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col p-4 sm:py-4 sm:pl-0 sm:pr-4">
         <div className="flex items-start justify-between gap-3">
@@ -117,14 +133,16 @@ export function PropertyRow({
               transition={LAYOUT_SPRING}
               className="text-h2 text-ink"
             >
-              {headlinePrice === null
-                ? EMPTY
-                : isLease
-                  ? formatLeasePrice(headlinePrice)
-                  : formatPrice(headlinePrice)}
+              {soldLocked
+                ? "Sold"
+                : headlinePrice === null
+                  ? EMPTY
+                  : isLease
+                    ? formatLeasePrice(headlinePrice)
+                    : formatPrice(headlinePrice)}
             </motion.p>
 
-            {isSold && closePrice !== null && price !== null && (
+            {isSold && !soldLocked && revealedClose !== null && price !== null && (
               <p className="mt-0.5 text-caption text-ink-muted">
                 List {formatPrice(price)}
                 {overAskPct !== null && Math.abs(overAskPct) >= 0.1 && (
@@ -140,12 +158,17 @@ export function PropertyRow({
                 )}
               </p>
             )}
+            {soldLocked && (
+              <p className="mt-0.5 text-caption text-ink-muted">
+                Sign in to unlock sold price and history
+              </p>
+            )}
 
             <h3 className="mt-1 truncate text-small font-medium text-ink">
               <Link
                 href={href}
                 onClick={rememberListingsScroll}
-                aria-label={`${address}${headlinePrice === null ? "" : `, ${isSold ? "sold for " : ""}${isLease ? formatLeasePrice(headlinePrice) : formatPrice(headlinePrice)}`}`}
+                aria-label={`${address}${soldLocked ? ", sold" : headlinePrice === null ? "" : `, ${isSold ? "sold for " : ""}${isLease ? formatLeasePrice(headlinePrice) : formatPrice(headlinePrice)}`}`}
                 className="outline-none before:absolute before:inset-0 before:rounded-surface focus-visible:before:outline-1 focus-visible:before:outline-offset-2 focus-visible:before:outline-navy/40"
               >
                 {address}

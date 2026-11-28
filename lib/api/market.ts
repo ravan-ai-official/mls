@@ -241,6 +241,8 @@ export interface SoldTrends {
   /** Communities with sales in the window (city-wide requests only). */
   communities: SoldCommunity[];
   community: string | null;
+  /** Anonymous sold gate — metrics redacted. */
+  soldLocked: boolean;
   /**
    * Set when the upstream sold feed could not be reached. The page renders a
    * plain unavailable state instead of an empty chart that reads as "no sales".
@@ -270,6 +272,7 @@ export async function getSoldTrends(
     months: [],
     communities: [],
     community: filters.community ?? null,
+    soldLocked: false,
     unavailable: true,
     generatedAt: null,
     stale: false,
@@ -285,6 +288,8 @@ export async function getSoldTrends(
       stale?: boolean;
       community?: string | null;
       communities?: Array<{ name?: string; units_sold?: number }>;
+      sold_locked?: boolean;
+      sold_login_required?: boolean;
     }>(`${MLS}/market/sold-trends/`, {
       revalidate: 1800,
       // A city missing from the backend's warm cache is fetched live from
@@ -299,6 +304,9 @@ export async function getSoldTrends(
       },
     });
 
+    const soldLocked =
+      data.sold_locked === true || data.sold_login_required === true;
+
     return {
       city: data.city ?? city,
       windowMonths: data.window_months ?? windowMonths,
@@ -306,13 +314,14 @@ export async function getSoldTrends(
         .filter((row): row is { name: string; units_sold?: number } => typeof row.name === "string" && row.name !== "")
         .map((row) => ({ name: row.name, unitsSold: row.units_sold ?? 0 })),
       community: data.community ?? filters.community ?? null,
+      soldLocked,
       months: (data.months ?? []).map((row) => ({
         month: String(row.month ?? ""),
-        medianSoldPrice: num(row.median_sold_price),
+        medianSoldPrice: soldLocked ? null : num(row.median_sold_price),
         avgDaysOnMarket: num(row.avg_days_on_market),
         avgPropertyDaysOnMarket:
           num(row.avg_property_days_on_market) ?? num(row.avg_pdom),
-        saleToListRatio: num(row.sale_to_list_ratio),
+        saleToListRatio: soldLocked ? null : num(row.sale_to_list_ratio),
         unitsSold: num(row.units_sold) ?? 0,
       })),
       unavailable: false,
