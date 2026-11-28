@@ -247,8 +247,13 @@ function MobileBar({ children }: { children: ReactNode }) {
 
     const apply = () => {
       if (mobile.matches) {
-        body.style.paddingBottom = `calc(var(--compare-tray-height, 0px) + ${node.offsetHeight}px + 1rem)`;
+        const height = node.offsetHeight;
+        body.classList.add("has-mobile-cta");
+        document.documentElement.style.setProperty("--mobile-cta-height", `${height}px`);
+        body.style.paddingBottom = `calc(var(--compare-tray-height, 0px) + ${height}px + 1rem)`;
       } else {
+        body.classList.remove("has-mobile-cta");
+        document.documentElement.style.removeProperty("--mobile-cta-height");
         body.style.removeProperty("padding-bottom");
       }
     };
@@ -262,6 +267,8 @@ function MobileBar({ children }: { children: ReactNode }) {
     return () => {
       observer.disconnect();
       mobile.removeEventListener("change", apply);
+      body.classList.remove("has-mobile-cta");
+      document.documentElement.style.removeProperty("--mobile-cta-height");
       body.style.removeProperty("padding-bottom");
     };
   }, []);

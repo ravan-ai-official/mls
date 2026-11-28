@@ -19,20 +19,23 @@ export const UI_PROPERTY_TYPES = [
   "Condo",
   "Luxury",
   "Rental",
+  "Open Houses",
 ] as const;
 
 export type UiPropertyType = (typeof UI_PROPERTY_TYPES)[number];
 
 /**
- * Property types a search can filter by. "Rental" is a transaction, not a
- * type: it lives on `ListingQuery.transaction` (URL `tx=rent`).
+ * Property types a search can filter by. "Rental" is a transaction
+ * (`ListingQuery.transaction` / `tx=rent`). "Open Houses" is the open-house
+ * flag (`openHouse=1` / `has_open_house=1`), not a structure type.
  */
 export const SEARCH_PROPERTY_TYPES = UI_PROPERTY_TYPES.filter(
-  (type): type is Exclude<UiPropertyType, "Rental"> => type !== "Rental",
+  (type): type is Exclude<UiPropertyType, "Rental" | "Open Houses"> =>
+    type !== "Rental" && type !== "Open Houses",
 );
 
-/** Buy vs Rent — the backend's `transaction_type`. */
-export type ListingTransaction = "sale" | "rent";
+/** For sale / For rent / Sold — backend `transaction_type`. */
+export type ListingTransaction = "sale" | "rent" | "sold";
 
 export interface PropertyBadge {
   label: string;
@@ -61,6 +64,8 @@ export interface PropertySummary {
   sqft: number | null;
   status: PropertyStatus;
   badge: PropertyBadge | null;
+  /** From API `is_featured` — Featured badge also maps when true. */
+  isFeatured: boolean;
   mls: string;
   image: string | null;
   photosCount: number;
@@ -86,16 +91,32 @@ export interface PropertySummary {
 export interface PropertyRoom {
   name: string | null;
   level: string | null;
-  dimensions: string | null;
+  /** Metric from API `dimensions_m` (or length×width m fallback). */
+  dimensionsM: string | null;
+  /** Imperial from API `dimensions_ft`. */
+  dimensionsFt: string | null;
+  /** Feed display string — last-resort fallback for either unit. */
+  dimensionsDisplay: string | null;
+  /** Notes from `room_description` (Laminate, Fireplace, …). */
+  notes: string | null;
 }
 
-/** One washroom row for the Overview “Washroom Info” table. */
-export interface PropertyWashroom {
-  /** Usually 1 — how many washrooms share this pieces/level combo. */
+/** REALM washroom_info row — count / pieces / level. */
+export interface PropertyWashroomInfo {
   count: number;
-  /** Piece count (e.g. 4 for a 4-piece bath). Null when the feed omits it. */
-  pieces: number | null;
+  pieces: string | null;
   level: string | null;
+}
+
+/** Detailed washroom room row (washrooms[] / rooms fallback). */
+export interface PropertyWashroom {
+  type: string | null;
+  level: string | null;
+  /** Pieces text from `room_description` (e.g. "4 Pc"). */
+  description: string | null;
+  dimensionsM: string | null;
+  dimensionsFt: string | null;
+  dimensionsDisplay: string | null;
 }
 
 export interface PropertyImage {
@@ -142,11 +163,18 @@ export interface PropertyDetail extends PropertySummary {
   propertyAge: number | null;
   potlMonthlyFees: number | null;
   rentalItems: string | null;
-  /** Full MLS inclusions text for the Overview Inclusions section. */
-  inclusions: string | null;
-  /** Washroom rows derived from bathroom room entries. */
+  /** Inclusion chips (appliances / listed inclusions) — separate from Features. */
+  inclusionsList: string[];
+  /** Raw inclusions sentence when the feed sends prose instead of a list. */
+  inclusionsText: string | null;
+  /** Prefer washroom_info[] (count / pieces / level). */
+  washroomInfo: PropertyWashroomInfo[];
+  /** Detailed washroom rows from washrooms[] / rooms fallback. */
   washrooms: PropertyWashroom[];
-  /** Amenity / feature chips from MLS interior, exterior, building, etc. */
+  bathroomsTotal: number | null;
+  bathroomsPartial: number | null;
+  bathroomsFull: number | null;
+  /** Feature chips from features[] / interior_features_list — not appliances. */
   features: string[];
   /**
    * Listing Details groups. Each group is two columns so Overview / More
@@ -205,9 +233,8 @@ export interface ListingQuery {
   city?: string;
   status?: string;
   /**
-   * Buy ("sale", the default) or Rent. Sent as `transaction_type`, which the
-   * backend applies in SQL, and which also moves price filters onto the
-   * monthly lease for rentals.
+   * For sale (default), For rent, or Sold. Sent as `transaction_type`.
+   * Rent moves price filters onto monthly lease; Sold selects closed listings.
    */
   transaction?: ListingTransaction;
   type?: string;
@@ -215,6 +242,8 @@ export interface ListingQuery {
   priceMax?: number;
   bedsMin?: number;
   bathsMin?: number;
+  /** Sold in the last N days (`sold_within_days`) — sold transaction only. */
+  soldWithinDays?: number;
   sqftMin?: number;
   sqftMax?: number;
   yearBuiltMin?: number;

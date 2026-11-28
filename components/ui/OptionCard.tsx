@@ -50,7 +50,7 @@ export function OptionCardGroup<T extends string>({
               key={option.value}
               className={cn(
                 "flex cursor-pointer items-start gap-3 rounded-control border p-3.5 transition-colors",
-                "has-focus-visible:ring-1 has-focus-visible:ring-navy",
+                "has-focus-visible:ring-2 has-focus-visible:ring-navy/15",
                 checked
                   ? "border-navy bg-navy-tint"
                   : "border-line bg-surface hover:border-ink-subtle",

@@ -14,7 +14,7 @@ const MapSearch = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[calc(100vh-72px)] items-center justify-center gap-3 bg-surface-alt">
+      <div className="flex h-full min-h-0 items-center justify-center gap-3 bg-surface-alt">
         <Spinner className="text-navy" />
         <span className="text-small text-ink-muted">Loading map…</span>
       </div>

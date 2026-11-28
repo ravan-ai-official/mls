@@ -51,7 +51,7 @@ const DEFAULT_ALERTS = [
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const FIELD =
-  "w-full rounded-xl border border-line bg-surface px-4 py-3 text-small text-ink outline-none transition-colors placeholder:text-ink-subtle focus:border-navy focus:ring-1 focus:ring-navy";
+  "w-full rounded-xl border border-line bg-surface px-4 py-3 text-small text-ink outline-none transition-colors placeholder:text-ink-subtle focus:border-navy/35 focus:ring-2 focus:ring-navy/10";
 
 export function AlertsCta({ content }: { content?: Record<string, unknown> }) {
   const { user, openAuth } = useAuth();

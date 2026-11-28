@@ -113,11 +113,29 @@ export async function getNearbyAmenities(
   return empty;
 }
 
-/** Price/status history for a listing, from PropertySnapshot rows. */
+/**
+ * Listing History row for the Buy/Sell History table.
+ * Prefer API `history[]` (date_start / date_end / price / event / listing_id).
+ */
 export interface PriceSnapshot {
+  dateStart: string | null;
+  dateEnd: string | null;
   listPrice: number | null;
+  event: string | null;
+  listingId: string | null;
+  /** @deprecated Prefer `event` — kept for older snapshot payloads. */
   status: string | null;
+  /** @deprecated Prefer `dateStart`. */
   recordedAt: string | null;
+}
+
+function toHistoryPrice(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 export async function getPropertySnapshots(
@@ -125,25 +143,76 @@ export async function getPropertySnapshots(
   options: RequestOptions = {},
 ): Promise<PriceSnapshot[]> {
   const data = await apiFetch<{
+    history?: Array<{
+      date_start?: string | null;
+      date_end?: string | null;
+      price?: number | string | null;
+      event?: string | null;
+      listing_id?: string | null;
+    }>;
     snapshots?: Array<{
       list_price?: number | null;
       standard_status?: string | null;
       source_modification_timestamp?: string | null;
       created_at?: string | null;
+      listing_id?: string | null;
     }>;
   }>(`${MLS}/properties/${encodeURIComponent(listingKey)}/snapshots/`, {
     revalidate: 600,
     ...options,
   });
 
+  if (Array.isArray(data.history) && data.history.length > 0) {
+    return data.history
+      .map((row) => {
+        const dateStart =
+          typeof row.date_start === "string" && row.date_start.trim()
+            ? row.date_start.trim()
+            : null;
+        const dateEnd =
+          typeof row.date_end === "string" && row.date_end.trim()
+            ? row.date_end.trim()
+            : null;
+        const event =
+          typeof row.event === "string" && row.event.trim() ? row.event.trim() : null;
+        const listingId =
+          typeof row.listing_id === "string" && row.listing_id.trim()
+            ? row.listing_id.trim()
+            : null;
+        return {
+          dateStart,
+          dateEnd,
+          listPrice: toHistoryPrice(row.price),
+          event,
+          listingId,
+          status: event,
+          recordedAt: dateStart,
+        };
+      })
+      .filter((row) => row.dateStart !== null || row.listPrice !== null)
+      .sort((a, b) => ((a.dateStart ?? "") < (b.dateStart ?? "") ? -1 : 1));
+  }
+
+  // Legacy PropertySnapshot rows — never put status/event into Date End.
   return (data.snapshots ?? [])
-    .map((row) => ({
-      listPrice: typeof row.list_price === "number" ? row.list_price : null,
-      status: row.standard_status ?? null,
-      recordedAt: row.source_modification_timestamp ?? row.created_at ?? null,
-    }))
-    .filter((row) => row.recordedAt !== null)
-    .sort((a, b) => (a.recordedAt! < b.recordedAt! ? -1 : 1));
+    .map((row) => {
+      const recordedAt = row.source_modification_timestamp ?? row.created_at ?? null;
+      const status = row.standard_status ?? null;
+      return {
+        dateStart: recordedAt,
+        dateEnd: null,
+        listPrice: typeof row.list_price === "number" ? row.list_price : null,
+        event: status,
+        listingId:
+          typeof row.listing_id === "string" && row.listing_id.trim()
+            ? row.listing_id.trim()
+            : null,
+        status,
+        recordedAt,
+      };
+    })
+    .filter((row) => row.dateStart !== null)
+    .sort((a, b) => ((a.dateStart ?? "") < (b.dateStart ?? "") ? -1 : 1));
 }
 
 export interface ListingEngagement {

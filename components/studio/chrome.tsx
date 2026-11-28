@@ -181,10 +181,10 @@ export function segmentItem(active: boolean) {
 
 /** Compact select used in page toolbars. */
 export const studioFilter =
-  "h-8 shrink-0 rounded-full border border-dashed border-line bg-surface px-2.5 text-caption text-ink focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy";
+  "h-8 shrink-0 rounded-full border border-dashed border-line bg-surface px-2.5 text-caption text-ink focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10";
 
 export const studioSearch =
-  "h-8 w-full rounded-full border border-line bg-surface px-3 text-caption text-ink placeholder:text-ink-subtle focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy sm:w-52";
+  "h-8 w-full rounded-full border border-line bg-surface px-3 text-caption text-ink placeholder:text-ink-subtle focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10 sm:w-52";
 
 export const studioTableWrap = "overflow-x-auto border-y border-line bg-surface -mx-3 sm:-mx-4 lg:-mx-5";
 

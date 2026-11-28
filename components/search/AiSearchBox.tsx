@@ -227,7 +227,7 @@ export function AiSearchBox({
         {multiline ? (
           <textarea
             id={id}
-            rows={variant === "panel" ? 2 : 2}
+            rows={variant === "panel" ? 6 : 3}
             maxLength={AI_QUERY_MAX_CHARS}
             value={text}
             onChange={(event) => setText(event.target.value)}
@@ -240,9 +240,9 @@ export function AiSearchBox({
             }}
             placeholder={placeholder}
             className={cn(
-              "box-border w-full min-w-0 max-w-full resize-none rounded-control border border-line bg-surface text-ink placeholder:text-ink-subtle focus:border-navy focus:outline-none",
+              "box-border w-full min-w-0 max-w-full resize-none rounded-control border border-line bg-surface text-ink placeholder:text-ink-subtle focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10",
               variant === "panel"
-                ? "px-3.5 py-2.5 text-small"
+                ? "min-h-[9.5rem] px-3.5 py-3 text-small leading-relaxed"
                 : "min-h-[4.75rem] px-3 py-2.5 text-small sm:min-h-[6rem] sm:px-4 sm:py-3 sm:text-body",
             )}
           />
@@ -254,7 +254,7 @@ export function AiSearchBox({
             value={text}
             onChange={(event) => setText(event.target.value)}
             placeholder={placeholder}
-            className="box-border h-11 w-full min-w-0 max-w-full flex-1 rounded-control border border-line bg-surface px-3.5 text-small text-ink placeholder:text-ink-subtle focus:border-navy focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+            className="box-border h-11 w-full min-w-0 max-w-full flex-1 rounded-control border border-line bg-surface px-3.5 text-small text-ink placeholder:text-ink-subtle focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10 [&::-webkit-search-cancel-button]:appearance-none"
           />
         )}
         <Button

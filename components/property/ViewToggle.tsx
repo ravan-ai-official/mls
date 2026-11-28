@@ -1,118 +1,117 @@
 "use client";
 
-import { usePendingNavigation, usePendingSearchParams } from "@/components/navigation/PendingNavigation";
+import { motion } from "framer-motion";
+import { usePendingSearchParams } from "@/components/navigation/PendingNavigation";
+import type { ListingView } from "@/lib/hooks/useListingView";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { cn } from "@/lib/utils/cn";
 
-export type ListingView = "grid" | "list";
+type Mode = ListingView | "map";
 
 /**
- * Grid / list / map switch.
+ * Grid / list / map switch with a sliding active pill.
  *
- * Grid and list write `?view=` to the URL rather than local state, so the
- * choice survives a refresh, a shared link and the back button — the same
- * reason the filters live in the URL.
- *
- * Map is a route, not a view: it needs the full viewport, so it links to
- * /map-search carrying the active filters rather than trying to render a map
- * inside this page's column.
+ * Grid and list stay on this page (client state) for instant swaps.
+ * List is desktop/tablet only — phones stay on grid.
+ * Map is a route (`/map-search`) carrying the active filters.
  */
-export function ViewToggle({ view: serverView }: { view: ListingView }) {
-  const { navigate, target } = usePendingNavigation();
+export function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: ListingView;
+  onChange: (next: ListingView) => void;
+}) {
   const params = usePendingSearchParams();
-  // Mid-navigation, show the view being switched to.
-  const view: ListingView = target ? (params.get("view") === "list" ? "list" : "grid") : serverView;
+  const listAllowed = useMediaQuery("(min-width: 768px)");
 
-  const setView = (next: ListingView) => {
-    const query = new URLSearchParams(params.toString());
-    // "grid" is the default; keeping it out of the URL keeps links clean.
-    if (next === "grid") query.delete("view");
-    else query.set("view", next);
-    navigate(`/listings?${query.toString()}`, { scroll: false });
-  };
-
-  /*
-   * The map reads the same filter params as this page (lib/utils/searchParams),
-   * so the active search carries over. Only `view` and `page` are dropped —
-   * they describe this grid, not the search.
-   */
   const mapQuery = new URLSearchParams(params.toString());
   mapQuery.delete("view");
   mapQuery.delete("page");
   const mapQs = mapQuery.toString();
   const mapHref = mapQs ? `/map-search?${mapQs}` : "/map-search";
 
+  const modes: Array<{
+    id: Mode;
+    label: string;
+    icon: React.ReactNode;
+    onSelect?: () => void;
+    href?: string;
+  }> = [
+    { id: "grid", label: "Grid", icon: <GridIcon />, onSelect: () => onChange("grid") },
+    ...(listAllowed
+      ? [{ id: "list" as const, label: "List", icon: <ListIcon />, onSelect: () => onChange("list") }]
+      : []),
+    { id: "map", label: "Map", icon: <MapIcon />, href: mapHref },
+  ];
+
+  const activeView: Mode = !listAllowed && view === "list" ? "grid" : view;
+
   return (
     <div
       role="group"
       aria-label="Result view"
-      className="flex items-center overflow-hidden rounded-control border border-line"
+      className="relative inline-flex items-center rounded-full bg-navy-tint/80 p-1 ring-1 ring-navy/10"
     >
-      <Option
-        label="Grid view"
-        active={view === "grid"}
-        onClick={() => setView("grid")}
-      >
-        <GridIcon />
-      </Option>
-      <span className="h-6 w-px bg-line" aria-hidden="true" />
-      <Option
-        label="List view"
-        active={view === "list"}
-        onClick={() => setView("list")}
-      >
-        <ListIcon />
-      </Option>
-      <span className="h-6 w-px bg-line" aria-hidden="true" />
-      <Option label="Map search" href={mapHref} active={false}>
-        <MapIcon />
-      </Option>
+      {modes.map((mode) => {
+        const active = mode.id === activeView;
+        const className = cn(
+          "relative z-10 inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-caption font-medium transition-colors sm:h-9 sm:min-w-[4.25rem] sm:px-3",
+          active ? "text-white" : "text-ink-muted hover:text-ink",
+        );
+        const content = (
+          <>
+            {active && (
+              <motion.span
+                layoutId="listings-view-pill"
+                className="absolute inset-0 -z-10 rounded-full bg-navy shadow-sm"
+                transition={{ type: "spring", stiffness: 420, damping: 32 }}
+              />
+            )}
+            <span className="relative inline-flex items-center gap-1.5">
+              {mode.icon}
+              <span className="hidden sm:inline">{mode.label}</span>
+            </span>
+          </>
+        );
+
+        if (mode.href) {
+          return (
+            <a
+              key={mode.id}
+              href={mode.href}
+              title={mode.label}
+              aria-label={`${mode.label} search`}
+              className={className}
+            >
+              {content}
+            </a>
+          );
+        }
+
+        return (
+          <button
+            key={mode.id}
+            type="button"
+            title={mode.label}
+            aria-label={`${mode.label} view`}
+            aria-pressed={active}
+            onClick={mode.onSelect}
+            className={className}
+          >
+            {content}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function Option({
-  label,
-  active,
-  onClick,
-  href,
-  children,
-}: {
-  label: string;
-  active: boolean;
-  onClick?: () => void;
-  href?: string;
-  children: React.ReactNode;
-}) {
-  const className = cn(
-    "flex h-10 w-11 items-center justify-center transition-colors",
-    active ? "bg-ink text-white" : "bg-surface text-ink-muted hover:bg-surface-alt hover:text-ink",
-  );
-
-  if (href) {
-    return (
-      <a href={href} title={label} aria-label={label} className={className}>
-        {children}
-      </a>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      className={className}
-    >
-      {children}
-    </button>
-  );
-}
+export type { ListingView };
 
 function GridIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+    <svg width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
       <rect x="2" y="2" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
       <rect x="10.5" y="2" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
       <rect x="2" y="10.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
@@ -123,7 +122,7 @@ function GridIcon() {
 
 function ListIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+    <svg width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
       <path
         d="M6 4h10M6 9h10M6 14h10"
         stroke="currentColor"
@@ -139,7 +138,7 @@ function ListIcon() {
 
 function MapIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+    <svg width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
       <path
         d="M2.5 4.5 6.5 2.75l5 2 4-1.75v10l-4 1.75-5-2-4 1.75v-10Z"
         stroke="currentColor"

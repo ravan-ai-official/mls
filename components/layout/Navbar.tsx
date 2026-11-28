@@ -15,21 +15,15 @@ interface NavLinkItem {
   label: string;
   href: string;
   /**
-   * Extra query check for links that share a path. Buy and Rent both live on
-   * /listings, so the path alone would light up both.
+   * Extra query check for links that share a path (rarely needed now that
+   * sale/rent share one Listings entry).
    */
   match?: (params: URLSearchParams) => boolean;
 }
 
-/** Mirrors parseListingParams: rent via transaction_type/tx, or legacy type=Rental. */
-const isRental = (params: URLSearchParams) =>
-  params.get("transaction_type") === "rent" ||
-  params.get("tx") === "rent" ||
-  params.get("type") === "Rental";
-
 const NAV_LINKS: NavLinkItem[] = [
-  { label: "Buy", href: "/listings?status=Active", match: (params) => !isRental(params) },
-  { label: "Rent", href: "/listings?transaction_type=rent", match: isRental },
+  { label: "Listings", href: "/listings" },
+  { label: "Map Search", href: "/map-search" },
   { label: "Preconstruction", href: "/preconstruction" },
   { label: "Assignments", href: "/assignments" },
   { label: "Sell", href: "/sell" },
@@ -38,11 +32,30 @@ const NAV_LINKS: NavLinkItem[] = [
   { label: "Blog", href: "/blog" },
 ];
 
+const LISTINGS_LINK = { label: "Listings", href: "/listings" };
+
+/** True for buy/rent/sale nav items that should collapse into Listings. */
+function isListingsBrowseLink(link: { label: string; href: string }) {
+  const path = link.href.split("?")[0];
+  if (path !== "/listings") return false;
+  const label = link.label.trim().toLowerCase();
+  return (
+    label === "buy" ||
+    label === "rent" ||
+    label === "for sale" ||
+    label === "for rent" ||
+    label === "sale" ||
+    label === "listings" ||
+    label === "homes"
+  );
+}
+
 const CONTACT_HREF = "/contact";
 
 /** Always visible in the desktop rail — keeps one clean line. */
 const PRIMARY_PATHS = new Set([
   "/listings",
+  "/map-search",
   "/preconstruction",
   "/assignments",
   "/sell",
@@ -129,25 +142,53 @@ function NavLinkList({
   );
 }
 
-function decorate(link: { label: string; href: string }): NavLinkItem {
-  if (
-    link.href.includes("transaction_type=rent") ||
-    link.href.includes("tx=rent") ||
-    link.href.includes("type=Rental")
-  ) {
-    return { ...link, match: isRental };
-  }
-  if (link.href.startsWith("/listings")) return { ...link, match: (params) => !isRental(params) };
-  return link;
-}
-
 const BLOG_LINK = { label: "Blog", href: "/blog" };
+const MAP_SEARCH_LINK = { label: "Map Search", href: "/map-search" };
+
+/**
+ * Collapse Buy / Rent / For Sale CMS entries into one Listings link so the
+ * nav matches the filter-bar model (sale vs rent is chosen on the page).
+ */
+function withUnifiedListingsLink(links: Array<{ label: string; href: string }>) {
+  const ahead: Array<{ label: string; href: string }> = [];
+  const behind: Array<{ label: string; href: string }> = [];
+  let seenBrowse = false;
+  for (const link of links) {
+    if (isListingsBrowseLink(link)) {
+      seenBrowse = true;
+      continue;
+    }
+    if (seenBrowse) behind.push(link);
+    else ahead.push(link);
+  }
+  if (!seenBrowse && !links.some((link) => link.href.split("?")[0] === "/listings")) {
+    return [LISTINGS_LINK, ...links];
+  }
+  if (!seenBrowse) return links;
+  return [...ahead, LISTINGS_LINK, ...behind];
+}
 
 function withBlogLink(links: Array<{ label: string; href: string }>) {
   const hasBlog = links.some(
     (link) => link.href.split("?")[0] === "/blog" || link.label.trim().toLowerCase() === "blog",
   );
   return hasBlog ? links : [...links, BLOG_LINK];
+}
+
+/** Always expose Map Search even when CMS nav omits it. */
+function withMapSearchLink(links: Array<{ label: string; href: string }>) {
+  const hasMap = links.some((link) => {
+    const path = link.href.split("?")[0];
+    const label = link.label.trim().toLowerCase();
+    return path === "/map-search" || label === "map search" || label === "map-search";
+  });
+  if (hasMap) return links;
+
+  let insertAt = 0;
+  for (let i = 0; i < links.length; i += 1) {
+    if (links[i].href.split("?")[0] === "/listings") insertAt = i + 1;
+  }
+  return [...links.slice(0, insertAt), MAP_SEARCH_LINK, ...links.slice(insertAt)];
 }
 
 /** Drop Contact from the text-link rail when it is shown as its own button. */
@@ -175,7 +216,15 @@ function splitNavLinks(links: NavLinkItem[]) {
   // Keep Sell after the browse links even if CMS order drifts.
   primary.sort((a, b) => {
     const rank = (path: string) =>
-      path === "/listings" ? 0 : path === "/preconstruction" ? 1 : path === "/sell" ? 2 : 3;
+      path === "/listings"
+        ? 0
+        : path === "/map-search"
+          ? 1
+          : path === "/preconstruction"
+            ? 2
+            : path === "/sell"
+              ? 3
+              : 4;
     return rank(pathOf(a)) - rank(pathOf(b));
   });
   return { primary, more };
@@ -191,7 +240,9 @@ export function Navbar({
   ctaHref?: string;
 }) {
   const navLinks = withoutContactLink(
-    withBlogLink(links?.length ? links : NAV_LINKS).map(decorate),
+    withMapSearchLink(
+      withBlogLink(withUnifiedListingsLink(links?.length ? links : NAV_LINKS)),
+    ),
   );
   const { primary, more } = splitNavLinks(navLinks);
   const pathname = usePathname();
@@ -201,8 +252,7 @@ export function Navbar({
   const menuId = useId();
   const contactActive = pathname.startsWith(CONTACT_HREF);
 
-  // Close the mobile menu when the path changes. Buy ↔ Rent stay on /listings,
-  // so those links also call closeMobile() on click (pathname alone wouldn't).
+  // Close the mobile menu when the path changes.
   const [lastPath, setLastPath] = useState(pathname);
   if (pathname !== lastPath) {
     setLastPath(pathname);
@@ -225,8 +275,9 @@ export function Navbar({
     <header
       className={cn(
         "sticky top-0 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85",
-        // Above the assistant / scroll-to-top FABs so mobile CTAs stay tappable.
-        mobileOpen ? "z-[70]" : "z-50",
+        // Above map chrome (z-480) so More / account menus aren’t covered by
+        // zoom controls; below Modal / SideSheet (z-600).
+        mobileOpen ? "z-[530]" : "z-[520]",
       )}
     >
       <div className="container-page flex h-[72px] items-center justify-between gap-4 lg:h-20">

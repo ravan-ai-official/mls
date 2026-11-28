@@ -174,7 +174,7 @@ export function BlogPostBody({ slug }: { slug: string }) {
               <li key={item.id}>
                 <Link
                   href={`/blog/${item.slug}`}
-                  className="group flex flex-col gap-1 py-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+                  className="group flex flex-col gap-1 py-4 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-navy/40"
                 >
                   <span className="text-h3 text-ink group-hover:text-navy">{item.title}</span>
                   {item.publishedAt && (

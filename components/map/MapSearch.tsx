@@ -3,40 +3,58 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { CircleMarker, MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DrawHint, MapControls } from "@/components/map/MapControls";
-import { MapFilters } from "@/components/map/MapFilters";
+import { MapPreviewCard } from "@/components/map/MapListingCard";
 import {
-  MapListingCard,
-  MapListingSkeletons,
-  MapPreviewCard,
-} from "@/components/map/MapListingCard";
+  MapResultsPanel,
+  type SheetSnap,
+} from "@/components/map/MapResultsPanel";
+import { useWatched } from "@/components/providers/WatchedProvider";
+import { Spinner } from "@/components/ui/Button";
 import { cn } from "@/lib/utils/cn";
+
+const LIST_PANEL_EASE = [0.22, 1, 0.36, 1] as const;
+const LIST_PANEL_TRANSITION = { duration: 0.38, ease: LIST_PANEL_EASE };
 import {
+  MAP_BASEMAPS,
   MAP_CLUSTER_ORANGE,
-  MAP_PIN_ACTIVE,
-  MAP_PIN_TEAL,
-  MAP_TILE_ATTRIBUTION,
-  MAP_TILE_URL,
+  type BasemapId,
+  type PinColorMode,
 } from "@/lib/map/basemap";
 import {
   getBoundingBoxFromPoints,
   serializePolygonParam,
   type LatLngPoint,
 } from "@/lib/map/polygon";
+import {
+  parseViewportParams,
+  readMapUiPrefs,
+  readMapViewport,
+  rememberMapViewport,
+  viewportToSearchParams,
+  writeMapUiPrefs,
+  type MapUiPrefs,
+} from "@/lib/map/mapPrefs";
+import { pinFillColor } from "@/lib/map/pinStyles";
 import { useMapDrawing, type DrawMode } from "@/lib/map/useMapDrawing";
 import { useUserLocation } from "@/lib/map/useUserLocation";
 import {
-  buildListingHref,
   buildListingQueryString,
   hasActiveFilters,
   parseListingSearch,
 } from "@/lib/utils/searchParams";
-import { Button, Spinner } from "@/components/ui/Button";
 import { EMPTY, formatPriceCompact } from "@/lib/utils/format";
 import type { ListingQuery, PropertySummary } from "@/lib/types/domain";
 import type { GeocodeResult, MapCluster } from "@/lib/api/geo";
@@ -46,6 +64,7 @@ import {
   type SchoolSearchHit,
 } from "@/lib/api/schools";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { rememberLastSearch } from "@/lib/personalize/lastSearch";
 import { cityFromText, rememberPlace } from "@/lib/personalize/places";
 import { PLACE_SEARCH_MIN_CHARS, usePlaceSearch } from "@/lib/queries/geo";
@@ -54,7 +73,6 @@ import {
   isClusterReply,
   mapAggregatesQuery,
   mapListingsQuery,
-  MAP_PAGE_SIZE,
   mapQueryView,
   type MapViewport,
 } from "@/lib/queries/map";
@@ -64,12 +82,20 @@ const DEFAULT_CENTER: [number, number] = [43.6532, -79.3832];
 const DEFAULT_ZOOM = 11;
 
 /**
- * Price pin — HouseSigma shape: teal rounded pill, white stroke; orange when
- * selected. Label stays in the DOM for assistive tech.
+ * Price pin — rounded pill; fill follows status / price / DOM color mode.
  */
-function priceIcon(property: PropertySummary, active: boolean) {
-  const label = property.price === null ? EMPTY : formatPriceCompact(property.price);
-  const bg = active ? MAP_PIN_ACTIVE : MAP_PIN_TEAL;
+function priceIcon(
+  property: PropertySummary,
+  active: boolean,
+  pinMode: PinColorMode,
+) {
+  const label =
+    property.status === "sold" && property.closePrice !== null
+      ? formatPriceCompact(property.closePrice)
+      : property.price === null
+        ? EMPTY
+        : formatPriceCompact(property.price);
+  const bg = pinFillColor(property, pinMode, active);
   return L.divIcon({
     className: "",
     html: `<span style="background:${bg};border:2px solid #fff;border-radius:7px;min-width:58px;height:25px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:500;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.25);white-space:nowrap">${label}</span>`,
@@ -78,7 +104,13 @@ function priceIcon(property: PropertySummary, active: boolean) {
   });
 }
 
-/** Cluster bubble — HouseSigma orange (#ff5f05), white stroke, count in white. */
+/** Approximate a cluster cell and zoom into it instead of only flying to its centroid. */
+function clusterFocusZoom(currentZoom: number, count: number) {
+  const bump = count > 200 ? 3 : count > 40 ? 2 : 1;
+  return Math.min(16, Math.max(currentZoom + bump, 12));
+}
+
+/** Cluster bubble — orange, white stroke, count in white. */
 function clusterIcon(count: number) {
   const size = count > 500 ? 52 : count > 100 ? 44 : count > 25 ? 38 : 35;
   const label = count > 999 ? `${Math.round(count / 1000)}k` : String(count);
@@ -194,31 +226,55 @@ export function DrawnArea({ points }: { points: LatLngPoint[] }) {
 
 export function MapSearch() {
   const params = useSearchParams();
+  const router = useRouter();
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const { isComparing } = useWatched();
   const [map, setMap] = useState<L.Map | null>(null);
-  // Hovered row or pin (highlight only) vs clicked pin (highlight + preview).
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoverPreviewId, setHoverPreviewId] = useState<string | null>(null);
+  const hoverClearRef = useRef<number | null>(null);
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const listRef = useRef<HTMLUListElement>(null);
   const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
   const [flyZoom, setFlyZoom] = useState<number | null>(null);
-  // A place the visitor searched for wins over a late automatic locate,
-  // which would otherwise pull the map back to where they are standing.
   const placeChosen = useRef(false);
-  /** Last city we already geocoded/flew for — avoids repeat flights. */
   const cityFlown = useRef<string | null>(null);
-  // Auto-centre only when the URL doesn't already say where to look.
+  const restoredViewport = useRef(false);
+  const [prefs, setPrefs] = useState<MapUiPrefs>({
+    searchAsMove: true,
+    listCollapsed: false,
+    listWidthPct: 0.4,
+    basemap: "streets",
+    pinMode: "status",
+  });
+  // Peek by default so map chrome stays clear; drag up for the list.
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>("peek");
+  const searchAsMoveRef = useRef(true);
+  const forceSearchOnceRef = useRef(false);
+  const [liveViewport, setLiveViewport] = useState<MapViewport | null>(null);
+  const [searchViewport, setSearchViewport] = useState<MapViewport | null>(null);
+  const debouncedViewport = useDebouncedValue(searchViewport, 350);
+  const resizing = useRef(false);
+
+  useEffect(() => {
+    const stored = readMapUiPrefs();
+    setPrefs(stored);
+    searchAsMoveRef.current = stored.searchAsMove;
+  }, []);
+
+  const urlCamera = useMemo(() => parseViewportParams(params), [params]);
+
   const userLocation = useUserLocation({
-    autoCenter: !params.get("poly"),
+    autoCenter:
+      !params.get("poly") && !params.get("city") && !urlCamera,
     onLocated: (point, auto) => {
       if (auto && placeChosen.current) return;
+      if (auto && restoredViewport.current) return;
       setFlyZoom(null);
       setFlyTarget(point);
     },
   });
-  const [viewport, setViewport] = useState<MapViewport | null>(null);
-  // Debounce viewport changes so a drag doesn't fire a request per frame.
-  const debouncedViewport = useDebouncedValue(viewport, 350);
 
   const flyToPlace = useCallback((point: [number, number], zoom?: number) => {
     placeChosen.current = true;
@@ -226,11 +282,6 @@ export function MapSearch() {
     setFlyTarget(point);
   }, []);
 
-  /*
-   * The URL is the source of truth, shared with /listings: the same filter
-   * params, plus `poly` for a drawn area. `filterQs` is everything except the
-   * area, forwarded to /api/properties/map so the map honours the filters.
-   */
   const query = useMemo(() => parseListingSearch(params), [params]);
   const polygon = query.polygon ?? null;
   const polyKey = serializePolygonParam(polygon);
@@ -239,51 +290,102 @@ export function MapSearch() {
     [query],
   );
   const filterQs = buildListingQueryString(filterQuery);
-  // H3 aggregates count the whole catalogue — they cannot apply listing
-  // filters — so with any filter set we show filtered pins instead of
-  // clusters that would overstate what matches.
   const filtered = hasActiveFilters(filterQuery) || Boolean(query.status);
 
-  /** Writes the query to the URL without a server round-trip. */
   const pushQuery = useCallback((next: ListingQuery) => {
     const qs = buildListingQueryString({ ...next, view: undefined, page: undefined });
     rememberLastSearch(next);
-    // Next 16 syncs native pushState with useSearchParams, and it gives the
-    // back button a step per drawn area.
     window.history.pushState(null, "", qs ? `/map-search?${qs}` : "/map-search");
   }, []);
 
+  const patchPrefs = useCallback((patch: Partial<MapUiPrefs>) => {
+    const next = writeMapUiPrefs(patch);
+    setPrefs(next);
+    if (patch.searchAsMove !== undefined) {
+      searchAsMoveRef.current = patch.searchAsMove;
+      if (patch.searchAsMove && liveViewport) {
+        setSearchViewport(liveViewport);
+        rememberMapViewport(liveViewport);
+      }
+    }
+  }, [liveViewport]);
+
   const handleBounds = useCallback((bounds: Bounds, zoom: number) => {
-    setViewport({ ...bounds, zoom });
+    const next: MapViewport = { ...bounds, zoom };
+    setLiveViewport(next);
+    if (searchAsMoveRef.current || forceSearchOnceRef.current) {
+      forceSearchOnceRef.current = false;
+      setSearchViewport(next);
+      rememberMapViewport(next);
+    }
   }, []);
 
-  /*
-   * A drawn area ignores the viewport (see `mapQueryView`); otherwise the
-   * debounced viewport plus filters is the key, so a filter change refetches
-   * at once for the current view.
-   */
-  const view = mapQueryView({ viewport: debouncedViewport, filters: filterQs, poly: polyKey });
+  const commitSearchArea = useCallback(() => {
+    if (!liveViewport) return;
+    setSearchViewport(liveViewport);
+    rememberMapViewport(liveViewport);
+  }, [liveViewport]);
 
-  // A new view is a new result set: start its list from the top rather than
-  // mid-way down, where the previous set's scroll position left it.
+  // Restore camera: URL lat/lng/z wins, else last local viewport.
+  useEffect(() => {
+    if (!map || restoredViewport.current) return;
+    if (params.get("poly") || params.get("city")) {
+      restoredViewport.current = true;
+      return;
+    }
+    restoredViewport.current = true;
+    if (urlCamera) {
+      placeChosen.current = true;
+      map.setView(urlCamera.center, urlCamera.zoom, { animate: false });
+      return;
+    }
+    const saved = readMapViewport();
+    if (!saved) return;
+    map.fitBounds(
+      [
+        [saved.latMin, saved.lngMin],
+        [saved.latMax, saved.lngMax],
+      ],
+      { maxZoom: Math.min(saved.zoom, 15), animate: false },
+    );
+    setSearchViewport(saved);
+    setLiveViewport(saved);
+  }, [map, params, urlCamera]);
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const qs = new URLSearchParams(buildListingQueryString({ ...query, view: undefined, page: undefined }));
+    const cam = liveViewport ?? searchViewport;
+    if (cam) {
+      const next = viewportToSearchParams(cam);
+      qs.set("lat", next.lat);
+      qs.set("lng", next.lng);
+      qs.set("z", next.z);
+    }
+    const q = qs.toString();
+    return `${window.location.origin}/map-search${q ? `?${q}` : ""}`;
+  }, [query, liveViewport, searchViewport]);
+
+  const view = mapQueryView({
+    viewport: debouncedViewport,
+    filters: filterQs,
+    poly: polyKey,
+  });
+
   const viewKey = JSON.stringify(view);
   useEffect(() => {
     listRef.current?.scrollTo({ top: 0 });
   }, [viewKey]);
 
-  /**
-   * Zoomed out and unfiltered, the backend returns H3 cluster counts instead of
-   * rows — drawing thousands of pins would be unreadable and slow. It tells us
-   * which mode applies via `mode`, and we only fetch rows in marker mode.
-   */
   const aggregatesEnabled = view !== null && !polyKey && !filtered;
   const aggregates = useQuery({
     ...mapAggregatesQuery(view ?? EMPTY_VIEW),
     enabled: aggregatesEnabled,
   });
-  // A failed aggregates call falls back to marker mode so the map still works.
-  const aggregatesSettled = aggregates.isError || (aggregates.isFetched && !aggregates.isPlaceholderData);
-  const clusterMode = aggregatesEnabled && !aggregates.isError && isClusterReply(aggregates.data);
+  const aggregatesSettled =
+    aggregates.isError || (aggregates.isFetched && !aggregates.isPlaceholderData);
+  const clusterMode =
+    aggregatesEnabled && !aggregates.isError && isClusterReply(aggregates.data);
 
   const listingsEnabled =
     view !== null && (!aggregatesEnabled || (aggregatesSettled && !clusterMode));
@@ -292,26 +394,19 @@ export function MapSearch() {
     enabled: listingsEnabled,
   });
 
-  // `cancelRefetch: false` makes a second trigger join the page already in
-  // flight; v5's default would abort it and start over.
   const { fetchNextPage } = listings;
   const loadMore = useCallback(() => {
     void fetchNextPage({ cancelRefetch: false });
   }, [fetchNextPage]);
 
   const clustered = clusterMode;
-  const clusters =clustered ? (aggregates.data?.clusters ?? []) : NO_CLUSTERS;
+  const clusters = clustered ? (aggregates.data?.clusters ?? []) : NO_CLUSTERS;
   const properties = clustered ? NO_PROPERTIES : (listings.data?.items ?? NO_PROPERTIES);
   const total = clustered ? null : (listings.data?.total ?? null);
-  // A failed LATER page keeps the rows already loaded; the list offers a retry
-  // at its foot instead of the whole view reading as an error.
   const error =
     listingsEnabled && listings.isError && !listings.isFetchNextPageError
       ? "Could not load listings for this area."
       : null;
-  // Before the first viewport is reported there is nothing in flight, but the
-  // page is still loading — don't flash the empty state. Loading more rows is
-  // shown at the foot of the list, not as a map-wide "Loading listings…".
   const loading =
     view === null ||
     aggregates.isFetching ||
@@ -321,6 +416,20 @@ export function MapSearch() {
   const drawing = useMapDrawing(map, (points) =>
     pushQuery({ ...query, polygon: points, schoolLabel: undefined, schoolKm: undefined }),
   );
+
+  // Drawn / school areas own the search geometry — pan-to-search UI is noise.
+  const areaLocked = Boolean(polygon) || Boolean(drawing.mode);
+
+  const viewportDrifted =
+    !areaLocked &&
+    !prefs.searchAsMove &&
+    liveViewport !== null &&
+    searchViewport !== null &&
+    (liveViewport.latMin !== searchViewport.latMin ||
+      liveViewport.latMax !== searchViewport.latMax ||
+      liveViewport.lngMin !== searchViewport.lngMin ||
+      liveViewport.lngMax !== searchViewport.lngMax ||
+      liveViewport.zoom !== searchViewport.zoom);
 
   const toggleDraw = (mode: DrawMode) => {
     if (drawing.mode === mode) drawing.cancel();
@@ -334,6 +443,7 @@ export function MapSearch() {
 
   const applySchool = useCallback(
     (school: SchoolSearchHit, km = DEFAULT_SCHOOL_RADIUS_KM) => {
+      forceSearchOnceRef.current = true;
       flyToPlace([school.latitude, school.longitude], 14);
       pushQuery({
         ...query,
@@ -345,18 +455,30 @@ export function MapSearch() {
     [flyToPlace, pushQuery, query],
   );
 
-  /** Place / city pick: fly there and keep listing filters aligned with the view. */
+  const widenSchool = useCallback(() => {
+    if (!query.schoolLabel || !polygon?.[0]) return;
+    const nextKm = (query.schoolKm ?? DEFAULT_SCHOOL_RADIUS_KM) + 2;
+    // Rebuild around the polygon centroid.
+    const lat =
+      polygon.reduce((sum, p) => sum + p.lat, 0) / polygon.length;
+    const lng =
+      polygon.reduce((sum, p) => sum + p.lng, 0) / polygon.length;
+    pushQuery({
+      ...query,
+      polygon: schoolSearchArea(lat, lng, nextKm),
+      schoolKm: nextKm,
+    });
+  }, [polygon, pushQuery, query]);
+
   const applyPlace = useCallback(
     (result: GeocodeResult) => {
       const city = cityFromText(result.label);
       rememberPlace(city);
       if (city) cityFlown.current = city;
-      // Cities need a wider frame than a street pin.
+      forceSearchOnceRef.current = true;
       flyToPlace([result.latitude, result.longitude], city ? 12 : 14);
       pushQuery({
         ...query,
-        // Known city → filter to it; unknown place → clear a stale city so the
-        // new bbox is not ANDed with e.g. Toronto after flying to Mississauga.
         city: city ?? undefined,
         polygon: undefined,
         schoolLabel: undefined,
@@ -366,8 +488,6 @@ export function MapSearch() {
     [flyToPlace, pushQuery, query],
   );
 
-  // Filters / listings "View on map" can set ?city= without a place search.
-  // Geocode once and fly so the viewport matches the city filter.
   useEffect(() => {
     const city = query.city?.trim();
     if (!city) {
@@ -390,9 +510,7 @@ export function MapSearch() {
         cityFlown.current = city;
         flyToPlace([places[0].latitude, places[0].longitude], 12);
       })
-      .catch(() => {
-        // Geocode soft-fails; the city filter still applies to the current bbox.
-      });
+      .catch(() => {});
 
     return () => {
       cancelled = true;
@@ -406,22 +524,35 @@ export function MapSearch() {
   );
 
   const selected = selectedId ? (mappable.find((p) => p.id === selectedId) ?? null) : null;
+  const hovered =
+    hoverPreviewId && hoverPreviewId !== selectedId
+      ? (mappable.find((p) => p.id === hoverPreviewId) ?? null)
+      : null;
 
-  /** A pin click selects its home and brings its row into view in the list. */
   const selectPin = (id: string) => {
     setSelectedId(id);
     setActiveId(id);
-    rowRefs.current.get(id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setHoverPreviewId(null);
+    if (!isDesktop) setSheetSnap("mid");
+    // Defer scroll until the sheet has room for the list.
+    window.setTimeout(() => {
+      rowRefs.current.get(id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 50);
   };
 
-  const listingsHref = buildListingHref({ ...query, view: undefined });
-  // Rows on screen belong to the previous viewport while this one loads.
+  const basemap = MAP_BASEMAPS[prefs.basemap];
+
+  const prefetchProperty = useCallback(
+    (id: string) => {
+      router.prefetch(`/property/${encodeURIComponent(id)}`);
+    },
+    [router],
+  );
+
   const refreshing = loading && listings.isPlaceholderData && properties.length > 0;
 
   const countLabel = (() => {
     if (error) return error;
-    // Without this the header read "0 homes in this area" during the first
-    // load, which looked like an answer.
     const schoolNear = query.schoolLabel
       ? `near ${query.schoolLabel}`
       : polygon
@@ -437,12 +568,108 @@ export function MapSearch() {
     return `${all.toLocaleString("en-CA")} ${all === 1 ? "home" : "homes"} ${schoolNear}`;
   })();
 
+  const listCollapsed = isDesktop && prefs.listCollapsed;
+  const listWidthPct = prefs.listWidthPct;
+
+  // Leaflet only remeasures after the panel width finishes animating.
+  useEffect(() => {
+    if (!map || !isDesktop) return;
+    const id = window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
+    return () => window.clearTimeout(id);
+  }, [map, isDesktop, listCollapsed, listWidthPct]);
+
+  const onResizeStart = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    resizing.current = true;
+    const startX = event.clientX;
+    const startPct = listWidthPct;
+    const onMove = (moveEvent: MouseEvent) => {
+      if (!resizing.current) return;
+      const delta = startX - moveEvent.clientX;
+      const next = startPct + delta / window.innerWidth;
+      patchPrefs({ listWidthPct: next });
+    };
+    const onUp = () => {
+      resizing.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const panel = (
+    <MapResultsPanel
+      query={query}
+      onChange={pushQuery}
+      countLabel={countLabel}
+      properties={properties}
+      clustered={clustered}
+      loading={loading}
+      refreshing={refreshing}
+      error={error}
+      polygon={Boolean(polygon)}
+      filtered={filtered}
+      total={total}
+      hasMore={Boolean(listings.hasNextPage)}
+      loadingMore={listings.isFetchingNextPage}
+      failedMore={listings.isFetchNextPageError}
+      paused={listings.isPlaceholderData}
+      onLoadMore={loadMore}
+      activeId={activeId}
+      selectedId={selectedId}
+      onActivate={setActiveId}
+      onShowOnMap={(property) => {
+        setSelectedId(property.id);
+        flyToPlace(
+          [property.latitude as number, property.longitude as number],
+          15,
+        );
+        if (!isDesktop) setSheetSnap("peek");
+      }}
+      rowRefs={rowRefs}
+      listRef={listRef}
+      onZoomIn={() => map?.zoomIn()}
+      onZoomOut={() => map?.zoomOut()}
+      onWidenSchool={widenSchool}
+      mobile={!isDesktop}
+      sheetSnap={sheetSnap}
+      onSheetSnap={setSheetSnap}
+      listCollapsed={prefs.listCollapsed}
+      onToggleCollapse={() => patchPrefs({ listCollapsed: !prefs.listCollapsed })}
+      dragHandle={
+        isDesktop ? (
+          <button
+            type="button"
+            aria-label="Resize results panel"
+            onMouseDown={onResizeStart}
+            className="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize bg-transparent hover:bg-navy/20"
+          />
+        ) : null
+      }
+    />
+  );
+
   return (
-    <div className="flex h-[calc(100vh-72px)] flex-col lg:flex-row">
-      {/* `isolate` gives the map its own stacking context. Leaflet's panes and
-          controls (z-index 400-1000) and our z-[400] overlays then only compete
-          with each other, instead of rising above the navbar and page modals. */}
-      <div className="relative isolate h-1/2 w-full lg:h-full lg:w-3/5">
+    <div
+      className={cn(
+        "relative flex h-full min-h-0",
+        isDesktop ? "flex-row" : "flex-col",
+      )}
+    >
+      <motion.div
+        className={cn(
+          "relative isolate h-full min-h-0",
+          !isDesktop && "w-full",
+        )}
+        initial={false}
+        animate={
+          isDesktop
+            ? { width: listCollapsed ? "100%" : `${(1 - listWidthPct) * 100}%` }
+            : { width: "100%" }
+        }
+        transition={LIST_PANEL_TRANSITION}
+      >
         <MapContainer
           ref={setMap}
           center={DEFAULT_CENTER}
@@ -451,7 +678,12 @@ export function MapSearch() {
           zoomControl={false}
           className="h-full w-full"
         >
-          <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
+          <TileLayer
+            key={prefs.basemap}
+            attribution={basemap.attribution}
+            url={basemap.url}
+            maxZoom={basemap.maxZoom}
+          />
           <BoundsWatcher onChange={handleBounds} />
           <FlyTo target={flyTarget} zoom={flyZoom} />
           {userLocation.position && (
@@ -462,57 +694,111 @@ export function MapSearch() {
               interactive={false}
             />
           )}
-          <MapClickWatcher onClick={() => setSelectedId(null)} />
+          <MapClickWatcher
+            onClick={() => {
+              setSelectedId(null);
+              setHoverPreviewId(null);
+            }}
+          />
           {polygon && <DrawnArea points={polygon} />}
 
-          {/* Markers swallow clicks, so while drawing they are remounted as
-              non-interactive — otherwise a tap on a pin would not add a point. */}
           {clustered
             ? clusters.map((cell, index) => (
                 <Marker
-                  key={`cluster-${index}-${drawing.mode ?? "idle"}`}
+                  key={`cluster-${index}`}
                   position={[cell.latitude, cell.longitude]}
                   icon={clusterIcon(cell.count)}
                   interactive={!drawing.mode}
                   eventHandlers={{
-                    // Clicking a cluster zooms toward it until markers appear.
-                    click: () => flyToPlace([cell.latitude, cell.longitude]),
+                    click: () => {
+                      const zoom = clusterFocusZoom(map?.getZoom() ?? DEFAULT_ZOOM, cell.count);
+                      flyToPlace([cell.latitude, cell.longitude], zoom);
+                    },
                   }}
                 />
               ))
             : mappable.map((property) => (
                 <Marker
-                  key={`${property.id}-${drawing.mode ?? "idle"}`}
+                  key={`${property.id}-${prefs.pinMode}-${isComparing(property.id) ? "c" : ""}`}
                   position={[property.latitude as number, property.longitude as number]}
-                  icon={priceIcon(property, property.id === activeId || property.id === selectedId)}
-                  // The highlighted pin draws above its neighbours in a dense cluster.
-                  zIndexOffset={property.id === activeId || property.id === selectedId ? 1000 : 0}
+                  icon={priceIcon(
+                    property,
+                    property.id === activeId ||
+                      property.id === selectedId ||
+                      isComparing(property.id),
+                    prefs.pinMode,
+                  )}
+                  zIndexOffset={
+                    property.id === activeId ||
+                    property.id === selectedId ||
+                    isComparing(property.id)
+                      ? 1000
+                      : 0
+                  }
                   interactive={!drawing.mode}
                   eventHandlers={{
                     click: () => selectPin(property.id),
-                    mouseover: () => setActiveId(property.id),
+                    mouseover: () => {
+                      if (drawing.mode) return;
+                      if (hoverClearRef.current) window.clearTimeout(hoverClearRef.current);
+                      setActiveId(property.id);
+                      setHoverPreviewId(property.id);
+                      prefetchProperty(property.id);
+                    },
+                    mouseout: () => {
+                      if (hoverClearRef.current) window.clearTimeout(hoverClearRef.current);
+                      hoverClearRef.current = window.setTimeout(() => {
+                        setHoverPreviewId((current) =>
+                          current === property.id ? null : current,
+                        );
+                        setActiveId((current) =>
+                          current === property.id && current !== selectedId ? null : current,
+                        );
+                      }, 120);
+                    },
                   }}
                 />
               ))}
         </MapContainer>
 
-        <PlaceSearch onSelect={applyPlace} onSelectSchool={applySchool} />
-
-        <MapControls
-          drawMode={drawing.mode}
-          hasShape={Boolean(polygon)}
-          locating={userLocation.status === "locating"}
-          onZoomIn={() => map?.zoomIn()}
-          onZoomOut={() => map?.zoomOut()}
-          onLocate={userLocation.locate}
-          onDraw={toggleDraw}
-          onClear={clearShape}
-        />
+        <div
+          className={cn(
+            "absolute left-1/2 z-[400] flex -translate-x-1/2 flex-col items-center gap-2",
+            isDesktop
+              ? "bottom-4"
+              : sheetSnap === "full"
+                ? "bottom-[calc(85vh+0.75rem)]"
+                : sheetSnap === "mid"
+                  ? "bottom-[calc(50vh+0.75rem)]"
+                  : "bottom-[calc(28vh+0.75rem)]",
+          )}
+        >
+          {viewportDrifted && (
+            <button
+              type="button"
+              onClick={commitSearchArea}
+              className="rounded-control bg-navy px-4 py-2.5 text-caption font-semibold text-white shadow-pop transition-colors hover:bg-navy-deep"
+            >
+              Search this area
+            </button>
+          )}
+          {!areaLocked && (
+            <label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface px-3 py-2 text-caption text-ink shadow-card">
+              <input
+                type="checkbox"
+                className="accent-navy"
+                checked={prefs.searchAsMove}
+                onChange={(event) => patchPrefs({ searchAsMove: event.target.checked })}
+              />
+              Search as I move
+            </label>
+          )}
+        </div>
 
         {(userLocation.status === "denied" || userLocation.status === "unavailable") && (
           <p
             role="status"
-            className="absolute bottom-4 left-1/2 z-[400] -translate-x-1/2 rounded-full bg-ink/90 px-4 py-2 text-caption text-white shadow-pop"
+            className="absolute bottom-20 left-1/2 z-[400] -translate-x-1/2 rounded-full bg-ink/90 px-4 py-2 text-caption text-white shadow-pop"
           >
             {userLocation.status === "denied"
               ? "Location is blocked for this site in your browser settings."
@@ -520,8 +806,11 @@ export function MapSearch() {
           </p>
         )}
 
-        {selected && !drawing.mode && (
+        {selected && !drawing.mode && isDesktop && (
           <MapPreviewCard property={selected} onClose={() => setSelectedId(null)} />
+        )}
+        {!selected && hovered && !drawing.mode && isDesktop && (
+          <MapPreviewCard property={hovered} ephemeral />
         )}
 
         {drawing.mode && (
@@ -529,206 +818,113 @@ export function MapSearch() {
             mode={drawing.mode}
             pointCount={drawing.pointCount}
             onFinish={drawing.finish}
+            onUndo={drawing.undo}
             onCancel={drawing.cancel}
           />
         )}
 
-        {loading && (
-          <div className="pointer-events-none absolute left-1/2 top-4 z-[400] flex -translate-x-1/2 items-center gap-2 rounded-full bg-surface px-4 py-2 shadow-pop">
+        {loading && properties.length === 0 && (
+          <div className="pointer-events-none absolute left-1/2 top-[4.5rem] z-[400] flex -translate-x-1/2 items-center gap-2 rounded-full bg-surface px-4 py-2 shadow-pop">
             <Spinner className="text-navy" />
             <span className="text-caption text-ink">Loading listings…</span>
           </div>
         )}
-      </div>
-
-      <aside className="flex h-1/2 min-h-0 w-full flex-col overflow-hidden border-t border-line lg:h-full lg:w-2/5 lg:border-l lg:border-t-0">
-        {/* One compact row only — search and filters live in the sheet so the
-            list keeps almost the whole half-screen on phones. */}
-        <header className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2.5 sm:px-5 sm:py-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-small font-semibold text-ink sm:text-h3">Map search</h1>
-            <p className="truncate text-caption text-ink-muted" aria-live="polite">
-              {countLabel}
-            </p>
+        {refreshing && (
+          <div className="pointer-events-none absolute left-1/2 top-[4.5rem] z-[400] -translate-x-1/2 rounded-full bg-surface/95 px-3 py-1.5 text-caption text-ink-muted shadow-card">
+            Updating…
           </div>
-          <MapFilters query={query} onChange={pushQuery} />
-          {/* Return path for the listings view toggle, carrying the search. */}
-          <Link
-            href={listingsHref}
-            className="flex h-10 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-2.5 text-caption font-medium text-ink transition-colors hover:border-navy hover:text-navy sm:h-11 sm:px-3 sm:text-small"
+        )}
+      </motion.div>
+
+      <AnimatePresence initial={false}>
+        {isDesktop && !listCollapsed && (
+          <motion.div
+            key="map-results-panel"
+            initial={{ width: 0, opacity: 0.7 }}
+            animate={{ width: `${listWidthPct * 100}%`, opacity: 1 }}
+            exit={{ width: 0, opacity: 0.7 }}
+            transition={LIST_PANEL_TRANSITION}
+            className="relative h-full min-h-0 shrink-0 overflow-hidden"
           >
-            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <path
-                d="M14.25 9H3.75M9 14.25 3.75 9 9 3.75"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.5"
-              />
-            </svg>
-            Listings
-          </Link>
-        </header>
+            {/* Fixed open width so content doesn’t reflow while the clip animates. */}
+            <div
+              className="h-full min-w-[20rem]"
+              style={{ width: `${listWidthPct * 100}vw` }}
+            >
+              {panel}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {!isDesktop && panel}
 
-        <ul
-          ref={listRef}
-          aria-busy={loading || undefined}
+      {/*
+        Overlay only the map column (not the desktop list). On mobile, tuck
+        under the results sheet (z-500) and fade out when the sheet is full so
+        search/controls don’t sit on top of the list.
+      */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-y-0 left-0 z-[480] transition-opacity duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+          !isDesktop && sheetSnap === "full" && "pointer-events-none opacity-0",
+        )}
+        style={{
+          right:
+            isDesktop && !listCollapsed ? `${listWidthPct * 100}%` : 0,
+        }}
+        aria-hidden={!isDesktop && sheetSnap === "full" ? true : undefined}
+      >
+        <div
           className={cn(
-            "flex-1 overflow-y-auto transition-opacity duration-200",
-            // The previous area's rows stay while the new area loads (so the
-            // list doesn't flash empty), dimmed so they don't read as results.
-            refreshing && "pointer-events-none opacity-50",
+            "absolute left-4 top-4 w-[min(320px,calc(100%-5.5rem))]",
+            !isDesktop && sheetSnap === "full" ? "pointer-events-none" : "pointer-events-auto",
           )}
-          onMouseLeave={() => setActiveId(null)}
         >
-          {properties.length === 0 && loading && <MapListingSkeletons count={8} />}
-
-          {properties.length === 0 && !loading && (
-            <li className="px-5 py-10 text-center text-small text-ink-muted">
-              {clustered
-                ? "Zoom in to list individual homes."
-                : query.schoolLabel
-                  ? `No listings within ${query.schoolKm ?? DEFAULT_SCHOOL_RADIUS_KM} km of ${query.schoolLabel}. Try a wider radius from Schools search, or clear the school filter.`
-                  : polygon
-                    ? "No listings in your drawn area. Try a bigger area or fewer filters."
-                    : filtered
-                      ? "No listings here match these filters. Try zooming out or clearing a filter."
-                      : "No listings in view. Try zooming out or panning to another area."}
-            </li>
+          <PlaceSearch onSelect={applyPlace} onSelectSchool={applySchool} />
+        </div>
+        <div
+          className={cn(
+            "absolute right-4 top-4 flex flex-col items-end gap-2",
+            !isDesktop && sheetSnap === "full" ? "pointer-events-none" : "pointer-events-auto",
           )}
-
-          {properties.map((property) => (
-            <li key={property.id}>
-              <MapListingCard
-                ref={(node) => {
-                  if (node) rowRefs.current.set(property.id, node);
-                  else rowRefs.current.delete(property.id);
-                }}
-                property={property}
-                active={property.id === activeId || property.id === selectedId}
-                onActivate={() => setActiveId(property.id)}
-                onShowOnMap={
-                  property.latitude !== null && property.longitude !== null
-                    ? () => {
-                        setSelectedId(property.id);
-                        flyToPlace(
-                          [property.latitude as number, property.longitude as number],
-                          15,
-                        );
-                      }
-                    : null
-                }
-              />
-            </li>
-          ))}
-
-          {!clustered && properties.length > 0 && (
-            <ListFoot
-              listRef={listRef}
-              loaded={properties.length}
-              total={total ?? properties.length}
-              hasMore={listings.hasNextPage}
-              loadingMore={listings.isFetchingNextPage}
-              failed={listings.isFetchNextPageError}
-              // Placeholder rows belong to the previous view; paging them
-              // would append the old area's homes to the new one.
-              paused={listings.isPlaceholderData}
-              onLoadMore={loadMore}
-            />
-          )}
-        </ul>
-      </aside>
+        >
+          <MapControls
+            drawMode={drawing.mode}
+            hasShape={Boolean(polygon)}
+            locating={userLocation.status === "locating"}
+            basemap={prefs.basemap}
+            pinMode={prefs.pinMode}
+            shareUrl={shareUrl}
+            onZoomIn={() => map?.zoomIn()}
+            onZoomOut={() => map?.zoomOut()}
+            onLocate={userLocation.locate}
+            onDraw={toggleDraw}
+            onClear={clearShape}
+            onBasemap={(next: BasemapId) => patchPrefs({ basemap: next })}
+            onPinMode={(next: PinColorMode) => patchPrefs({ pinMode: next })}
+          />
+          <AnimatePresence initial={false}>
+            {listCollapsed && (
+              <motion.button
+                key="show-list"
+                type="button"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: LIST_PANEL_EASE }}
+                onClick={() => patchPrefs({ listCollapsed: false })}
+                className="rounded-control border border-line bg-surface px-3 py-2 text-caption font-medium text-ink shadow-card transition-colors hover:border-navy hover:text-navy"
+              >
+                Show list
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }
 
-/**
- * Foot of the results list: loads the next page as it scrolls into view.
- *
- * Infinite scroll rather than numbered pages because the list is a companion
- * to the map: every loaded row is also a pin, so rows accumulate instead of
- * replacing each other, and any pan or filter restarts the set anyway, which
- * would make "page 4" meaningless. A real button is always rendered too, for
- * keyboard users and as a fallback if the observer never fires.
- */
-function ListFoot({
-  listRef,
-  loaded,
-  total,
-  hasMore,
-  loadingMore,
-  failed,
-  paused,
-  onLoadMore,
-}: {
-  listRef: RefObject<HTMLUListElement | null>;
-  loaded: number;
-  total: number;
-  hasMore: boolean;
-  loadingMore: boolean;
-  failed: boolean;
-  paused: boolean;
-  onLoadMore: () => void;
-}) {
-  const sentinelRef = useRef<HTMLLIElement>(null);
-  const auto = hasMore && !loadingMore && !failed && !paused;
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!auto || !sentinel) return;
-    // Starts loading ~one screen before the end, so scrolling rarely waits.
-    // Re-created per page (`loaded`): observe() reports the current state at
-    // once, so a list still too short to scroll keeps filling itself.
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) onLoadMore();
-      },
-      { root: listRef.current, rootMargin: "0px 0px 600px 0px" },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [auto, loaded, listRef, onLoadMore]);
-
-  const remaining = Math.max(0, total - loaded);
-  const capped = !hasMore && remaining > 0;
-
-  // Placeholder rows where the next rows will land, rather than a spinner
-  // below them: the list visibly continues instead of seeming to end.
-  if (loadingMore) {
-    return (
-      <>
-        <MapListingSkeletons count={Math.min(3, remaining) || 1} />
-        <li role="status" className="sr-only">
-          Loading more homes…
-        </li>
-      </>
-    );
-  }
-
-  return (
-    <li ref={sentinelRef} className="px-5 py-6 text-center text-caption text-ink-muted">
-      {failed ? (
-        <span className="inline-flex flex-wrap items-center justify-center gap-2" role="alert">
-          Couldn&apos;t load more homes.
-          <Button variant="secondary" size="sm" onClick={onLoadMore}>
-            Try again
-          </Button>
-        </span>
-      ) : hasMore ? (
-        <Button variant="secondary" size="sm" onClick={onLoadMore} disabled={paused}>
-          Load {Math.min(remaining, MAP_PAGE_SIZE)} more of {remaining.toLocaleString("en-CA")}
-        </Button>
-      ) : capped ? (
-        <>
-          That&apos;s the first {loaded.toLocaleString("en-CA")} of {total.toLocaleString("en-CA")}.
-          Zoom in, draw an area or add a filter to browse the rest.
-        </>
-      ) : loaded > 10 ? (
-        <>That&apos;s all {loaded.toLocaleString("en-CA")} homes.</>
-      ) : null}
-    </li>
-  );
-}
 
 /**
  * Place search overlaid on the map, backed by `locations/geocode/`, with
@@ -830,7 +1026,7 @@ export function PlaceSearch({
       schools.isError);
 
   return (
-    <div className="absolute left-4 top-4 z-[1100] w-[min(320px,calc(100%-2rem))]">
+    <div className="relative w-full">
       <label htmlFor="map-place-search" className="sr-only">
         Search for a city, neighbourhood, or school
       </label>
@@ -860,7 +1056,7 @@ export function PlaceSearch({
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onFocus={() => (results.length > 0 || schoolHits.length > 0) && setOpen(true)}
         placeholder="City, neighbourhood, or school…"
-        className="h-11 w-full rounded-control border border-line bg-surface px-4 text-small text-ink shadow-card outline-none placeholder:text-ink-subtle focus:border-navy"
+        className="h-11 w-full rounded-control border border-line bg-surface px-4 text-small text-ink shadow-card outline-none placeholder:text-ink-subtle focus:border-navy/35 focus:ring-2 focus:ring-navy/10"
       />
 
       {showList && (

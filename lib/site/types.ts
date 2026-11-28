@@ -14,6 +14,7 @@ export const SECTION_IDS = [
   "highReturn",
   "marketDeals",
   "soldBelow",
+  "profitableInvestments",
   "schools",
   "incentives",
   "marketIntelligence",
@@ -107,13 +108,13 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
   featuredListings: {
     label: "Featured listings",
     summary:
-      "Heading around the rail. Admin pins under Featured homes always lead; empty slots follow visitor search history and IP city.",
+      "Heading around the rail (3 cards). View All opens /featured-listings. Admin pins lead; empty slots follow search history and IP city.",
     canHide: true,
   },
   propertyTypes: {
     label: "Property types",
     summary:
-      "The six type tiles (Detached, Semi-Detached, Townhomes, Luxury, Condos, Rentals) and their links. Counts stay live.",
+      "The six type tiles (Detached, Semi-Detached, Townhomes, Condos, Luxury, Open Houses) and their links. Counts stay live.",
     canHide: true,
   },
   newPrecon: {
@@ -122,17 +123,27 @@ export const SECTION_META: Record<SectionId, { label: string; summary: string; c
       "Heading only. Featured precon rail (pinned first); with search history, scopes by remembered cities and beds/baths/price. Never uses IP city.",
     canHide: true,
   },
-  todaysNew: { label: "Today's new listings", summary: "Heading only. The 24-hour subtitle stays automatic so it never overclaims.", canHide: true },
-  highReturn: {
-    label: "High return",
-    summary: "Heading and caption. Which homes appear is set under High return homes.",
+  todaysNew: {
+    label: "Today's new listings",
+    summary: "3 cards from the last 24 hours. View All opens /todays-new. Subtitle stays automatic.",
     canHide: true,
   },
-  marketDeals: { label: "Market deals", summary: "Heading only. Four keyword deal cards (Distress, Detached Under $1M, Power of Sale, Just Sold).", canHide: true },
+  highReturn: {
+    label: "High return",
+    summary: "Heading and caption (3 cards). View All opens /high-return. Pins are set under High return homes.",
+    canHide: true,
+  },
+  marketDeals: { label: "Market deals", summary: "Heading only. Four keyword deal cards (Below-Market Deals, Detached Under $1M, Power of Sale, Just Sold).", canHide: true },
   soldBelow: {
     label: "Sold below purchase",
     summary:
       "Heading only. Cards come from live sold-below feed, preferring visitor search history and IP city.",
+    canHide: true,
+  },
+  profitableInvestments: {
+    label: "Profitable investments",
+    summary:
+      "3 cards of homes that sold again above their previous close (last 12 months). View All opens /profitable-investments.",
     canHide: true,
   },
   schools: {

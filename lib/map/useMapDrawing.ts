@@ -64,8 +64,9 @@ export function useMapDrawing(
     onCompleteRef.current = onComplete;
   }, [onComplete]);
 
-  // Set by the effect for the active mode; lets the Finish button complete.
+  // Set by the effect for the active mode; lets the Finish / Undo buttons act.
   const finishRef = useRef<(() => void) | null>(null);
+  const undoRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!map || !mode) return;
@@ -111,6 +112,22 @@ export function useMapDrawing(
         }).addTo(vertices);
       });
       setPointCount(points.length);
+    };
+
+    const undoLast = () => {
+      if (mode === "polygon") {
+        if (points.length === 0) return;
+        points = points.slice(0, -1);
+        redrawPolygon();
+        preview.setLatLngs([]);
+        return;
+      }
+      // rectangle: drop the first corner and start over
+      if (corner) {
+        corner = null;
+        rect.setLatLngs([]);
+        setPointCount(0);
+      }
     };
 
     const px = (a: L.LatLng, b: L.LatLng) =>
@@ -181,10 +198,21 @@ export function useMapDrawing(
         event.preventDefault();
         done = true;
         setMode(null);
+        return;
+      }
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        undoLast();
+        return;
+      }
+      if ((event.key === "z" || event.key === "Z") && (event.metaKey || event.ctrlKey) && !event.shiftKey) {
+        event.preventDefault();
+        undoLast();
       }
     };
 
     finishRef.current = mode === "polygon" ? finishPolygon : null;
+    undoRef.current = undoLast;
     map.on("click", onClick);
     map.on("mousemove", onMove);
     map.on("mousedown", onDown);
@@ -203,6 +231,7 @@ export function useMapDrawing(
       document.removeEventListener("keydown", onKeyDown);
       layer.remove();
       finishRef.current = null;
+      undoRef.current = null;
       if (wasDragging) map.dragging.enable();
       if (wasDblZoom) map.doubleClickZoom.enable();
       container.style.cursor = "";
@@ -213,6 +242,7 @@ export function useMapDrawing(
   const start = useCallback((next: DrawMode) => setMode(next), []);
   const cancel = useCallback(() => setMode(null), []);
   const finish = useCallback(() => finishRef.current?.(), []);
+  const undo = useCallback(() => undoRef.current?.(), []);
 
-  return { mode, pointCount, start, cancel, finish };
+  return { mode, pointCount, start, cancel, finish, undo };
 }

@@ -10,6 +10,7 @@ import {
   mapInvestorPicks,
   mapMarketSnapshot,
   mapPartners,
+  mapProfitableInvestments,
   mapSoldBelow,
   safeUrl,
   snapshotStats,
@@ -154,6 +155,47 @@ describe("mapSoldBelow", () => {
     expect(mapSoldBelow({ results: [], count: 0, empty: true, source: "none" })).toEqual([]);
     expect(mapSoldBelow({ results: [valid], count: 0, empty: false })).toEqual([]);
     expect(mapSoldBelow({ empty: true, results: [valid], count: 1 })).toEqual([]);
+  });
+});
+
+describe("mapProfitableInvestments", () => {
+  const valid = {
+    listing_key: "P1",
+    address: "12 Oak",
+    city: "Oakville",
+    close_price: 1_200_000,
+    close_date: "2026-08-01",
+    previous_close_price: 1_000_000,
+    previous_close_date: "2022-03-01",
+    gain_amount: 200_000,
+    image_url: "https://cdn.example/p1.jpg",
+  };
+
+  it("maps complete gain rows and skips losses or incomplete rows", () => {
+    const rows = mapProfitableInvestments({
+      results: [
+        valid,
+        { ...valid, listing_key: "P2", gain_amount: 0 },
+        { ...valid, listing_key: "P3", close_price: 900_000, gain_amount: 100_000 },
+        { ...valid, listing_key: "P4", address: "" },
+      ],
+      count: 4,
+      empty: false,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      listingKey: "P1",
+      gainAmount: 200_000,
+      previousClosePrice: 1_000_000,
+      imageUrl: "https://cdn.example/p1.jpg",
+    });
+  });
+
+  it("returns no rows when the envelope is empty", () => {
+    expect(
+      mapProfitableInvestments({ results: [], count: 0, empty: true, source: "none" }),
+    ).toEqual([]);
+    expect(mapProfitableInvestments({ empty: true, results: [valid], count: 1 })).toEqual([]);
   });
 });
 

@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { forwardRef } from "react";
 import { PropertyBadgePill } from "@/components/ui/Badge";
 import { SafeImage } from "@/components/ui/SafeImage";
 import { Skeleton } from "@/components/ui/States";
+import { CompareButton } from "@/components/property/CompareButton";
 import { SaveButton } from "@/components/property/SaveButton";
 import type { PropertySummary } from "@/lib/types/domain";
 import { cn } from "@/lib/utils/cn";
@@ -51,15 +53,26 @@ export const MapListingCard = forwardRef<
     onShowOnMap: (() => void) | null;
   }
 >(function MapListingCard({ property, active, onActivate, onShowOnMap }, ref) {
+  const router = useRouter();
   const { id, address, image, badge, photosCount, status } = property;
   const price = headlinePrice(property);
   const details = specs(property);
+  const href = propertyHref(id);
+  const prefetch = () => {
+    router.prefetch(href);
+  };
 
   return (
     <article
       ref={ref}
-      onMouseEnter={onActivate}
-      onFocus={onActivate}
+      onMouseEnter={() => {
+        onActivate();
+        prefetch();
+      }}
+      onFocus={() => {
+        onActivate();
+        prefetch();
+      }}
       className={cn(
         "group relative flex gap-3 border-b border-line-soft px-5 py-3 transition-colors",
         "has-[a:focus-visible]:bg-surface-alt",
@@ -90,7 +103,7 @@ export const MapListingCard = forwardRef<
         </div>
         <h3 className="mt-0.5 truncate text-small text-ink">
           <Link
-            href={propertyHref(id)}
+            href={href}
             aria-label={`${address}, ${price}`}
             className="outline-none before:absolute before:inset-0 group-hover:text-navy"
           >
@@ -103,7 +116,17 @@ export const MapListingCard = forwardRef<
 
       {/* z-10 lifts these above the stretched link covering the row. */}
       <div className="z-10 flex shrink-0 flex-col items-end gap-2">
-        {status === "active" && <SaveButton listingKey={id} address={address} size="sm" />}
+        {status === "active" && (
+          <>
+            <SaveButton listingKey={id} address={address} size="sm" />
+            <CompareButton
+              listingKey={id}
+              address={address}
+              variant="inline"
+              className="h-8 px-2 text-[11px]"
+            />
+          </>
+        )}
         {onShowOnMap && (
           <button
             type="button"
@@ -127,15 +150,24 @@ export const MapListingCard = forwardRef<
 export function MapPreviewCard({
   property,
   onClose,
+  ephemeral = false,
 }: {
   property: PropertySummary;
-  onClose: () => void;
+  onClose?: () => void;
+  /** Hover preview — no close control, lighter chrome. */
+  ephemeral?: boolean;
 }) {
   const price = headlinePrice(property);
   const details = specs(property);
 
   return (
-    <div className="animate-fade-up absolute bottom-4 left-4 z-[400] w-[min(340px,calc(100%-5.5rem))] overflow-hidden rounded-surface border border-line bg-surface shadow-pop">
+    <div
+      className={cn(
+        "absolute bottom-4 left-4 z-[400] w-[min(340px,calc(100%-5.5rem))] overflow-hidden rounded-surface border border-line bg-surface shadow-pop",
+        !ephemeral && "animate-fade-up",
+        ephemeral && "pointer-events-none",
+      )}
+    >
       <article className="group relative flex">
         <div className="relative w-28 shrink-0 self-stretch bg-surface-alt">
           <SafeImage
@@ -146,31 +178,49 @@ export function MapPreviewCard({
             className="object-cover"
           />
         </div>
-        <div className="min-w-0 flex-1 py-3 pl-3 pr-9">
+        <div className={cn("min-w-0 flex-1 py-3 pl-3", ephemeral ? "pr-3" : "pr-9")}>
           <p className="text-small font-semibold text-ink">{price}</p>
           <h3 className="mt-0.5 truncate text-small text-ink">
-            <Link
-              href={propertyHref(property.id)}
-              aria-label={`${property.address}, ${price}`}
-              className="outline-none before:absolute before:inset-0 group-hover:text-navy"
-            >
-              {property.address}
-            </Link>
+            {ephemeral ? (
+              property.address
+            ) : (
+              <Link
+                href={propertyHref(property.id)}
+                aria-label={`${property.address}, ${price}`}
+                className="outline-none before:absolute before:inset-0 group-hover:text-navy"
+              >
+                {property.address}
+              </Link>
+            )}
           </h3>
           <p className="mt-0.5 truncate text-caption text-ink-muted">{location(property)}</p>
           {details && <p className="mt-1 truncate text-caption text-ink-muted">{details}</p>}
-          <p className="mt-1.5 text-caption font-medium text-navy">View details →</p>
+          {!ephemeral && (
+            <div className="relative z-10 mt-2 flex flex-wrap items-center gap-2">
+              <p className="text-caption font-medium text-navy">View details →</p>
+              {property.status === "active" && (
+                <CompareButton
+                  listingKey={property.id}
+                  address={property.address}
+                  variant="inline"
+                  className="h-7 px-2 text-[11px]"
+                />
+              )}
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close preview"
-          className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-surface-alt hover:text-ink"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-          </svg>
-        </button>
+        {!ephemeral && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close preview"
+            className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-surface-alt hover:text-ink"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
       </article>
     </div>
   );

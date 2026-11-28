@@ -72,7 +72,7 @@ export function TrendingCommunities({ content }: { content?: Record<string, unkn
             <li key={row.city} className="shrink-0 snap-start">
               <Link
                 href={`/listings?city=${encodeURIComponent(row.city)}`}
-                className="group relative flex h-72 w-48 flex-col justify-end overflow-hidden rounded-control bg-linear-to-br from-navy to-navy-deep p-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+                className="group relative flex h-72 w-48 flex-col justify-end overflow-hidden rounded-control bg-linear-to-br from-navy to-navy-deep p-5 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-navy/40"
               >
                 <SafeImage
                   src={image}

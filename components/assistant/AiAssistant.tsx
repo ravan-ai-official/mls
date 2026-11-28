@@ -115,7 +115,16 @@ export function AiAssistant() {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-4 z-[60] flex flex-col items-end gap-3 sm:right-6">
+    <div
+      className={cn(
+        "pointer-events-none fixed right-4 z-[60] flex flex-col items-end gap-3 sm:right-6",
+        // Default clears the bottom edge; property/precon mobile CTAs publish
+        // --mobile-cta-height so the FAB sits above the bar until lg.
+        "bottom-[calc(5.5rem+var(--compare-tray-height,0px))]",
+        "[:where(body.has-mobile-cta)_&]:bottom-[calc(var(--mobile-cta-height,0px)+var(--compare-tray-height,0px)+0.75rem)]",
+        "lg:!bottom-6",
+      )}
+    >
       <AnimatePresence initial={false}>
         {open && (
           <motion.section
@@ -268,7 +277,7 @@ export function AiAssistant() {
                   <label htmlFor="assistant-question" className="sr-only">
                     Your question
                   </label>
-                  <div className="flex items-end gap-2 rounded-2xl border border-line bg-surface-alt/80 p-1.5 shadow-inner transition focus-within:border-navy/40 focus-within:bg-surface focus-within:ring-2 focus-within:ring-navy/10">
+                  <div className="flex items-end gap-2 rounded-2xl border border-line bg-surface-alt/80 p-1.5 shadow-inner transition focus-within:border-navy/35 focus-within:bg-surface focus-within:ring-2 focus-within:ring-navy/10">
                     <textarea
                       ref={inputRef}
                       id="assistant-question"
@@ -309,7 +318,7 @@ export function AiAssistant() {
         aria-label={open ? "Close assistant" : "Ask HomeAtlas"}
         whileTap={{ scale: 0.97 }}
         transition={fabEase}
-        className="pointer-events-auto inline-flex items-center gap-2.5 rounded-full bg-navy py-2 pl-2 pr-4 text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] hover:bg-navy-deep"
+        className="pointer-events-auto inline-flex items-center gap-2.5 rounded-full bg-navy py-2 pl-2 pr-2 text-white shadow-[0_12px_32px_-8px_rgba(21,35,56,0.55)] hover:bg-navy-deep sm:pr-4"
       >
         <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 ring-1 ring-white/15">
           {open ? (
@@ -318,7 +327,7 @@ export function AiAssistant() {
             <AssistantMark className="h-[18px] w-[18px] text-gold" />
           )}
         </span>
-        <span className="text-[13px] font-semibold tracking-tight">
+        <span className="hidden text-[13px] font-semibold tracking-tight sm:inline">
           {open ? "Close" : "Ask HomeAtlas"}
         </span>
       </motion.button>

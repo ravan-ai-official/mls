@@ -103,28 +103,38 @@ export function Footer({ footer }: { footer?: ChromeDocument["footer"] }) {
   });
   return (
     <footer className="bg-ink text-white">
-      <div className="border-b border-white/10 py-16">
-        <div className="container-page flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
-          <div>
+      <div className="border-b border-white/10 py-10 sm:py-14 lg:py-16">
+        <div className="container-page flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center sm:gap-6">
+          <div className="min-w-0 flex-1">
             <Eyebrow>{footer?.bannerEyebrow || "Still looking?"}</Eyebrow>
             <h2 className="mt-2 text-h1 text-white">
               {footer?.bannerHeading || "Let our team find your perfect home."}
             </h2>
           </div>
-          <LinkButton href={footer?.bannerHref || "/listings"} variant="accent" size="lg" className="shrink-0">
+          <LinkButton
+            href={footer?.bannerHref || "/listings"}
+            variant="accent"
+            size="lg"
+            className="w-full shrink-0 sm:w-auto"
+          >
             {footer?.bannerLabel || "Browse all listings"} →
           </LinkButton>
         </div>
       </div>
 
-      <div className="container-page py-14">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
-          <div>
+      <div className="container-page py-10 sm:py-12 lg:py-14">
+        {/*
+          Mobile: brand full-width, then link columns in a 2×2 so the footer
+          doesn’t become a long single stack. Desktop: brand + four columns.
+        */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:gap-x-8 sm:gap-y-10 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))] lg:gap-10">
+          <div className="col-span-2 lg:col-span-1">
             <Logo tone="dark" />
-            <p className="mt-4 max-w-[280px] text-small leading-relaxed text-white/50">
-              {footer?.blurb || "HomeAtlas is a real estate intelligence platform providing GTA home valuations and market data."}
+            <p className="mt-3 max-w-[280px] text-small leading-relaxed text-white/50 sm:mt-4">
+              {footer?.blurb ||
+                "HomeAtlas is a real estate intelligence platform providing GTA home valuations and market data."}
             </p>
-            <ul className="mt-6 flex gap-2.5">
+            <ul className="mt-5 flex flex-wrap gap-2.5 sm:mt-6">
               {socials.map((social) => (
                 <li key={social.label}>
                   <a
@@ -134,7 +144,13 @@ export function Footer({ footer }: { footer?: ChromeDocument["footer"] }) {
                     aria-label={`HomeAtlas on ${social.label}`}
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-white/50 transition-colors hover:border-gold hover:text-gold"
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
                       <path d={social.path} />
                     </svg>
                   </a>
@@ -144,9 +160,9 @@ export function Footer({ footer }: { footer?: ChromeDocument["footer"] }) {
           </div>
 
           {columns.map((column) => (
-            <nav key={column.heading} aria-label={column.heading}>
+            <nav key={column.heading} aria-label={column.heading} className="min-w-0">
               <h3 className="text-small font-semibold text-white">{column.heading}</h3>
-              <ul className="mt-4 space-y-2.5">
+              <ul className="mt-3 space-y-2 sm:mt-4 sm:space-y-2.5">
                 {column.links.map((link) => (
                   <li key={link.label}>
                     <Link
@@ -163,15 +179,15 @@ export function Footer({ footer }: { footer?: ChromeDocument["footer"] }) {
         </div>
       </div>
 
-      <div className="border-t border-white/10 py-6">
-        <div className="container-page flex flex-col gap-3 text-caption text-white/40 sm:flex-row sm:items-center sm:justify-between">
-          <p>
+      <div className="border-t border-white/10 py-5 sm:py-6">
+        <div className="container-page flex flex-col gap-3 text-caption text-white/40 sm:flex-row sm:items-start sm:justify-between">
+          <p className="shrink-0">
             © {new Date().getFullYear()} HomeAtlas. All rights reserved.{" "}
             <Link href="/cookies" className="hover:text-gold">
               Cookies
             </Link>
           </p>
-          <p className="max-w-2xl">
+          <p className="max-w-2xl sm:text-right">
             MLS®, REALTOR® and associated logos are trademarks of The Canadian Real
             Estate Association. Listing data is provided for consumers&rsquo; personal,
             non-commercial use.

@@ -189,7 +189,7 @@ function PromptForm({
           placeholder={placeholder}
           data-autofocus
           aria-invalid={shown ? true : undefined}
-          className="w-full rounded-control border border-line bg-surface px-3 py-2 text-small text-ink focus:border-navy focus:outline-none"
+          className="w-full rounded-control border border-line bg-surface px-3 py-2 text-small text-ink focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10"
         />
         {shown && (
           <p role="alert" className="mt-1.5 text-caption text-negative">

@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import {
+  clearSellFormDraft,
+  EMPTY_SELL_FORM_DRAFT,
+  readSellFormDraft,
+  saveSellFormDraft,
+  type SellFormDraft,
+} from "@/lib/sell/sellDraft";
 import {
   MARKET_CITIES,
   RECENT_SALES_PROPERTY_TYPES,
@@ -47,7 +54,7 @@ function lotWidthMin(raw: string): number | undefined {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-line bg-surface px-4 py-3 text-small text-ink placeholder:text-ink-subtle transition focus:outline-none focus:ring-2 focus:ring-navy";
+  "w-full rounded-lg border border-line bg-surface px-4 py-3 text-small text-ink placeholder:text-ink-subtle transition focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10";
 const selectClass = `${inputClass} appearance-none`;
 const labelClass = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted";
 
@@ -99,7 +106,7 @@ function LiveSoldCard({ sale }: { sale: RecentSale }) {
   return (
     <Link
       href={soldCardHref(sale)}
-      className="group block overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy"
+      className="group block overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/15"
     >
       <div className="mb-3 flex items-start justify-between gap-2">
         {sale.closeDate ? (
@@ -154,45 +161,69 @@ export function SellPageClient() {
   const { user, openAuth } = useAuth();
   const submitInquiry = useSubmitInquiry();
 
-  const [address, setAddress] = useState("");
-  const [propertyType, setPropertyType] = useState("");
-  const [beds, setBeds] = useState("");
-  const [baths, setBaths] = useState("");
-  const [garage, setGarage] = useState("");
-  const [lotWidth, setLotWidth] = useState("");
-  const [compsVisible, setCompsVisible] = useState(false);
+  // sessionStorage is browser-only — start empty for SSR, hydrate once on mount.
+  const [draft, setDraft] = useState<SellFormDraft>(EMPTY_SELL_FORM_DRAFT);
+  const [draftReady, setDraftReady] = useState(false);
 
-  const [formName, setFormName] = useState("");
-  const [formEmail, setFormEmail] = useState("");
-  const [formPhone, setFormPhone] = useState("");
-  const [formAddress, setFormAddress] = useState("");
-  const [formPropertyType, setFormPropertyType] = useState("");
-  const [formValueRange, setFormValueRange] = useState("");
-  const [formBestTime, setFormBestTime] = useState("");
-  const [formMessage, setFormMessage] = useState("");
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const [sidebarName, setSidebarName] = useState("");
-  const [sidebarPhone, setSidebarPhone] = useState("");
-  const [sidebarEmail, setSidebarEmail] = useState("");
   const [sidebarSubmitted, setSidebarSubmitted] = useState(false);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
-
-  const [asgName, setAsgName] = useState("");
-  const [asgEmail, setAsgEmail] = useState("");
-  const [asgPhone, setAsgPhone] = useState("");
-  const [asgProject, setAsgProject] = useState("");
-  const [asgUnit, setAsgUnit] = useState("");
-  const [asgAskingPrice, setAsgAskingPrice] = useState("");
-  const [asgClosingDate, setAsgClosingDate] = useState("");
-  const [asgMessage, setAsgMessage] = useState("");
   const [asgSubmitted, setAsgSubmitted] = useState(false);
   const [asgError, setAsgError] = useState<string | null>(null);
 
   const formRef = useRef<HTMLElement>(null);
   const compsRef = useRef<HTMLElement>(null);
   const assignmentRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const stored = readSellFormDraft();
+    if (stored) setDraft(stored);
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    saveSellFormDraft(draft);
+  }, [draft, draftReady]);
+
+  function patchDraft<K extends keyof SellFormDraft>(key: K, value: SellFormDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function resetDraft() {
+    clearSellFormDraft();
+    setDraft(EMPTY_SELL_FORM_DRAFT);
+  }
+
+  const {
+    address,
+    propertyType,
+    beds,
+    baths,
+    garage,
+    lotWidth,
+    compsVisible,
+    formName,
+    formEmail,
+    formPhone,
+    formAddress,
+    formPropertyType,
+    formValueRange,
+    formBestTime,
+    formMessage,
+    sidebarName,
+    sidebarPhone,
+    sidebarEmail,
+    asgName,
+    asgEmail,
+    asgPhone,
+    asgProject,
+    asgUnit,
+    asgAskingPrice,
+    asgClosingDate,
+    asgMessage,
+  } = draft;
 
   const compsCity = useMemo(() => cityFromAddress(address || formAddress), [address, formAddress]);
   const compsFilters = useMemo(
@@ -210,12 +241,12 @@ export function SellPageClient() {
   const liveSales = (salesQuery.data?.results ?? []).slice(0, 6);
 
   function handleSeeComps() {
-    setCompsVisible(true);
+    patchDraft("compsVisible", true);
     window.setTimeout(() => compsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }
 
   function handleGetAnalysis() {
-    setFormAddress(address || formAddress);
+    patchDraft("formAddress", address || formAddress);
     window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }
 
@@ -252,6 +283,7 @@ export function SellPageClient() {
         page_url: typeof window !== "undefined" ? window.location.href : undefined,
         listing_key: "",
       });
+      resetDraft();
       setSidebarSubmitted(true);
     } catch (caught) {
       setSidebarError(caught instanceof Error ? caught.message : "Could not send your request.");
@@ -282,6 +314,7 @@ export function SellPageClient() {
         page_url: typeof window !== "undefined" ? window.location.href : undefined,
         listing_key: "",
       });
+      resetDraft();
       setFormSubmitted(true);
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : "Could not send your request.");
@@ -312,6 +345,7 @@ export function SellPageClient() {
         page_url: typeof window !== "undefined" ? window.location.href : undefined,
         listing_key: "",
       });
+      resetDraft();
       setAsgSubmitted(true);
     } catch (caught) {
       setAsgError(caught instanceof Error ? caught.message : "Could not send your request.");
@@ -362,14 +396,14 @@ export function SellPageClient() {
                   type="text"
                   placeholder="e.g. 91 Sherwood Ave, Toronto, ON"
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => patchDraft("address", e.target.value)}
                   className={inputClass}
                 />
               </div>
               <div>
                 <label className={labelClass}>Property Type</label>
                 <div className="relative">
-                  <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} className={selectClass}>
+                  <select value={propertyType} onChange={(e) => patchDraft("propertyType", e.target.value)} className={selectClass}>
                     <option value="">Select type</option>
                     {RECENT_SALES_PROPERTY_TYPES.map((type) => (
                       <option key={type.value} value={type.value}>
@@ -383,7 +417,7 @@ export function SellPageClient() {
               <div>
                 <label className={labelClass}>Bedrooms</label>
                 <div className="relative">
-                  <select value={beds} onChange={(e) => setBeds(e.target.value)} className={selectClass}>
+                  <select value={beds} onChange={(e) => patchDraft("beds", e.target.value)} className={selectClass}>
                     <option value="">Select</option>
                     <option>1</option>
                     <option>2</option>
@@ -397,7 +431,7 @@ export function SellPageClient() {
               <div>
                 <label className={labelClass}>Bathrooms</label>
                 <div className="relative">
-                  <select value={baths} onChange={(e) => setBaths(e.target.value)} className={selectClass}>
+                  <select value={baths} onChange={(e) => patchDraft("baths", e.target.value)} className={selectClass}>
                     <option value="">Select</option>
                     <option>1</option>
                     <option>2</option>
@@ -411,7 +445,7 @@ export function SellPageClient() {
               <div>
                 <label className={labelClass}>Garage</label>
                 <div className="relative">
-                  <select value={garage} onChange={(e) => setGarage(e.target.value)} className={selectClass}>
+                  <select value={garage} onChange={(e) => patchDraft("garage", e.target.value)} className={selectClass}>
                     <option value="">Any</option>
                     <option value="None">None</option>
                     <option value="1-car">1-car</option>
@@ -428,7 +462,7 @@ export function SellPageClient() {
                   inputMode="decimal"
                   placeholder="e.g. 40"
                   value={lotWidth}
-                  onChange={(e) => setLotWidth(e.target.value)}
+                  onChange={(e) => patchDraft("lotWidth", e.target.value)}
                   className={inputClass}
                 />
               </div>
@@ -470,15 +504,15 @@ export function SellPageClient() {
               <form onSubmit={handleSidebarSubmit} className="flex flex-col gap-3 px-5 py-5">
                 <div>
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Your Name *</label>
-                  <input required type="text" placeholder="Jane Smith" value={sidebarName} onChange={(e) => setSidebarName(e.target.value)} className={inputClass} />
+                  <input required type="text" placeholder="Jane Smith" value={sidebarName} onChange={(e) => patchDraft("sidebarName", e.target.value)} className={inputClass} />
                 </div>
                 <div>
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Phone Number *</label>
-                  <input required type="tel" placeholder="(416) 555-0100" value={sidebarPhone} onChange={(e) => setSidebarPhone(e.target.value)} className={inputClass} />
+                  <input required type="tel" placeholder="(416) 555-0100" value={sidebarPhone} onChange={(e) => patchDraft("sidebarPhone", e.target.value)} className={inputClass} />
                 </div>
                 <div>
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Email *</label>
-                  <input required type="email" placeholder="jane@email.com" value={sidebarEmail} onChange={(e) => setSidebarEmail(e.target.value)} className={inputClass} />
+                  <input required type="email" placeholder="jane@email.com" value={sidebarEmail} onChange={(e) => patchDraft("sidebarEmail", e.target.value)} className={inputClass} />
                 </div>
                 {sidebarError ? <p className="text-caption text-negative">{sidebarError}</p> : null}
                 <button
@@ -721,26 +755,26 @@ export function SellPageClient() {
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <div>
                     <label className={labelClass}>Full Name *</label>
-                    <input required type="text" placeholder="Jane Smith" value={formName} onChange={(e) => setFormName(e.target.value)} className={inputClass} />
+                    <input required type="text" placeholder="Jane Smith" value={formName} onChange={(e) => patchDraft("formName", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Email Address *</label>
-                    <input required type="email" placeholder="jane@email.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} className={inputClass} />
+                    <input required type="email" placeholder="jane@email.com" value={formEmail} onChange={(e) => patchDraft("formEmail", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Phone Number</label>
-                    <input type="tel" placeholder="(416) 555-0100" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} className={inputClass} />
+                    <input type="tel" placeholder="(416) 555-0100" value={formPhone} onChange={(e) => patchDraft("formPhone", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Property Address *</label>
-                    <input required type="text" placeholder="123 Main St, Toronto, ON" value={formAddress} onChange={(e) => setFormAddress(e.target.value)} className={inputClass} />
+                    <input required type="text" placeholder="123 Main St, Toronto, ON" value={formAddress} onChange={(e) => patchDraft("formAddress", e.target.value)} className={inputClass} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                   <div>
                     <label className={labelClass}>Property Type</label>
                     <div className="relative">
-                      <select value={formPropertyType} onChange={(e) => setFormPropertyType(e.target.value)} className={selectClass}>
+                      <select value={formPropertyType} onChange={(e) => patchDraft("formPropertyType", e.target.value)} className={selectClass}>
                         <option value="">Select</option>
                         <option>Detached</option>
                         <option>Semi-Detached</option>
@@ -754,7 +788,7 @@ export function SellPageClient() {
                   <div>
                     <label className={labelClass}>Estimated Value Range</label>
                     <div className="relative">
-                      <select value={formValueRange} onChange={(e) => setFormValueRange(e.target.value)} className={selectClass}>
+                      <select value={formValueRange} onChange={(e) => patchDraft("formValueRange", e.target.value)} className={selectClass}>
                         <option value="">Select</option>
                         <option>Under $600K</option>
                         <option>$600K – $900K</option>
@@ -769,7 +803,7 @@ export function SellPageClient() {
                   <div>
                     <label className={labelClass}>Best Time to Contact</label>
                     <div className="relative">
-                      <select value={formBestTime} onChange={(e) => setFormBestTime(e.target.value)} className={selectClass}>
+                      <select value={formBestTime} onChange={(e) => patchDraft("formBestTime", e.target.value)} className={selectClass}>
                         <option value="">Select</option>
                         <option>Morning (8am–12pm)</option>
                         <option>Afternoon (12pm–5pm)</option>
@@ -786,7 +820,7 @@ export function SellPageClient() {
                     rows={4}
                     placeholder="Tell us anything relevant about your home or timeline..."
                     value={formMessage}
-                    onChange={(e) => setFormMessage(e.target.value)}
+                    onChange={(e) => patchDraft("formMessage", e.target.value)}
                     className={`${inputClass} resize-none`}
                   />
                 </div>
@@ -935,31 +969,31 @@ export function SellPageClient() {
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <div>
                     <label className={labelClass}>Full Name *</label>
-                    <input required type="text" placeholder="Jane Smith" value={asgName} onChange={(e) => setAsgName(e.target.value)} className={inputClass} />
+                    <input required type="text" placeholder="Jane Smith" value={asgName} onChange={(e) => patchDraft("asgName", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Email Address *</label>
-                    <input required type="email" placeholder="jane@email.com" value={asgEmail} onChange={(e) => setAsgEmail(e.target.value)} className={inputClass} />
+                    <input required type="email" placeholder="jane@email.com" value={asgEmail} onChange={(e) => patchDraft("asgEmail", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Phone Number</label>
-                    <input type="tel" placeholder="(416) 555-0100" value={asgPhone} onChange={(e) => setAsgPhone(e.target.value)} className={inputClass} />
+                    <input type="tel" placeholder="(416) 555-0100" value={asgPhone} onChange={(e) => patchDraft("asgPhone", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Project / Building Name *</label>
-                    <input required type="text" placeholder="e.g. The Well Condos, Toronto" value={asgProject} onChange={(e) => setAsgProject(e.target.value)} className={inputClass} />
+                    <input required type="text" placeholder="e.g. The Well Condos, Toronto" value={asgProject} onChange={(e) => patchDraft("asgProject", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Unit / Suite Number *</label>
-                    <input required type="text" placeholder="e.g. 1204" value={asgUnit} onChange={(e) => setAsgUnit(e.target.value)} className={inputClass} />
+                    <input required type="text" placeholder="e.g. 1204" value={asgUnit} onChange={(e) => patchDraft("asgUnit", e.target.value)} className={inputClass} />
                   </div>
                   <div>
                     <label className={labelClass}>Assignment Asking Price *</label>
-                    <input required type="text" placeholder="e.g. $750,000" value={asgAskingPrice} onChange={(e) => setAsgAskingPrice(e.target.value)} className={inputClass} />
+                    <input required type="text" placeholder="e.g. $750,000" value={asgAskingPrice} onChange={(e) => patchDraft("asgAskingPrice", e.target.value)} className={inputClass} />
                   </div>
                   <div className="md:col-span-2">
                     <label className={labelClass}>Estimated Closing / Occupancy Date</label>
-                    <input type="text" placeholder="e.g. Q3 2026" value={asgClosingDate} onChange={(e) => setAsgClosingDate(e.target.value)} className={inputClass} />
+                    <input type="text" placeholder="e.g. Q3 2026" value={asgClosingDate} onChange={(e) => patchDraft("asgClosingDate", e.target.value)} className={inputClass} />
                   </div>
                 </div>
                 <div>
@@ -968,7 +1002,7 @@ export function SellPageClient() {
                     rows={3}
                     placeholder="Parking, locker, upgrades, or anything relevant to buyers..."
                     value={asgMessage}
-                    onChange={(e) => setAsgMessage(e.target.value)}
+                    onChange={(e) => patchDraft("asgMessage", e.target.value)}
                     className={`${inputClass} resize-none`}
                   />
                 </div>

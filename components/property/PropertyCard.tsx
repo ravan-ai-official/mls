@@ -1,11 +1,14 @@
 "use client";
 
-import { SafeImage } from "@/components/ui/SafeImage";
+import { motion } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { SafeImage } from "@/components/ui/SafeImage";
 import { cn } from "@/lib/utils/cn";
 import { PropertyBadgePill } from "@/components/ui/Badge";
 import { SaveButton } from "@/components/property/SaveButton";
 import { CompareButton } from "@/components/property/CompareButton";
+import { rememberListingsScroll } from "@/lib/hooks/useListingsScrollRestore";
 import type { PropertySummary } from "@/lib/types/domain";
 import {
   EMPTY,
@@ -14,6 +17,8 @@ import {
   formatPrice,
   formatDate,
 } from "@/lib/utils/format";
+
+const LAYOUT_SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
 
 /**
  * Listing card.
@@ -30,12 +35,20 @@ export function PropertyCard({
   property,
   priority = false,
   className,
+  layout = false,
 }: {
   property: PropertySummary;
   /** Set on above-the-fold cards so LCP images preload. */
   priority?: boolean;
   className?: string;
+  /** Shared-element morph with list rows via layoutId. */
+  layout?: boolean;
 }) {
+  const router = useRouter();
+  const href = `/property/${encodeURIComponent(property.id)}`;
+  const prefetch = () => {
+    router.prefetch(href);
+  };
   const {
     id,
     address,
@@ -72,7 +85,10 @@ export function PropertyCard({
   const soldOn = closeDate ?? statusChangedAt;
 
   return (
-    <article
+    <motion.article
+      layout={layout || undefined}
+      layoutId={layout ? `listing-shell-${id}` : undefined}
+      transition={LAYOUT_SPRING}
       className={cn(
         "group relative flex h-full flex-col overflow-hidden rounded-surface border border-line bg-surface",
         "shadow-card transition-shadow duration-200 hover:shadow-card-hover",
@@ -81,9 +97,16 @@ export function PropertyCard({
         "has-[a:focus-visible]:border-navy",
         className,
       )}
+      onPointerEnter={prefetch}
+      onFocusCapture={prefetch}
     >
       {/* Photo, full-bleed across the top of the card. */}
-      <div className="relative h-[210px] w-full shrink-0 bg-surface-alt">
+      <motion.div
+        layout={layout || undefined}
+        layoutId={layout ? `listing-photo-${id}` : undefined}
+        transition={LAYOUT_SPRING}
+        className="relative h-[210px] w-full shrink-0 bg-surface-alt"
+      >
         <SafeImage
           src={image}
           alt={`Photo of ${address}`}
@@ -112,16 +135,21 @@ export function PropertyCard({
             />
           </>
         )}
-      </div>
+      </motion.div>
 
       <div className="flex flex-1 flex-col p-5">
-        <p className="text-h2 text-ink">
+        <motion.p
+          layout={layout || undefined}
+          layoutId={layout ? `listing-price-${id}` : undefined}
+          transition={LAYOUT_SPRING}
+          className="text-h2 text-ink"
+        >
           {headlinePrice === null
             ? EMPTY
             : isLease
               ? formatLeasePrice(headlinePrice)
               : formatPrice(headlinePrice)}
-        </p>
+        </motion.p>
         {isSold && closePrice !== null && price !== null && (
           <p className="mt-0.5 text-caption text-ink-muted">
             List {formatPrice(price)}
@@ -143,9 +171,10 @@ export function PropertyCard({
           {/* Stretched link: the whole card is the click target, but only this
               text is the accessible link name. */}
           <Link
-            href={`/property/${encodeURIComponent(id)}`}
+            href={href}
+            onClick={rememberListingsScroll}
             aria-label={`${address}${headlinePrice === null ? "" : `, ${isSold ? "sold for " : ""}${isLease ? formatLeasePrice(headlinePrice) : formatPrice(headlinePrice)}`}`}
-            className="outline-none before:absolute before:inset-0 before:rounded-surface focus-visible:before:outline-1 focus-visible:before:outline-offset-2 focus-visible:before:outline-navy"
+            className="outline-none before:absolute before:inset-0 before:rounded-surface focus-visible:before:outline-1 focus-visible:before:outline-offset-2 focus-visible:before:outline-navy/40"
           >
             {address}
           </Link>
@@ -172,7 +201,7 @@ export function PropertyCard({
         </dl>
         <p className="mt-2 text-caption text-ink-muted">MLS® {mls}</p>
       </div>
-    </article>
+    </motion.article>
   );
 }
 

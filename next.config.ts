@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Phone / LAN testing hits the machine by IP; without this, Next blocks
+  // /_next/* for that host and the client map UI can fail to hydrate.
+  allowedDevOrigins: ["192.168.31.66", "127.0.0.1", "localhost"],
   // The repo sits inside a parent folder that has its own package-lock.json;
   // pin the workspace root so Turbopack does not walk up and warn.
   turbopack: {

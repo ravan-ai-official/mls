@@ -1,7 +1,7 @@
 "use client";
 
 import { SafeImage } from "@/components/ui/SafeImage";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { cn } from "@/lib/utils/cn";
 import { useScrollLock } from "@/lib/hooks/useScrollLock";
 import type { PropertyImage } from "@/lib/types/domain";
@@ -60,6 +60,26 @@ export function Gallery({
     [count],
   );
 
+  const touchStartX = useRef<number | null>(null);
+
+  const onTouchStart = useCallback((event: TouchEvent) => {
+    touchStartX.current = event.changedTouches[0]?.clientX ?? null;
+  }, []);
+
+  const onTouchEnd = useCallback(
+    (event: TouchEvent) => {
+      const start = touchStartX.current;
+      touchStartX.current = null;
+      if (start === null) return;
+      const end = event.changedTouches[0]?.clientX;
+      if (end === undefined) return;
+      const delta = end - start;
+      if (Math.abs(delta) < 48) return;
+      go(delta < 0 ? 1 : -1);
+    },
+    [go],
+  );
+
   useEffect(() => {
     if (!lightbox) return;
     const onKey = (event: KeyboardEvent) => {
@@ -115,6 +135,14 @@ export function Gallery({
             className="object-cover transition-transform duration-500 hover:scale-[1.02]"
             onError={() => markFailed(photos[0].url)}
           />
+          <span className="absolute bottom-3 left-3 rounded-full bg-ink/75 px-2.5 py-1 text-[12px] font-medium tabular-nums text-white backdrop-blur-sm">
+            1 / {count}
+          </span>
+          {count > 1 && (
+            <span className="absolute bottom-3 right-3 rounded-full bg-ink/75 px-2.5 py-1 text-[12px] font-medium text-white backdrop-blur-sm sm:hidden">
+              View all photos
+            </span>
+          )}
         </button>
 
         {count > 1 && (
@@ -187,7 +215,11 @@ export function Gallery({
 
           {/* min-h-0 is required so the flex child can shrink below the image's
               intrinsic height — otherwise tall flyers push the nav off-screen. */}
-          <div className="min-h-0 flex-1">
+          <div
+            className="min-h-0 flex-1 touch-pan-y"
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
             <LightboxSlide
               key={`${index}-${current.url}`}
               src={current.url}

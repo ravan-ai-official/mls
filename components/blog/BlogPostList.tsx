@@ -114,7 +114,7 @@ function PostCard({ post }: { post: BlogPost }) {
     <article className="h-full">
       <Link
         href={`/blog/${post.slug}`}
-        className="group flex h-full flex-col overflow-hidden rounded-surface border border-line bg-surface transition-colors hover:border-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+        className="group flex h-full flex-col overflow-hidden rounded-surface border border-line bg-surface transition-colors hover:border-navy focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-navy/40"
       >
         {post.thumbnail && (
           // eslint-disable-next-line @next/next/no-img-element

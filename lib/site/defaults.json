@@ -25,7 +25,7 @@
             "Detached house in Vaughan with a basement apartment"
           ],
           "intents": [
-            { "value": "buy", "label": "Buy" },
+            { "value": "buy", "label": "For Sale" },
             { "value": "rent", "label": "Rent" },
             { "value": "sold", "label": "Sold" }
           ],
@@ -119,8 +119,8 @@
           "title": "Featured MLS\u00ae Listings",
           "description": "Hand-picked homes from the HomeAtlas team.",
           "useAutomaticDescription": true,
-          "actionLabel": "View all",
-          "actionHref": "/listings"
+          "actionLabel": "View All",
+          "actionHref": "/featured-listings"
         }
       },
       {
@@ -135,7 +135,7 @@
               "href": "/listings?type=Detached"
             },
             {
-              "icon": "semi",
+              "icon": "semiDetached",
               "label": "Semi-Detached",
               "href": "/listings?type=Semi-Detached"
             },
@@ -145,19 +145,19 @@
               "href": "/listings?type=Townhome"
             },
             {
-              "icon": "luxury",
-              "label": "Luxury",
-              "href": "/listings?priceMin=2000000"
-            },
-            {
               "icon": "condo",
               "label": "Condos",
               "href": "/listings?type=Condo"
             },
             {
-              "icon": "rental",
-              "label": "Rentals",
-              "href": "/listings?tx=rent"
+              "icon": "luxury",
+              "label": "Luxury",
+              "href": "/listings?sqftMin=3501"
+            },
+            {
+              "icon": "openHouse",
+              "label": "Open Houses",
+              "href": "/listings?openHouse=1"
             }
           ]
         }
@@ -179,7 +179,7 @@
           "eyebrow": "Live",
           "title": "Today's New Listings",
           "actionLabel": "View All",
-          "actionHref": "/listings?sort=newest"
+          "actionHref": "/todays-new"
         }
       },
       {
@@ -190,15 +190,15 @@
           "title": "High Return Properties",
           "description": "Top rental yield opportunities in the GTA \u2014 strong cash flow potential",
           "caption": "Estimated from asking rents of comparable rentals; excludes financing.",
-          "actionLabel": "View All Investor Properties",
-          "actionHref": "/listings"
+          "actionLabel": "View All",
+          "actionHref": "/high-return"
         }
       },
       {
         "id": "marketDeals",
         "visible": true,
         "content": {
-          "eyebrow": "Exclusive opportunities",
+          "eyebrow": "Below-Market Deals",
           "title": "GTA Market Deals"
         }
       },
@@ -211,6 +211,17 @@
           "description": "Properties that recently sold below their previous purchase price \u2014 potential value opportunities",
           "actionLabel": "View All Sold Data",
           "actionHref": "/listings?status=Sold"
+        }
+      },
+      {
+        "id": "profitableInvestments",
+        "visible": true,
+        "content": {
+          "eyebrow": "For investors",
+          "title": "Profitable Investments",
+          "description": "Homes that sold again for more than their previous sale price in the last 12 months.",
+          "actionLabel": "View All",
+          "actionHref": "/profitable-investments"
         }
       },
       {
@@ -523,12 +534,12 @@
     "nav": {
       "links": [
         {
-          "label": "Buy",
-          "href": "/listings?status=Active"
+          "label": "Listings",
+          "href": "/listings"
         },
         {
-          "label": "Rent",
-          "href": "/listings?tx=rent"
+          "label": "Map Search",
+          "href": "/map-search"
         },
         {
           "label": "Preconstruction",

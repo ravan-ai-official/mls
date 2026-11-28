@@ -16,6 +16,7 @@ import {
   mapMarketSnapshot,
   mapNeighbourActivity,
   mapPartners,
+  mapProfitableInvestments,
   mapSoldBelow,
   type Incentive,
   type InvestorPicksFeed,
@@ -23,6 +24,7 @@ import {
   type NeighbourActivityItem,
   type Partner,
   type PriceDropDeal,
+  type ProfitableInvestmentRow,
   type SoldBelowRow,
 } from "./homeMappers";
 
@@ -85,6 +87,26 @@ export function getSoldBelowPurchase(
       headers,
       cache,
       // AMPRE fill can take longer than the default homepage timeout.
+      timeoutMs: 12_000,
+    },
+  );
+}
+
+/** Homes that sold again above their previous close (last 12 months). */
+export function getProfitableInvestments(
+  limit = 3,
+  options: { headers?: Record<string, string>; cache?: RequestCache } = {},
+): Promise<ProfitableInvestmentRow[] | null> {
+  const { headers, cache } = options;
+  return get(
+    "profitable-investments/",
+    FEED_REVALIDATE,
+    mapProfitableInvestments,
+    { limit },
+    undefined,
+    {
+      headers,
+      cache,
       timeoutMs: 12_000,
     },
   );

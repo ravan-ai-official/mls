@@ -1,14 +1,7 @@
+import { HOME_TYPE_PARAM, LUXURY_MIN_SQFT } from "@/lib/api/properties";
 import type { ListingQuery, ListingSort, ListingTransaction } from "@/lib/types/domain";
 import { parsePolygonParam, serializePolygonParam } from "@/lib/map/polygon";
 import { parsePostalList } from "@/lib/utils/postal";
-
-/** UI type label → filter `home_type` (mirrors lib/api/properties HOME_TYPE_PARAM). */
-const HOME_TYPE_PARAM: Readonly<Record<string, string>> = {
-  Detached: "detached",
-  "Semi-Detached": "semi",
-  Townhome: "townhouse",
-  Condo: "condo",
-};
 
 /**
  * URL search params are the single source of truth for listing filters, so any
@@ -86,7 +79,7 @@ const HOME_TYPE_TO_UI: Record<string, string> = Object.fromEntries(
 );
 
 /**
- * `transaction_type=rent` / `tx=rent` is Rent; anything else is Buy.
+ * `transaction_type=sale|rent|sold` (aliases `tx=`).
  * `type=Rental` is the pre-`tx` spelling and still means Rent.
  */
 function parseTransaction(params: RawParams): {
@@ -96,12 +89,13 @@ function parseTransaction(params: RawParams): {
   const typeRaw = pick(params, "type");
   const homeType = pick(params, "home_type");
   const legacyRent = typeRaw?.toLowerCase() === "rental";
-  const rent =
-    pick(params, "transaction_type", "tx")?.toLowerCase() === "rent" || legacyRent;
+  const raw = pick(params, "transaction_type", "tx")?.toLowerCase();
   const type = legacyRent
     ? undefined
     : typeRaw || (homeType ? HOME_TYPE_TO_UI[homeType.toLowerCase()] ?? homeType : undefined);
-  return { transaction: rent ? "rent" : "sale", type };
+  if (raw === "sold") return { transaction: "sold", type };
+  if (raw === "rent" || legacyRent) return { transaction: "rent", type };
+  return { transaction: "sale", type };
 }
 
 function parseSort(params: RawParams, semantic: string | undefined): ListingSort {
@@ -133,8 +127,9 @@ export function parseListingParams(params: RawParams): ListingQuery {
     type,
     priceMin: int(pick(params, "price_min", "priceMin")),
     priceMax: int(pick(params, "price_max", "priceMax")),
-    bedsMin: int(pick(params, "beds_min", "beds")),
-    bathsMin: int(pick(params, "baths_min", "baths")),
+    bedsMin: int(pick(params, "bedrooms", "beds_min", "beds")),
+    bathsMin: int(pick(params, "bathrooms", "baths_min", "baths")),
+    soldWithinDays: int(pick(params, "sold_within_days", "soldWithinDays")),
     sqftMin: int(pick(params, "sqft_min", "sqftMin")),
     sqftMax: int(pick(params, "sqft_max", "sqftMax")),
     yearBuiltMin: int(pick(params, "year_built_min", "yearBuiltMin")),
@@ -181,23 +176,36 @@ export function buildListingQueryString(
   if (query.search) params.set("search", query.search);
   if (query.city) params.set("city", query.city);
   if (query.status) {
-    // Keep the existing tab URL shape (`status=Active|Sold|De-listed`) so
-    // ListingFilters pills and STATUS_TABS keep matching. Readers also accept
-    // `status_group=active|sold|de-listed`.
+    // Readers accept `status` and `status_group`. Transaction Type is the
+    // primary sale/rent/sold control; status remains for staff / deep links.
     params.set("status", query.status);
   }
-  // Buy is the default, so only Rent is written.
+  // Sale is the default — only rent/sold are written.
   if (query.transaction === "rent") params.set("transaction_type", "rent");
+  if (query.transaction === "sold") params.set("transaction_type", "sold");
   if (query.type) {
     const home = HOME_TYPE_PARAM[query.type];
     if (home) params.set("home_type", home);
-    else params.set("type", query.type); // e.g. Luxury price-band chip
+    else params.set("type", query.type); // e.g. Luxury size-band chip
   }
   if (query.priceMin) params.set("price_min", String(query.priceMin));
   if (query.priceMax) params.set("price_max", String(query.priceMax));
-  if (query.bedsMin) params.set("beds_min", String(query.bedsMin));
-  if (query.bathsMin) params.set("baths_min", String(query.bathsMin));
-  if (query.sqftMin) params.set("sqft_min", String(query.sqftMin));
+  // Canonical MLS names + legacy beds_min/baths_min for older bookmarks.
+  if (query.bedsMin) {
+    params.set("bedrooms", String(query.bedsMin));
+    params.set("beds_min", String(query.bedsMin));
+  }
+  if (query.bathsMin) {
+    params.set("bathrooms", String(query.bathsMin));
+    params.set("baths_min", String(query.bathsMin));
+  }
+  if (query.soldWithinDays) {
+    params.set("sold_within_days", String(query.soldWithinDays));
+  }
+  // Luxury is a size band (>3500 sq ft); keep the URL in sync when type=Luxury.
+  const sqftMin =
+    query.type === "Luxury" ? Math.max(query.sqftMin ?? 0, LUXURY_MIN_SQFT) : query.sqftMin;
+  if (sqftMin) params.set("sqft_min", String(sqftMin));
   if (query.sqftMax) params.set("sqft_max", String(query.sqftMax));
   if (query.yearBuiltMin) params.set("year_built_min", String(query.yearBuiltMin));
   if (query.garagesMin) params.set("garages_min", String(query.garagesMin));
@@ -247,10 +255,13 @@ export function hasActiveFilters(query: ListingQuery): boolean {
     query.search ||
       query.city ||
       query.type ||
+      query.transaction === "rent" ||
+      query.transaction === "sold" ||
       query.priceMin ||
       query.priceMax ||
       query.bedsMin ||
       query.bathsMin ||
+      query.soldWithinDays ||
       query.sqftMin ||
       query.sqftMax ||
       query.yearBuiltMin ||

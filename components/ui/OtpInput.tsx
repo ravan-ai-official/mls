@@ -98,7 +98,7 @@ export function OtpInput({
           onFocus={(event) => event.target.select()}
           className={cn(
             "h-12 w-full min-w-0 rounded-control border bg-surface text-center text-h3 font-semibold text-ink tabular-nums transition-colors",
-            "focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy",
+            "focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10",
             "disabled:bg-surface-alt disabled:text-ink-subtle",
             invalid ? "border-negative" : "border-line",
           )}

@@ -19,6 +19,7 @@
 
 import { apiFetch } from "@/lib/api/client";
 import { SORT_TO_ORDERBY, toBackendParams } from "@/lib/api/properties";
+import { matchPropertyAgePreset } from "@/lib/search/listingFilterOptions";
 import type { ListingQuery, ListingSort } from "@/lib/types/domain";
 import { formatPriceCompact } from "@/lib/utils/format";
 import { formatPostal } from "@/lib/utils/postal";
@@ -167,15 +168,21 @@ export function fromBackendParams(filters: SavedFilters): ListingQuery {
     city: filters.city || undefined,
     // Searches saved before the Buy/Rent split have no transaction_type; they
     // restore as Buy, the same default the URL parser applies.
-    transaction: filters.transaction_type === "rent" || legacyRent ? "rent" : "sale",
+    transaction:
+      filters.transaction_type === "sold"
+        ? "sold"
+        : filters.transaction_type === "rent" || legacyRent
+          ? "rent"
+          : "sale",
     // Status tabs save as `status_group`; searches saved before that kept `status`.
     status: statusParamForGroup(filters.status_group) ?? (filters.status || undefined),
     type: legacyRent ? undefined : filters[UI_TYPE_KEY] || homeTypeUi || undefined,
     hasLease: filters.has_lease === "true" || undefined,
     priceMin: intParam(filters.price_min),
     priceMax: intParam(filters.price_max),
-    bedsMin: intParam(filters.beds_min),
-    bathsMin: intParam(filters.baths_min),
+    bedsMin: intParam(filters.bedrooms) ?? intParam(filters.beds_min),
+    bathsMin: intParam(filters.bathrooms) ?? intParam(filters.baths_min),
+    soldWithinDays: intParam(filters.sold_within_days),
     sqftMin: intParam(filters.sqft_min),
     sqftMax: intParam(filters.sqft_max),
     yearBuiltMin: intParam(filters.year_built_min),
@@ -269,7 +276,14 @@ export function describeCriteria(query: ListingQuery): string[] {
   if (query.bedsMin) chips.push(`${query.bedsMin}+ beds`);
   if (query.bathsMin) chips.push(`${query.bathsMin}+ baths`);
   if (query.sqftMin) chips.push(`${query.sqftMin.toLocaleString("en-CA")}+ sq ft`);
-  if (query.yearBuiltMin) chips.push(`Built ${query.yearBuiltMin}+`);
+  {
+    const age = matchPropertyAgePreset(query.yearBuiltMin, query.yearBuiltMax);
+    if (age) chips.push(`Age: ${age.label}`);
+    else {
+      if (query.yearBuiltMin) chips.push(`Built ${query.yearBuiltMin}+`);
+      if (query.yearBuiltMax) chips.push(`Built ${query.yearBuiltMax} or earlier`);
+    }
+  }
   if (query.garagesMin) chips.push(`${query.garagesMin}+ garage`);
   if (query.storiesMin) chips.push(`${query.storiesMin}+ floors`);
   if (query.basement) {

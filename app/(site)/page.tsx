@@ -15,6 +15,7 @@ import { PropertyTypes } from "@/components/home/sections/PropertyTypes";
 import { QuickActions } from "@/components/home/sections/QuickActions";
 import { ResearchInsights } from "@/components/home/sections/ResearchInsights";
 import { ResourcesGuides } from "@/components/home/sections/ResourcesGuides";
+import { ProfitableInvestments } from "@/components/home/sections/ProfitableInvestments";
 import { SoldBelowLastPurchase } from "@/components/home/sections/SoldBelowLastPurchase";
 import { ThinkingOfSelling } from "@/components/home/sections/ThinkingOfSelling";
 import { TodaysNewListings } from "@/components/home/sections/TodaysNewListings";
@@ -37,7 +38,8 @@ import { SECTION_IDS, type SectionId, type SiteSection } from "@/lib/site/types"
  *
  *   hero → buy/rent/precon/sell → trending communities → featured MLS
  *   listings → property types → new precon → today's new listings → high
- *   return → GTA market deals → sold below last purchase → top-rated schools
+ *   return → GTA market deals → sold below last purchase → profitable
+ *   investments → top-rated schools
  *   → buyer's incentives → market intelligence → neighbour alerts → smart
  *   alerts → thinking of selling → why HomeAtlas → research & insights →
  *   trusted connections → how it works → daily news → resources & guides
@@ -114,11 +116,16 @@ function HomeBlock({ section }: { section: SiteSection }) {
     case "marketDeals":
       return <GtaMarketDeals content={content} />;
     case "soldBelow":
-      // Skeleton only while loading; empty feed returns null (no mock cards,
-      // no leftover title/skeleton after the stream resolves).
+      // Skeleton only while loading; empty feed shows EmptyState (no mock cards).
       return (
         <Live fallback={<RailFallback title="Sold Below Last Purchase" />}>
           <SoldBelowLastPurchase content={content} />
+        </Live>
+      );
+    case "profitableInvestments":
+      return (
+        <Live fallback={<RailFallback title="Profitable Investments" />}>
+          <ProfitableInvestments content={content} />
         </Live>
       );
     case "schools":

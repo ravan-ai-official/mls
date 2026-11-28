@@ -15,6 +15,8 @@ import type {
   BackendPropertyTypeFacet,
   BackendRoom,
   BackendUserProfile,
+  BackendWashroom,
+  BackendWashroomInfo,
 } from "@/lib/types/backend";
 import {
   UI_PROPERTY_TYPES,
@@ -27,6 +29,7 @@ import {
   type PropertySummary,
   type PropertyTypeFacet,
   type PropertyWashroom,
+  type PropertyWashroomInfo,
   type UiPropertyType,
 } from "@/lib/types/domain";
 import {
@@ -184,14 +187,18 @@ const PRICE_DROP_MIN_PCT = 1;
  * optional on the payload, so every read is guarded — an older backend simply
  * yields no badge rather than a crash.
  *
- * Order is by usefulness to a buyer scanning a grid: a scheduled visit beats a
- * price cut, which beats "new", which beats a brokerage marketing flag.
+ * Featured comes from the API only (`badge === "Featured"` or `is_featured`),
+ * and wins over New / Price Drop so the Featured rail always shows it.
+ * Otherwise: Open House → Price Drop → New → Exclusive.
  */
 function deriveBadge(
   raw: BackendPropertySummary,
   status: PropertyStatus,
 ): PropertyBadge | null {
   if (status === "sold") return { label: "Sold", tone: "sold" };
+
+  const featured = featuredBadge(raw);
+  if (featured) return featured;
 
   if (isUpcomingOpenHouse(raw.next_open_house)) {
     return { label: "Open House", tone: "openHouse" };
@@ -209,8 +216,19 @@ function deriveBadge(
 
   const category = (raw.category_type ?? "").toLowerCase();
   if (category.includes("exclusive")) return { label: "Exclusive", tone: "exclusive" };
-  if (raw.is_featured) return { label: "Featured", tone: "featured" };
 
+  return null;
+}
+
+/** API `badge: "Featured"` or `is_featured: true` — never invent Featured otherwise. */
+function featuredBadge(raw: BackendPropertySummary): PropertyBadge | null {
+  const apiBadge = typeof raw.badge === "string" ? raw.badge.trim() : "";
+  if (/^featured$/i.test(apiBadge)) {
+    return { label: apiBadge, tone: "featured" };
+  }
+  if (raw.is_featured === true) {
+    return { label: "Featured", tone: "featured" };
+  }
   return null;
 }
 
@@ -367,6 +385,7 @@ export function mapPropertySummary(raw: BackendPropertySummary): PropertySummary
     sqft,
     status,
     badge: deriveBadge(raw, status),
+    isFeatured: raw.is_featured === true || /^featured$/i.test(String(raw.badge ?? "").trim()),
     mls: raw.listing_id?.trim() || raw.listing_key,
     image: summaryImage(raw),
     photosCount: raw.photos_count ?? 0,
@@ -488,45 +507,110 @@ function groupColumns(
   };
 }
 
-/** Decimal feet → `12'6"` so room dimensions always carry feet/inches units. */
-export function formatFeetInches(value: string | number | null | undefined): string | null {
-  if (value === null || value === undefined) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  if (/['′]|ft|feet|in|″|"/i.test(raw)) return raw;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return raw;
-  const feet = Math.floor(n);
-  let inches = Math.round((n - feet) * 12);
-  if (inches === 12) return `${feet + 1}'`;
-  if (inches === 0) return `${feet}'`;
-  return `${feet}'${inches}"`;
+function trimRoomDim(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 /**
- * Room dimensions with feet/inches units. Prefers the feed’s dimension string;
- * falls back to length × width.
+ * Metric fallback when API `dimensions_m` is missing.
+ * TREB length/width are metres — never invent feet/inches.
  */
 export function formatRoomDimensions(room: BackendRoom): string | null {
-  const dims = room.room_dimensions?.trim();
-  if (dims) {
-    if (/['′]|ft|feet|in|″|"/i.test(dims)) return dims;
-    const parts = dims.split(/[x×]/i).map((part) => part.trim()).filter(Boolean);
-    if (parts.length === 2) {
-      const a = formatFeetInches(parts[0]);
-      const b = formatFeetInches(parts[1]);
-      if (a && b) return `${a} × ${b}`;
-    }
-    const asFeet = formatFeetInches(dims);
-    return asFeet && asFeet !== dims ? asFeet : `${dims} ft`;
+  const fromApi = trimRoomDim(room.dimensions_m);
+  if (fromApi) return fromApi;
+
+  const length = room.room_length != null ? String(room.room_length).trim() : "";
+  const width = room.room_width != null ? String(room.room_width).trim() : "";
+  if (!length && !width) {
+    return trimRoomDim(room.room_dimensions);
   }
-  const length = formatFeetInches(room.room_length);
-  const width = formatFeetInches(room.room_width);
-  if (length && width) return `${length} × ${width}`;
-  return length ?? width;
+
+  const units = (room.room_length_width_units || "").trim();
+  // TREB uses Metres/Meters; blank units also mean metres on TREB.
+  const metric = !units || /^(m|meters?|metres?)$/i.test(units);
+  const pair = length && width ? `${length} × ${width}` : length || width;
+  if (metric) return `${pair} m`;
+  // Non-metric unit label from the feed (rare) — keep as-is, still no ft/in conversion.
+  return units ? `${pair} ${units}` : pair;
 }
 
-/** Bathroom / washroom / powder rows for the Washroom Info table. */
+export function mapPropertyRoom(room: BackendRoom): {
+  name: string | null;
+  level: string | null;
+  dimensionsM: string | null;
+  dimensionsFt: string | null;
+  dimensionsDisplay: string | null;
+  notes: string | null;
+} {
+  return {
+    name: titleCase(room.room_type),
+    level: titleCase(room.room_level),
+    dimensionsM: formatRoomDimensions(room),
+    dimensionsFt: trimRoomDim(room.dimensions_ft),
+    dimensionsDisplay: trimRoomDim(room.dimensions_display),
+    notes: trimRoomDim(room.room_description),
+  };
+}
+
+function mapWashroomRow(room: BackendWashroom | BackendRoom): PropertyWashroom {
+  const asRoom = room as BackendRoom;
+  return {
+    type: titleCase(room.room_type ?? null),
+    level: titleCase(room.room_level ?? null),
+    description: trimRoomDim(room.room_description) || piecesLabelFromRoom(room),
+    dimensionsM: formatRoomDimensions(asRoom),
+    dimensionsFt: trimRoomDim(room.dimensions_ft),
+    dimensionsDisplay: trimRoomDim(room.dimensions_display),
+  };
+}
+
+/** "4 Pc" from description or type when the feed only encodes pieces in the name. */
+function piecesLabelFromRoom(room: BackendWashroom | BackendRoom): string | null {
+  const blob = `${room.room_type ?? ""} ${room.room_description ?? ""}`;
+  const match = blob.match(/(\d+)\s*[- ]?\s*(?:pc|pcs|piece)/i);
+  return match ? `${match[1]} Pc` : null;
+}
+
+/** Prefer `washroom_info[]` (count / pieces / level) when the API sends it. */
+export function mapWashroomInfo(
+  rows: BackendWashroomInfo[] | null | undefined,
+): PropertyWashroomInfo[] {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const out: PropertyWashroomInfo[] = [];
+  for (const row of rows) {
+    const count =
+      typeof row.count === "number" && Number.isFinite(row.count) ? row.count : null;
+    if (count === null || count <= 0) continue;
+    const pieces =
+      row.pieces === null || row.pieces === undefined || row.pieces === ""
+        ? null
+        : String(row.pieces).trim() || null;
+    out.push({
+      count,
+      pieces,
+      level: titleCase(typeof row.level === "string" ? row.level : null),
+    });
+  }
+  return out;
+}
+
+/**
+ * Prefer API `washrooms[]` (already filtered). Fallback: bath/wash/powder
+ * rows from `rooms` — never invent rows from bathrooms_total_integer alone.
+ */
+export function mapWashrooms(
+  washrooms: BackendWashroom[] | null | undefined,
+  rooms: BackendRoom[] | null | undefined,
+): PropertyWashroom[] {
+  if (Array.isArray(washrooms) && washrooms.length > 0) {
+    return washrooms.map(mapWashroomRow).filter((row) => row.type);
+  }
+  return deriveWashrooms(rooms);
+}
+
+/** Bathroom / washroom / powder rows from the rooms array (legacy fallback). */
 export function deriveWashrooms(rooms: BackendRoom[] | null | undefined): PropertyWashroom[] {
   if (!rooms?.length) return [];
   const out: PropertyWashroom[] = [];
@@ -534,13 +618,86 @@ export function deriveWashrooms(rooms: BackendRoom[] | null | undefined): Proper
     const type = (room.room_type || "").trim();
     if (!type) continue;
     if (!/bath|wash\s*room|powder/i.test(type)) continue;
-    const blob = `${type} ${room.room_description ?? ""}`;
-    const piecesMatch = blob.match(/(\d+)\s*[- ]?\s*(?:pc|pcs|piece)/i);
-    out.push({
-      count: 1,
-      pieces: piecesMatch ? Number(piecesMatch[1]) : null,
-      level: titleCase(room.room_level),
-    });
+    out.push(mapWashroomRow(room));
+  }
+  return out;
+}
+
+/** Inclusion chips — prefer `inclusions_list`, then split inclusions, then appliances. */
+export function collectInclusions(raw: BackendPropertyDetail): string[] {
+  if (Array.isArray(raw.inclusions_list) && raw.inclusions_list.length > 0) {
+    return dedupeLabels(raw.inclusions_list);
+  }
+  const fromInclusions = splitFeatures(
+    typeof raw.inclusions === "string" ? raw.inclusions : null,
+  );
+  if (fromInclusions.length > 0) return dedupeLabels(fromInclusions);
+  return dedupeLabels(splitFeatures(raw.appliances));
+}
+
+export function inclusionsSentence(raw: BackendPropertyDetail): string | null {
+  if (typeof raw.inclusions === "string" && raw.inclusions.trim()) {
+    return raw.inclusions.trim();
+  }
+  return null;
+}
+
+function yesNoFromUnknown(value: unknown): string | null {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^(y|yes|true|1)$/i.test(trimmed)) return "Yes";
+    if (/^(n|no|false|0|none)$/i.test(trimmed)) return "No";
+    return titleCase(trimmed);
+  }
+  return null;
+}
+
+function parseLockerFlag(
+  locker: unknown,
+  ...featureBlobs: Array<string | null | undefined>
+): boolean | null {
+  if (typeof locker === "boolean") return locker;
+  if (typeof locker === "string") {
+    const trimmed = locker.trim();
+    if (!trimmed) return deriveLocker(...featureBlobs);
+    if (/^(n|no|false|0|none)$/i.test(trimmed)) return false;
+    if (/^(y|yes|true|1)$/i.test(trimmed)) return true;
+    // Free-text locker type (e.g. "Owned") counts as yes.
+    return true;
+  }
+  return deriveLocker(...featureBlobs);
+}
+
+function livingAreaRangeLabel(raw: BackendPropertyDetail): string | null {
+  if (typeof raw.living_area_range === "string" && raw.living_area_range.trim()) {
+    return raw.living_area_range.trim();
+  }
+  const min = toNumber(raw.living_area_minimum);
+  const max = toNumber(raw.living_area_maximum);
+  if (min !== null && max !== null && max >= min) {
+    return `${Math.round(min)}-${Math.round(max)}`;
+  }
+  return null;
+}
+
+function parkingSpacesLabel(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return formatNumber(value);
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return null;
+}
+
+function dedupeLabels(parts: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts) {
+    const label = typeof part === "string" ? part.trim() : "";
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
   }
   return out;
 }
@@ -614,10 +771,21 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
   const bedsLabel =
     above !== null && below !== null && below > 0 ? `${above}+${below}` : null;
   const roomSignals = deriveRoomSignals(raw.rooms);
-  const roomCount = (raw.rooms ?? []).filter((room) => titleCase(room.room_type)).length;
+  const roomCountFromRooms = (raw.rooms ?? []).filter((room) =>
+    titleCase(room.room_type),
+  ).length;
+  const roomCount =
+    (typeof raw.rooms_count === "number" && raw.rooms_count > 0
+      ? raw.rooms_count
+      : null) ??
+    (typeof raw.rooms_total === "number" && raw.rooms_total > 0
+      ? raw.rooms_total
+      : null) ??
+    roomCountFromRooms;
 
   const level = deriveCondoLevel(raw.rooms);
-  const locker = deriveLocker(
+  const locker = parseLockerFlag(
+    raw.locker,
     raw.building_features,
     raw.parking_features,
     raw.interior_features,
@@ -642,12 +810,31 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     typeof raw.family_room === "boolean"
       ? raw.family_room
       : roomSignals.familyRoom;
-  // Prefer dedicated garage column; fall back to parking total when the feed
-  // describes garage parking (same rule the listing filters use).
+  // Prefer detail aliases (garage_spaces / garage_type), then legacy columns.
   const parkingFeatures = (raw.parking_features || "").toLowerCase();
   const garageSpaces =
+    toNumber(raw.garage_spaces) ??
     toNumber(raw.garages) ??
     (/(garage|carport)/.test(parkingFeatures) ? raw.parking_total ?? null : null);
+  const garageTypeLabel =
+    (typeof raw.garage_type === "string" && raw.garage_type.trim()) ||
+    titleCase(raw.garage_size) ||
+    null;
+  const garageYnLabel =
+    yesNoFromUnknown(raw.garage_yn) ||
+    (garageSpaces !== null
+      ? garageSpaces > 0
+        ? "Yes"
+        : "No"
+      : garageTypeLabel
+        ? "Yes"
+        : yesNoFromFlag(
+            /(garage|carport)/.test(parkingFeatures)
+              ? true
+              : raw.garage_yn === false
+                ? false
+                : null,
+          ));
   const stories = raw.stories ?? null;
   const ownership = titleCase(raw.common_interest);
   const yearBuilt =
@@ -663,6 +850,63 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       ? String(raw.potl_monthly_fees)
       : null,
   );
+  // Keep brokerage casing from the feed (e.g. "LePage"); don't titleCase.
+  const listingBrokerage =
+    (typeof raw.listing_brokerage === "string" && raw.listing_brokerage.trim()) ||
+    (typeof raw.list_office_name === "string" && raw.list_office_name.trim()) ||
+    null;
+  // Prefer detail aliases as returned (preserve casing like "2-Storey").
+  const exteriorLabel =
+    (typeof raw.exterior === "string" && raw.exterior.trim()) ||
+    titleCase(raw.construction_materials) ||
+    titleCase(raw.exterior_features);
+  const styleLabel =
+    (typeof raw.style === "string" && raw.style.trim()) || style;
+  const originalListPrice = toNumber(raw.original_list_price);
+  const originalListLabel =
+    originalListPrice === null
+      ? null
+      : summary.isLease
+        ? formatLeasePrice(originalListPrice)
+        : formatPrice(originalListPrice);
+  const livingAreaRange = livingAreaRangeLabel(raw);
+  const sizeLabel = livingAreaRange
+    ? /sq\.?\s*ft|sqft/i.test(livingAreaRange)
+      ? livingAreaRange
+      : `${livingAreaRange} sq ft`
+    : sqftLabel;
+  const sqftAboveFromAlias = toNumber(raw.square_feet_above_ground);
+  const frontingOn =
+    (typeof raw.fronting_on === "string" && raw.fronting_on.trim()) ||
+    titleCase(raw.direction_faces);
+  const linkLabel = yesNoFromUnknown(raw.link);
+  const laundryLabel =
+    (typeof raw.laundry_level === "string" && raw.laundry_level.trim()) ||
+    titleCase(raw.laundry_features) ||
+    deriveLaundryLevel(raw.rooms);
+  const lotLabel =
+    (typeof raw.lot_size === "string" && raw.lot_size.trim()) ||
+    (typeof raw.lot_size_dimensions === "string" && raw.lot_size_dimensions.trim()) ||
+    null;
+  const crossStreet =
+    (typeof raw.cross_street === "string" && raw.cross_street.trim()) || null;
+  const possession =
+    (typeof raw.possession === "string" && raw.possession.trim()) || null;
+  const legalDescription =
+    (typeof raw.tax_legal_description === "string" &&
+      raw.tax_legal_description.trim()) ||
+    null;
+  const parcelNumber =
+    (typeof raw.parcel_number === "string" && raw.parcel_number.trim()) || null;
+  const parkingDriveSpaces =
+    parkingSpacesLabel(raw.parking_drive_spaces) ||
+    parkingSpacesLabel(raw.open_parking_spaces) ||
+    (() => {
+      const driveSpacesMatch = (raw.parking_features || "").match(
+        /(\d+)\s*(?:drive|driveway|parking\s*drive)/i,
+      );
+      return driveSpacesMatch ? driveSpacesMatch[1] : null;
+    })();
 
   const maintenanceLabel = assocFee
     ? `${formatPrice(assocFee)}${raw.association_fee_frequency ? ` / ${raw.association_fee_frequency.toLowerCase()}` : ""}`
@@ -684,16 +928,13 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
       : `${propertyAge} year${propertyAge === 1 ? "" : "s"}`;
   const dataSource =
     titleCase(raw.origin_system_name) || titleCase(raw.list_aor);
+  const aboveGradeSqftResolved =
+    (sqftAboveFromAlias && sqftAboveFromAlias > 0 ? sqftAboveFromAlias : null) ??
+    (sqftAboveGrade && sqftAboveGrade > 0 ? sqftAboveGrade : null);
   const aboveGradeLabel =
-    sqftAboveGrade && sqftAboveGrade > 0
-      ? `${formatNumber(sqftAboveGrade)} sq ft`
+    aboveGradeSqftResolved !== null
+      ? `${formatNumber(aboveGradeSqftResolved)} sq ft`
       : null;
-  const hasGarage =
-    garageSpaces !== null
-      ? garageSpaces > 0
-      : Boolean(raw.garage_size?.trim()) || /(garage|carport)/.test(parkingFeatures)
-        ? true
-        : null;
   const fireplaceLabel =
     typeof raw.fireplace_yn === "boolean"
       ? raw.fireplace_yn
@@ -707,17 +948,17 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
           : "No"
         : null;
   const poolLabel = titleCase(raw.pool_features);
-  const exteriorLabel = titleCase(raw.construction_materials);
-  const laundryLevel = deriveLaundryLevel(raw.rooms);
-  const driveSpacesMatch = (raw.parking_features || "").match(
-    /(\d+)\s*(?:drive|driveway|parking\s*drive)/i,
-  );
-  const parkingDriveSpaces = driveSpacesMatch ? driveSpacesMatch[1] : null;
-  const inclusions =
-    typeof raw.inclusions === "string" && raw.inclusions.trim()
-      ? raw.inclusions.trim()
-      : null;
-  const washrooms = deriveWashrooms(raw.rooms);
+  const inclusionsList = collectInclusions(raw);
+  const inclusionsText = inclusionsSentence(raw);
+  const washroomInfo = mapWashroomInfo(raw.washroom_info);
+  const washrooms =
+    washroomInfo.length > 0 ? [] : mapWashrooms(raw.washrooms, raw.rooms);
+  const bathroomsTotal =
+    typeof raw.bathrooms_total_integer === "number" ? raw.bathrooms_total_integer : null;
+  const bathroomsPartial =
+    typeof raw.bathrooms_partial === "number" ? raw.bathrooms_partial : null;
+  const bathroomsFull =
+    typeof raw.bathrooms_full === "number" ? raw.bathrooms_full : null;
 
   // Listing Details — Overview / More details columns match the mockup order.
   // Missing values show "-" (temporary; omit-empty can be restored later).
@@ -739,8 +980,8 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
         fact("Property type", summary.type),
         fact("Municipality", summary.community),
         fact("Community", summary.neighbourhood),
-        fact("Listing brokerage", null),
-        fact("Size", sqftLabel),
+        fact("Listing brokerage", listingBrokerage),
+        fact("Size", sizeLabel),
       ],
     ),
     groupColumns(
@@ -750,10 +991,11 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
           "Lot frontage",
           lotFrontage ? `${formatNumber(lotFrontage)} ft` : null,
         ),
-        fact("Original list price", null),
-        fact("Fronting on", null),
+        fact("Lot", lotLabel),
+        fact("Original list price", originalListLabel),
+        fact("Fronting on", frontingOn),
         fact("Square feet above ground", aboveGradeLabel),
-        fact("Garage", yesNoFromFlag(hasGarage)),
+        fact("Garage", garageYnLabel),
         fact(
           "Garage parking spaces",
           garageSpaces === null ? null : formatNumber(garageSpaces),
@@ -761,22 +1003,24 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
         fact("Rooms", roomCount || null),
         fact("Number of bedrooms", bedsLabel ?? summary.beds),
         fact("Number of kitchens", kitchens),
-        fact("Link", null),
+        fact("Link", linkLabel),
         fact("Number of floors", stories),
         fact("Locker", yesNoFromFlag(locker)),
         fact("Maintenance", maintenanceLabel),
         fact("Exterior", exteriorLabel),
         fact("Fireplace", fireplaceLabel),
-        fact("Laundry level", laundryLevel),
+        fact("Laundry level", laundryLabel),
+        fact("Cross street", crossStreet),
+        fact("Possession", possession),
         fact("Water", titleCase(raw.water_source)),
         fact("Heating", titleCase(raw.heating)),
       ],
       [
         fact("Lot depth", lotDepth),
         fact("CDOM", daysOnMarketLabel),
-        fact("Style", style),
+        fact("Style", styleLabel),
         fact("Basement", basement),
-        fact("Garage type", titleCase(raw.garage_size)),
+        fact("Garage type", garageTypeLabel),
         fact(
           "Total parking spaces",
           raw.parking_total === null || raw.parking_total === undefined
@@ -796,6 +1040,8 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
         fact("Parking drive spaces", parkingDriveSpaces),
         fact("Pool", poolLabel),
         fact("Under contract", rentalItems),
+        fact("Legal description", legalDescription),
+        fact("PIN", parcelNumber),
         fact("Sewer", titleCase(raw.sewer)),
         fact("Cooling", titleCase(raw.cooling)),
       ],
@@ -812,11 +1058,7 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     image: images[0]?.url ?? summary.image,
     images,
     rooms: (raw.rooms ?? [])
-      .map((r) => ({
-        name: titleCase(r.room_type),
-        level: titleCase(r.room_level),
-        dimensions: formatRoomDimensions(r),
-      }))
+      .map(mapPropertyRoom)
       .filter((r) => r.name !== null),
     unitNumber,
     stateOrProvince: raw.state_or_province?.trim() || null,
@@ -830,21 +1072,26 @@ export function mapPropertyDetail(raw: BackendPropertyDetail): PropertyDetail {
     associationFee: assocFee,
     associationFeeFrequency: raw.association_fee_frequency?.trim() || null,
     associationFeeIncludes,
-    style,
+    style: styleLabel,
     level,
     locker,
     basement,
     kitchens,
     daysOnMarket,
-    sqftAboveGrade,
+    sqftAboveGrade: aboveGradeSqftResolved,
     familyRoom,
     stories,
     ownership,
     propertyAge,
     potlMonthlyFees,
     rentalItems,
-    inclusions,
+    inclusionsList,
+    inclusionsText,
+    washroomInfo,
     washrooms,
+    bathroomsTotal,
+    bathroomsPartial,
+    bathroomsFull,
     features,
     factGroups,
     virtualTourUrl: httpUrl(raw.virtual_tour_url),
@@ -863,27 +1110,18 @@ function httpUrl(value: string | null | undefined): string | null {
   }
 }
 
-/** Amenity/feature chips shown on the detail page — all MLS feature columns. */
+/**
+ * Feature chips — prefer API `features[]`, then `interior_features_list[]`,
+ * then split `interior_features`. Never mix appliances / exterior materials.
+ */
 export function collectFeatures(raw: BackendPropertyDetail): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const part of [
-    ...splitFeatures(raw.interior_features),
-    ...splitFeatures(raw.exterior_features),
-    ...splitFeatures(raw.community_features),
-    ...splitFeatures(raw.building_features),
-    ...splitFeatures(raw.lot_features),
-    ...splitFeatures(raw.pool_features),
-    ...splitFeatures(raw.appliances),
-    ...splitFeatures(raw.view),
-  ]) {
-    const key = part.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(part);
-    if (out.length >= 24) break;
+  if (Array.isArray(raw.features) && raw.features.length > 0) {
+    return dedupeLabels(raw.features).slice(0, 48);
   }
-  return out;
+  if (Array.isArray(raw.interior_features_list) && raw.interior_features_list.length > 0) {
+    return dedupeLabels(raw.interior_features_list).slice(0, 48);
+  }
+  return dedupeLabels(splitFeatures(raw.interior_features)).slice(0, 48);
 }
 
 /* -------------------------------------------------------------------------- */

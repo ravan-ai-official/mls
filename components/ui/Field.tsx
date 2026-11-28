@@ -16,15 +16,14 @@ const CONTROL_BASE =
   "disabled:cursor-not-allowed disabled:bg-surface-alt disabled:text-ink-subtle";
 
 /**
- * Focus is shown on the control's own border plus a 1px inset ring of the same
- * colour — reads as a crisp 2px edge that hugs the field, rather than the global
- * outline's halo floating outside it. Invalid state keeps the same shape in red.
+ * Subtle focus: soft navy border + light ring — enough to show the active
+ * field without a heavy outline. Invalid state keeps the same shape in red.
  */
 const CONTROL_STATE =
   "border-line hover:border-ink-subtle " +
-  "focus:border-navy focus:ring-1 focus:ring-navy focus:outline-none " +
+  "focus:border-navy/35 focus:ring-2 focus:ring-navy/10 focus:outline-none " +
   "aria-[invalid=true]:border-negative " +
-  "aria-[invalid=true]:focus:border-negative aria-[invalid=true]:focus:ring-negative";
+  "aria-[invalid=true]:focus:border-negative aria-[invalid=true]:focus:ring-negative/25";
 
 /**
  * Wraps a control with a real <label>, optional hint, and an error message that
@@ -277,7 +276,7 @@ export const PasswordInput = forwardRef<
         className={cn(
           "absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center",
           "rounded-control text-ink-muted transition-colors hover:text-ink",
-          "focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-navy",
+          "focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-navy/40",
         )}
         // Keep focus on the field: toggling should not interrupt typing.
         onMouseDown={(event) => event.preventDefault()}
@@ -359,7 +358,7 @@ export function SearchInput({
         }
       }}
       className={cn(
-        "flex cursor-text items-center gap-2 rounded-control border border-line bg-surface transition-colors focus-within:border-navy",
+        "flex cursor-text items-center gap-2 rounded-control border border-line bg-surface transition-colors focus-within:border-navy/35 focus-within:ring-2 focus-within:ring-navy/10",
         size === "lg" ? "h-13 px-4" : "h-11 px-3.5",
         className,
       )}

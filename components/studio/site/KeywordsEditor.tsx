@@ -24,7 +24,10 @@ import {
   FLOOR_OPTIONS,
   GARAGE_OPTIONS,
   OWNERSHIP_OPTIONS,
-  YEAR_BUILT_MIN_OPTIONS,
+  PROPERTY_AGE_OPTIONS,
+  matchPropertyAgePreset,
+  propertyAgeToYears,
+  type PropertyAgeId,
 } from "@/lib/search/listingFilterOptions";
 import { SEARCH_PROPERTY_TYPES, type ListingQuery } from "@/lib/types/domain";
 import { validateCurated, type FieldErrors } from "@/lib/site/validate";
@@ -587,30 +590,56 @@ function KeywordsForm({
                       ) : null}
                     </div>
 
-                    <div className="space-y-1.5 sm:col-span-2">
+                    <label className="block space-y-1.5">
                       <span className="block text-caption text-ink-muted">Property age</span>
-                      <div className="flex flex-wrap gap-2">
-                        <ChipToggle
-                          active={!page.query.yearBuiltMin}
-                          onClick={() => patchQuery(index, { yearBuiltMin: undefined })}
-                        >
-                          Any
-                        </ChipToggle>
-                        {YEAR_BUILT_MIN_OPTIONS.map((year) => (
-                          <ChipToggle
-                            key={year}
-                            active={page.query.yearBuiltMin === year}
-                            onClick={() =>
-                              patchQuery(index, {
-                                yearBuiltMin: page.query.yearBuiltMin === year ? undefined : year,
-                              })
-                            }
-                          >
-                            {year}+
-                          </ChipToggle>
+                      <select
+                        className="w-full rounded-control border border-line bg-surface px-3 py-2 text-small text-ink"
+                        value={
+                          matchPropertyAgePreset(page.query.yearBuiltMin, page.query.yearBuiltMax)
+                            ?.id ?? ""
+                        }
+                        onChange={(event) => {
+                          const years = propertyAgeToYears(
+                            event.target.value as PropertyAgeId | "",
+                          );
+                          patchQuery(index, {
+                            yearBuiltMin: years.min,
+                            yearBuiltMax: years.max,
+                          });
+                        }}
+                      >
+                        <option value="">Any</option>
+                        {PROPERTY_AGE_OPTIONS.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
                         ))}
-                      </div>
-                    </div>
+                      </select>
+                    </label>
+
+                    <TextControl
+                      label="Built in or before"
+                      value={
+                        matchPropertyAgePreset(page.query.yearBuiltMin, page.query.yearBuiltMax)
+                          ? ""
+                          : page.query.yearBuiltMax != null
+                            ? String(page.query.yearBuiltMax)
+                            : ""
+                      }
+                      max={4}
+                      hint={
+                        matchPropertyAgePreset(page.query.yearBuiltMin, page.query.yearBuiltMax)
+                          ? "Clear property age to set a specific year."
+                          : "Few listings publish a year built."
+                      }
+                      error={errors[`pages.${index}.query.yearBuiltMax`]}
+                      onChange={(value) =>
+                        patchQuery(index, {
+                          yearBuiltMin: undefined,
+                          yearBuiltMax: positiveOrUndefined(value),
+                        })
+                      }
+                    />
 
                     <ChipField
                       label="Most floors"
@@ -618,17 +647,6 @@ function KeywordsForm({
                       options={FLOOR_OPTIONS}
                       onChange={(floorsMax) =>
                         patchQuery(index, { storiesMax: floorsMax ? Number(floorsMax) : undefined })
-                      }
-                    />
-
-                    <TextControl
-                      label="Built in or before"
-                      value={page.query.yearBuiltMax != null ? String(page.query.yearBuiltMax) : ""}
-                      max={4}
-                      hint="Few listings publish a year built."
-                      error={errors[`pages.${index}.query.yearBuiltMax`]}
-                      onChange={(value) =>
-                        patchQuery(index, { yearBuiltMax: positiveOrUndefined(value) })
                       }
                     />
                     <label className="block text-caption text-ink-muted">

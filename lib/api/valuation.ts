@@ -250,24 +250,50 @@ function mapComp(comp: Record<string, unknown>): ValuationComp {
     comp.source === "sold" || comp.source === "sold_proxy" || comp.source === "active_listing"
       ? comp.source
       : null;
+  const details = mapAvmDetails(comp.details);
+  const address =
+    (typeof comp.unparsed_address === "string" && comp.unparsed_address.trim()) ||
+    details.address ||
+    "";
+  const city =
+    (typeof comp.city === "string" && comp.city.trim()) || details.city || "";
   return {
-    listingKey: (comp.listing_key as string) ?? null,
-    price: typeof comp.price === "number" ? comp.price : null,
-    closePrice: typeof comp.close_price === "number" ? comp.close_price : null,
-    listPrice: typeof comp.list_price === "number" ? comp.list_price : null,
-    beds: typeof comp.bedrooms_total === "number" ? comp.bedrooms_total : null,
+    listingKey:
+      typeof comp.listing_key === "string" && comp.listing_key.trim()
+        ? comp.listing_key.trim()
+        : null,
+    // DRF decimals often arrive as strings — use toNumber, not typeof === "number".
+    price: toNumber(comp.price) ?? details.lastSoldPrice,
+    closePrice: toNumber(comp.close_price) ?? details.lastSoldPrice,
+    listPrice: toNumber(comp.list_price) ?? details.listPrice,
+    beds: toNumber(comp.bedrooms_total) ?? details.bedrooms,
     baths:
-      typeof comp.bathrooms_total_integer === "number" ? comp.bathrooms_total_integer : null,
-    livingArea: typeof comp.living_area === "number" ? comp.living_area : null,
-    address: (comp.unparsed_address as string) ?? "",
-    city: (comp.city as string) ?? "",
-    distanceKm: typeof comp.distance_km === "number" ? comp.distance_km : null,
+      toNumber(comp.bathrooms_total_integer) ??
+      (details.bathroomsFull !== null || details.bathroomsHalf !== null
+        ? (details.bathroomsFull ?? 0) + (details.bathroomsHalf ?? 0)
+        : null),
+    livingArea:
+      toNumber(comp.living_area) ?? details.floorAreaSqft ?? details.aboveGradeSqft,
+    address,
+    city,
+    distanceKm: toNumber(comp.distance_km),
     source,
     eventDate: typeof comp.event_date === "string" ? comp.event_date : null,
-    daysOnMarket: typeof comp.days_on_market === "number" ? comp.days_on_market : null,
+    daysOnMarket: toNumber(comp.days_on_market) ?? details.daysOnMarket,
+    // Optional for sold table rows; used mainly by active suggestion cards.
     imageUrl: typeof comp.image_url === "string" ? comp.image_url.trim() || null : null,
-    details: mapAvmDetails(comp.details),
+    details,
   };
+}
+
+/** Sold table rows: prefer `comps`, else alias `comparables`. Never use active_comps. */
+function pickSoldCompRows(
+  data: BackendValuationEstimate & { comparables?: Array<Record<string, unknown>> },
+): Array<Record<string, unknown>> {
+  const primary = Array.isArray(data.comps) ? data.comps : [];
+  if (primary.length > 0) return primary;
+  const alias = Array.isArray(data.comparables) ? data.comparables : [];
+  return alias;
 }
 
 function mapBreakdownItem(raw: Record<string, unknown>): ValuationBreakdownItem {
@@ -341,7 +367,7 @@ export async function estimateValue(
     trendPct12m: Number(data.trend?.pct_12m ?? 0) * 100,
     trendSource: typeof data.trend?.source === "string" ? data.trend.source : null,
     trendSeries: series,
-    comps: (data.comps ?? []).map(mapComp),
+    comps: pickSoldCompRows(data).map(mapComp),
     activeComps: (data.active_comps ?? []).map(mapComp),
     breakdown: (data.breakdown ?? []).map((row) => mapBreakdownItem(row as Record<string, unknown>)),
     ai: {

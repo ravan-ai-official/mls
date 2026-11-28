@@ -44,7 +44,10 @@ export function ListingShareActions({
 
   return (
     <div className={cn("contents", className)}>
-      <ShareButton title={address} url={url} />
+      {/* Share lives in the mobile sticky CTA; keep it in the tab bar from lg up. */}
+      <span className="hidden lg:contents">
+        <ShareButton title={address} url={url} />
+      </span>
       {virtualTourUrl && (
         <a
           href={virtualTourUrl}

@@ -11,6 +11,21 @@ import { mapViewKey, qk, type MapViewKey } from "@/lib/queries/keys";
 import type { ListingQuery, PropertySummary } from "@/lib/types/domain";
 import { parseListingSearch } from "@/lib/utils/searchParams";
 
+/** Same For-sale → Active default the listings page applies. */
+function withMapListingDefaults(query: ListingQuery): ListingQuery {
+  const transaction = query.transaction ?? "sale";
+  if (transaction === "sold") {
+    return {
+      ...query,
+      transaction: "sold",
+      status: query.status ?? "Sold",
+      openHouse: undefined,
+    };
+  }
+  if (query.status || query.openHouse) return { ...query, transaction };
+  return { ...query, transaction, status: "Active" };
+}
+
 /**
  * Map search reads: listing rows for the viewport (or a drawn area) and H3
  * cluster counts for zoomed-out, unfiltered views.
@@ -104,7 +119,7 @@ function boxParams(view: MapViewKey): Record<string, string> {
 export function mapListingsQueryInput(view: MapViewKey, offset = 0): ListingQuery {
   const params = new URLSearchParams(view.filters);
   if (view.poly) params.set("poly", view.poly);
-  const query = parseListingSearch(params);
+  const query = withMapListingDefaults(parseListingSearch(params));
   const [south, west, north, east] = view.bounds;
   return {
     ...query,

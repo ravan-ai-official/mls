@@ -8,7 +8,7 @@ import { DealGlyph } from "./sectionIcons";
 /**
  * "GTA Market Deals" — HomeAtlasUI HomePage L540-612 ("DEALS SECTION").
  *
- * Four keyword category cards (Distress, Detached Under $1M, Power of Sale,
+ * Four keyword category cards (Below-Market, Detached Under $1M, Power of Sale,
  * Just Sold). Each opens the matching curated `/homes/...` search or sold
  * listings, same layout as the reference.
  */
@@ -16,7 +16,7 @@ export function GtaMarketDeals({ content }: { content?: Record<string, unknown> 
   return (
     <Section
       tone="alt"
-      eyebrow={textOf(content, "eyebrow", "Exclusive opportunities")}
+      eyebrow={textOf(content, "eyebrow", "Below-Market Deals")}
       title={textOf(content, "title", "GTA Market Deals")}
     >
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

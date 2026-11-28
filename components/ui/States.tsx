@@ -12,24 +12,25 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function PropertyCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-surface border border-line bg-surface">
-      <Skeleton className="h-[210px] rounded-none" />
-      <div className="space-y-3 p-5">
-        <Skeleton className="h-6 w-32" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-3 w-2/3" />
-        <div className="flex gap-3 border-y border-line py-3">
+    <div className="flex flex-col overflow-hidden rounded-surface border border-line bg-surface">
+      <Skeleton className="h-[210px] w-full shrink-0 rounded-none" />
+      <div className="flex flex-1 flex-col p-5">
+        <Skeleton className="h-7 w-28" />
+        <Skeleton className="mt-2 h-4 w-4/5 max-w-[14rem]" />
+        <Skeleton className="mt-1.5 h-3 w-2/3 max-w-[11rem]" />
+        <div className="flex-1" aria-hidden="true" />
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-line pt-3">
           <Skeleton className="h-3 w-14" />
           <Skeleton className="h-3 w-14" />
           <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-20" />
         </div>
-        <Skeleton className="h-3 w-24" />
       </div>
     </div>
   );
 }
 
-export function PropertyGridSkeleton({ count = 6 }: { count?: number }) {
+export function PropertyGridSkeleton({ count = 12 }: { count?: number }) {
   return (
     <div
       className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
@@ -40,6 +41,26 @@ export function PropertyGridSkeleton({ count = 6 }: { count?: number }) {
         <PropertyCardSkeleton key={i} />
       ))}
       <span className="sr-only">Loading listings…</span>
+    </div>
+  );
+}
+
+/** Sticky filter chrome placeholder — search dock + facet chips. */
+export function ListingsFilterSkeleton() {
+  return (
+    <div className="space-y-3" aria-hidden="true">
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-12 min-w-0 flex-1 sm:h-13" />
+        <Skeleton className="hidden h-12 w-24 shrink-0 sm:block sm:h-13" />
+      </div>
+      <div className="hidden flex-wrap items-center gap-2 md:flex">
+        <Skeleton className="h-9 w-24" />
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-16" />
+        <Skeleton className="h-9 w-16" />
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-16" />
+      </div>
     </div>
   );
 }
@@ -117,12 +138,14 @@ export function EmptyState({
   description,
   icon,
   action,
+  secondaryAction,
   className,
 }: {
   title: string;
   description?: string;
   icon?: ReactNode;
   action?: { label: string; href?: string; onClick?: () => void };
+  secondaryAction?: { label: string; href?: string; onClick?: () => void };
   className?: string;
 }) {
   return (
@@ -139,16 +162,30 @@ export function EmptyState({
       {description && (
         <p className="mt-2 max-w-md text-small text-ink-muted">{description}</p>
       )}
-      {action &&
-        (action.href ? (
-          <LinkButton href={action.href} variant="primary" size="md" className="mt-6">
-            {action.label}
-          </LinkButton>
-        ) : (
-          <Button variant="primary" size="md" className="mt-6" onClick={action.onClick}>
-            {action.label}
-          </Button>
-        ))}
+      {(action || secondaryAction) && (
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          {action &&
+            (action.href ? (
+              <LinkButton href={action.href} variant="primary" size="md">
+                {action.label}
+              </LinkButton>
+            ) : (
+              <Button variant="primary" size="md" onClick={action.onClick}>
+                {action.label}
+              </Button>
+            ))}
+          {secondaryAction &&
+            (secondaryAction.href ? (
+              <LinkButton href={secondaryAction.href} variant="secondary" size="md">
+                {secondaryAction.label}
+              </LinkButton>
+            ) : (
+              <Button variant="secondary" size="md" onClick={secondaryAction.onClick}>
+                {secondaryAction.label}
+              </Button>
+            ))}
+        </div>
+      )}
     </div>
   );
 }

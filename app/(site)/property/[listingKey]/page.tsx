@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache, Suspense } from "react";
+import { BackToListingsLink } from "@/components/property/BackToListingsLink";
+import { ExpandableText } from "@/components/property/ExpandableText";
 import { Gallery } from "@/components/property/Gallery";
 import { InquiryForm } from "@/components/property/InquiryForm";
 import { ListingShareActions, ListingWhatsAppCard } from "@/components/property/ListingShareActions";
@@ -13,8 +15,11 @@ import { ClimateRiskPanel } from "@/components/property/ClimateRiskPanel";
 import { ComparablesSection } from "@/components/property/ComparablesSection";
 import { DemandPanel } from "@/components/property/DemandPanel";
 import { PriceHistorySection } from "@/components/property/PriceHistorySection";
+import { PropertyMobileCta } from "@/components/property/PropertyMobileCta";
 import { PropertyNote } from "@/components/property/PropertyNote";
 import { PropertyTabs } from "@/components/property/PropertyTabs";
+import { RoomsSection } from "@/components/property/RoomsSection";
+import { WashroomsSection } from "@/components/property/WashroomsSection";
 import { SaveButton } from "@/components/property/SaveButton";
 import { SchoolsPanel } from "@/components/property/SchoolsPanel";
 import { SimilarHomes } from "@/components/property/SimilarHomes";
@@ -26,6 +31,7 @@ import { getProperty } from "@/lib/api/properties";
 import { statusLabel } from "@/lib/api/mappers";
 import {
   EMPTY,
+  formatDate,
   formatLeasePrice,
   formatNumber,
   formatPrice,
@@ -123,9 +129,50 @@ export default async function PropertyPage({
     ? `/listings?city=${encodeURIComponent(property.community)}`
     : "/listings";
   const hasLocation = property.latitude !== null && property.longitude !== null;
+  const priceBasis =
+    soldClose !== null ? soldClose : property.price;
+  const pricePerSqft =
+    priceBasis !== null && property.sqft !== null && property.sqft > 0
+      ? Math.round(priceBasis / property.sqft)
+      : null;
+  const priceContext: { label: string; value: string }[] = [];
+  if (property.daysOnMarket !== null) {
+    priceContext.push({
+      label: "On market",
+      value: `${property.daysOnMarket} day${property.daysOnMarket === 1 ? "" : "s"}`,
+    });
+  } else if (property.listedAt) {
+    priceContext.push({ label: "Listed", value: formatDate(property.listedAt) });
+  }
+  if (pricePerSqft !== null) {
+    priceContext.push({
+      label: property.isLease ? "Per sq ft / mo" : "Per sq ft",
+      value: formatPrice(pricePerSqft),
+    });
+  }
+  if (property.taxAnnualAmount !== null) {
+    priceContext.push({
+      label: "Taxes / yr",
+      value: formatPrice(property.taxAnnualAmount),
+    });
+  }
+  if (property.associationFee !== null) {
+    const freq = property.associationFeeFrequency
+      ? ` / ${property.associationFeeFrequency.toLowerCase()}`
+      : "/mo";
+    priceContext.push({
+      label: "Condo fee",
+      value: `${formatPrice(property.associationFee)}${freq}`,
+    });
+  } else if (property.potlMonthlyFees !== null) {
+    priceContext.push({
+      label: "POTL / mo",
+      value: formatPrice(property.potlMonthlyFees),
+    });
+  }
 
   return (
-    <article className="pb-8">
+    <article className="min-w-0 overflow-x-clip pb-8">
       <JsonLd data={propertyJsonLd(property)} />
       {/* Records the view for popularity counts and "Recently Viewed". */}
       <ViewTracker
@@ -142,21 +189,7 @@ export default async function PropertyPage({
 
       <div className="container-page pt-3 sm:pt-4">
       <nav aria-label="Breadcrumb" className="mb-1 sm:mb-2">
-        <Link
-          href="/listings"
-          className="inline-flex items-center gap-1.5 text-small text-ink-muted transition-colors hover:text-ink"
-        >
-          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path
-              d="M14.25 9H3.75M9 14.25L3.75 9L9 3.75"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Back to listings
-        </Link>
+        <BackToListingsLink className="inline-flex items-center gap-1.5 text-small text-ink-muted transition-colors hover:text-ink" />
       </nav>
       </div>
 
@@ -214,6 +247,17 @@ export default async function PropertyPage({
           </div>
         </div>
 
+        {priceContext.length > 0 && (
+          <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-b border-line-soft pb-3 text-[13px] text-ink-muted">
+            {priceContext.map((item) => (
+              <div key={item.label} className="inline-flex items-baseline gap-1.5">
+                <dt>{item.label}</dt>
+                <dd className="font-medium text-ink">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+
         <dl className="mt-4 flex flex-wrap gap-2 sm:gap-3">
           {property.bedsLabel || property.beds !== null ? (
             <StatPill label="Bedrooms" value={property.bedsLabel ?? formatNumber(property.beds)} />
@@ -241,24 +285,20 @@ export default async function PropertyPage({
           )}
         </dl>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
           {property.type && (
-            <span className="inline-flex items-center gap-2 rounded-xl bg-surface-alt px-4 py-2.5 text-[14px]">
+            <span className="inline-flex items-center gap-2 rounded-xl bg-surface-alt px-3.5 py-2.5 text-[14px] sm:px-4">
               <span className="font-semibold text-ink">{property.type}</span>
               <span className="text-[12px] text-ink-muted">Type</span>
             </span>
           )}
-          <span className="text-ink-subtle" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-            </svg>
-          </span>
           <Link
             href="/preconstruction"
-            className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-gold px-4 py-2.5 text-[13px] font-bold text-navy hover:bg-gold-deep sm:px-5"
+            className="inline-flex max-w-full items-center gap-2 rounded-xl bg-gold px-3.5 py-2.5 text-[13px] font-bold text-navy hover:bg-gold-deep sm:px-5"
           >
-            Browse Similar Preconstruction
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <span className="sm:hidden">Similar preconstruction</span>
+            <span className="hidden sm:inline">Browse Similar Preconstruction</span>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0">
               <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" />
             </svg>
           </Link>
@@ -279,11 +319,13 @@ export default async function PropertyPage({
         actions={
           <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
             {property.status === "active" && (
-              <SaveButton
-                variant="inline"
-                listingKey={property.id}
-                address={property.address}
-              />
+              <span className="hidden lg:contents">
+                <SaveButton
+                  variant="inline"
+                  listingKey={property.id}
+                  address={property.address}
+                />
+              </span>
             )}
             <ListingShareActions
               listingKey={property.id}
@@ -296,11 +338,13 @@ export default async function PropertyPage({
         }
         aside={
           <div className="space-y-4">
-            <InquiryForm
-              listingKey={property.id}
-              mls={property.mls}
-              address={property.address}
-            />
+            <div id="property-inquiry">
+              <InquiryForm
+                listingKey={property.id}
+                mls={property.mls}
+                address={property.address}
+              />
+            </div>
             <ListingWhatsAppCard
               address={property.address}
               listingKey={property.mls}
@@ -345,9 +389,7 @@ export default async function PropertyPage({
                       {property.description && (
                         <section>
                           <h2 className="mb-3 text-[18px] font-semibold text-ink">Description</h2>
-                          <p className="whitespace-pre-line text-[14px] leading-relaxed text-ink-muted">
-                            {property.description}
-                          </p>
+                          <ExpandableText text={property.description} />
                         </section>
                       )}
                       {property.features.length > 0 && (
@@ -365,90 +407,41 @@ export default async function PropertyPage({
                           </ul>
                         </section>
                       )}
-                      {property.rooms.length > 0 && (
-                        <section className="overflow-hidden rounded-2xl border border-line">
-                          <div className="border-b border-line bg-surface-alt px-4 py-4 sm:px-6">
-                            <h2 className="text-[18px] font-semibold text-ink">Rooms</h2>
-                          </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[420px] text-[13px]">
-                              <thead>
-                                <tr className="border-b border-line text-left text-ink-muted">
-                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">Room</th>
-                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">Level</th>
-                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
-                                    Dimensions (ft / in)
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {property.rooms.map((room, index) => (
-                                  <tr key={`${room.name}-${index}`} className="border-b border-line-soft">
-                                    <td className="px-4 py-3 font-medium text-ink sm:px-6">{room.name}</td>
-                                    <td className="px-4 py-3 text-ink-muted sm:px-6">{room.level ?? ""}</td>
-                                    <td className="px-4 py-3 text-ink-muted sm:px-6">{room.dimensions ?? ""}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </section>
+                      {property.rooms.length > 0 && <RoomsSection rooms={property.rooms} />}
+                      {(property.washroomInfo.length > 0 || property.washrooms.length > 0) && (
+                        <WashroomsSection
+                          washroomInfo={property.washroomInfo}
+                          washrooms={property.washrooms}
+                          bathroomsTotal={property.bathroomsTotal}
+                          bathroomsFull={property.bathroomsFull}
+                          bathroomsPartial={property.bathroomsPartial}
+                        />
                       )}
-                      {property.washrooms.length > 0 && (
-                        <section className="overflow-hidden rounded-2xl border border-line">
-                          <div className="border-b border-line bg-surface-alt px-4 py-4 sm:px-6">
-                            <h2 className="text-[18px] font-semibold text-ink">Washroom Info</h2>
-                          </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[360px] text-[13px]">
-                              <thead>
-                                <tr className="border-b border-line text-left text-ink-muted">
-                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
-                                    # of Washrooms
-                                  </th>
-                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
-                                    Pieces
-                                  </th>
-                                  <th scope="col" className="px-4 py-3 font-medium sm:px-6">
-                                    Level
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {property.washrooms.map((row, index) => (
-                                  <tr
-                                    key={`${row.level}-${row.pieces}-${index}`}
-                                    className="border-b border-line-soft"
-                                  >
-                                    <td className="px-4 py-3 font-medium text-ink sm:px-6">
-                                      {row.count}
-                                    </td>
-                                    <td className="px-4 py-3 text-ink-muted sm:px-6">
-                                      {row.pieces ?? ""}
-                                    </td>
-                                    <td className="px-4 py-3 text-ink-muted sm:px-6">
-                                      {row.level ?? ""}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </section>
-                      )}
-                      {(property.inclusions || property.rentalItems) && (
+                      {(property.inclusionsText ||
+                        property.inclusionsList.length > 0 ||
+                        property.rentalItems) && (
                         <section className="rounded-2xl border border-line p-4 sm:p-6">
                           <h2 className="mb-3 text-[18px] font-semibold text-ink">Inclusions</h2>
-                          {property.inclusions ? (
+                          {property.inclusionsText ? (
                             <p className="text-[14px] leading-relaxed text-ink-muted">
-                              <span className="font-medium text-ink">Inclusions: </span>
-                              {property.inclusions}
+                              {property.inclusionsText}
                             </p>
+                          ) : property.inclusionsList.length > 0 ? (
+                            <ul className="flex flex-wrap gap-2">
+                              {property.inclusionsList.map((item) => (
+                                <li
+                                  key={item}
+                                  className="rounded-xl bg-surface-alt px-3 py-1.5 text-[13px] text-ink"
+                                >
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
                           ) : null}
                           {property.rentalItems ? (
                             <p
                               className={
-                                property.inclusions
+                                property.inclusionsText || property.inclusionsList.length > 0
                                   ? "mt-3 text-[14px] leading-relaxed text-ink-muted"
                                   : "text-[14px] leading-relaxed text-ink-muted"
                               }
@@ -537,6 +530,13 @@ export default async function PropertyPage({
                   ),
                 },
               ]}
+      />
+
+      <PropertyMobileCta
+        listingKey={property.id}
+        address={property.address}
+        url={shareUrl}
+        canSave={property.status === "active"}
       />
     </article>
   );

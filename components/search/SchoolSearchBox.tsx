@@ -95,7 +95,7 @@ export function SchoolSearchBox({
               : "Search a school name…"
           }
           className={cn(
-            "w-full rounded-control border border-line bg-surface text-ink outline-none placeholder:text-ink-subtle focus:border-navy",
+            "w-full rounded-control border border-line bg-surface text-ink outline-none placeholder:text-ink-subtle focus:border-navy/35 focus:ring-2 focus:ring-navy/10",
             hero ? "h-12 px-4 text-small" : "h-11 px-3.5 text-small",
           )}
         />

@@ -64,13 +64,13 @@ export function PropertyTabs({
   }
 
   return (
-    <div className="mt-2 sm:mt-3">
-      <div className="sticky top-[72px] z-40 border-b border-line bg-surface lg:top-20">
-        <div className="container-page flex flex-col lg:flex-row lg:items-center lg:justify-between">
+    <div className="mt-2 min-w-0 sm:mt-3">
+      <div className="sticky top-[72px] z-40 max-w-full overflow-x-clip border-b border-line bg-surface lg:top-20">
+        <div className="container-page flex min-w-0 flex-col lg:flex-row lg:items-center lg:justify-between">
           <div
             role="tablist"
             aria-label="Property details"
-            className="-mx-1 flex min-w-0 flex-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden"
+            className="flex min-w-0 max-w-full flex-1 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {visible.map((tab) => {
               const selected = tab.id === current.id;
@@ -84,7 +84,7 @@ export function PropertyTabs({
                   aria-controls={`panel-${tab.id}`}
                   onClick={() => selectTab(tab.id)}
                   className={cn(
-                    "shrink-0 cursor-pointer whitespace-nowrap border-b-2 px-4 py-4 text-[13px] font-medium transition-colors sm:px-5",
+                    "shrink-0 cursor-pointer whitespace-nowrap border-b-2 px-3.5 py-3.5 text-[13px] font-medium transition-colors sm:px-5 sm:py-4",
                     selected
                       ? "border-navy text-navy"
                       : "border-transparent text-ink-muted hover:text-ink",
@@ -96,16 +96,16 @@ export function PropertyTabs({
             })}
           </div>
           {actions && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2 pb-3 lg:flex-nowrap lg:py-0 lg:pl-4">
+            <div className="flex min-w-0 max-w-full shrink-0 flex-wrap items-center gap-2 pb-3 lg:flex-nowrap lg:py-0 lg:pl-4">
               {actions}
             </div>
           )}
         </div>
       </div>
 
-      <div className="container-page py-6 sm:py-8">
-        {hero ? <div className="mb-6 sm:mb-8">{hero}</div> : null}
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="container-page min-w-0 overflow-x-clip py-6 sm:py-8">
+        {hero ? <div className="mb-6 min-w-0 sm:mb-8">{hero}</div> : null}
+        <div className="grid min-w-0 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="min-w-0">
             {lead && <div className="mb-8">{lead}</div>}
             {/*

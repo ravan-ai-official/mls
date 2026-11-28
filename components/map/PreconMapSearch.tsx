@@ -117,7 +117,7 @@ export function PreconMapSearch({ projects }: { projects: PreconProject[] }) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-72px)] flex-col lg:flex-row">
+    <div className="flex h-full min-h-0 flex-col lg:flex-row">
       <div className="relative isolate h-1/2 w-full lg:h-full lg:w-3/5">
         <MapContainer
           ref={setMap}
@@ -197,6 +197,7 @@ export function PreconMapSearch({ projects }: { projects: PreconProject[] }) {
             mode={drawing.mode}
             pointCount={drawing.pointCount}
             onFinish={drawing.finish}
+            onUndo={drawing.undo}
             onCancel={drawing.cancel}
           />
         )}

@@ -1,45 +1,86 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { MapLayersPanel } from "@/components/map/MapLayersControl";
+import type { BasemapId, PinColorMode } from "@/lib/map/basemap";
 import { cn } from "@/lib/utils/cn";
 import { MAX_POLYGON_POINTS } from "@/lib/map/polygon";
 import type { DrawMode } from "@/lib/map/useMapDrawing";
 
 /**
- * Vertical map control stack (HomeAtlasUI MapSearchPage L255-265): zoom, then a
- * gap, then the area tools. Leaflet's own zoom control is turned off so there
- * is one consistent stack instead of two styles of button on one map.
+ * Vertical map control stack: zoom, locate, draw, layers.
  */
 export function MapControls({
   drawMode,
   hasShape,
   locating,
+  basemap = "streets",
+  pinMode = "status",
+  shareUrl,
   onZoomIn,
   onZoomOut,
   onLocate,
   onDraw,
   onClear,
+  onBasemap,
+  onPinMode,
 }: {
   drawMode: DrawMode | null;
   hasShape: boolean;
   locating: boolean;
+  basemap?: BasemapId;
+  pinMode?: PinColorMode;
+  shareUrl?: string;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onLocate: () => void;
   onDraw: (mode: DrawMode) => void;
   onClear: () => void;
+  onBasemap?: (next: BasemapId) => void;
+  onPinMode?: (next: PinColorMode) => void;
 }) {
+  const [layersOpen, setLayersOpen] = useState(false);
+  const layersRef = useRef<HTMLDivElement>(null);
+  const layersEnabled = Boolean(onBasemap && onPinMode);
+
+  useEffect(() => {
+    if (!layersOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (!layersRef.current?.contains(event.target as Node)) {
+        setLayersOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLayersOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [layersOpen]);
+
   return (
-    <div className="absolute right-4 top-4 z-[400] flex flex-col gap-2">
+    <div className="relative flex flex-col items-end gap-2">
       <ControlButton label="Zoom in" onClick={onZoomIn}>
         <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
       </ControlButton>
       <ControlButton label="Zoom out" onClick={onZoomOut}>
         <path d="M3.5 8h9" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
       </ControlButton>
-      <ControlButton label={locating ? "Finding your location…" : "Show my location"} active={locating} onClick={onLocate}>
+      <ControlButton
+        label={locating ? "Finding your location…" : "Show my location"}
+        active={locating}
+        onClick={onLocate}
+      >
         <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M8 1.5v2.5M8 12v2.5M1.5 8H4M12 8h2.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+        <path
+          d="M8 1.5v2.5M8 12v2.5M1.5 8H4M12 8h2.5"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="1.5"
+        />
       </ControlButton>
 
       <div className="mt-2 flex flex-col gap-2">
@@ -76,10 +117,50 @@ export function MapControls({
         </ControlButton>
         {hasShape && (
           <ControlButton label="Clear drawn area" onClick={onClear}>
-            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+            <path
+              d="M4 4l8 8M12 4l-8 8"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="1.5"
+            />
           </ControlButton>
         )}
       </div>
+
+      {layersEnabled && (
+        <div ref={layersRef} className="relative mt-2">
+          <ControlButton
+            label="Map style and pin colors"
+            active={layersOpen}
+            onClick={() => setLayersOpen((v) => !v)}
+          >
+            <path
+              d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="1.5"
+            />
+            <circle cx="5.5" cy="4.5" r="1.4" fill="currentColor" />
+            <circle cx="10" cy="8" r="1.4" fill="currentColor" />
+            <circle cx="7" cy="11.5" r="1.4" fill="currentColor" />
+          </ControlButton>
+          {layersOpen && (
+            <div
+              role="dialog"
+              aria-label="Map style"
+              className="absolute right-full top-0 z-[1200] mr-2 max-h-[min(22rem,70vh)] overflow-y-auto rounded-control border border-line bg-surface shadow-pop"
+            >
+              <MapLayersPanel
+                basemap={basemap}
+                pinMode={pinMode}
+                shareUrl={shareUrl}
+                onBasemap={onBasemap!}
+                onPinMode={onPinMode!}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -122,11 +203,13 @@ export function DrawHint({
   mode,
   pointCount,
   onFinish,
+  onUndo,
   onCancel,
 }: {
   mode: DrawMode;
   pointCount: number;
   onFinish: () => void;
+  onUndo: () => void;
   onCancel: () => void;
 }) {
   const message =
@@ -146,6 +229,15 @@ export function DrawHint({
       className="absolute bottom-4 left-1/2 z-[400] flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-full bg-ink py-1.5 pl-4 pr-1.5 text-caption text-white shadow-pop"
     >
       <span>{message}</span>
+      {pointCount > 0 && (
+        <button
+          type="button"
+          onClick={onUndo}
+          className="rounded-full px-3 py-1 font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          Undo
+        </button>
+      )}
       {mode === "polygon" && pointCount >= 3 && (
         <button
           type="button"

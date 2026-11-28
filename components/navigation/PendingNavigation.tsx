@@ -153,8 +153,34 @@ export function PendingLink({
   return <Link href={href} replace={replace} scroll={scroll} onClick={handleClick} {...props} />;
 }
 
-/** Shows `fallback` (a skeleton) while a navigation is in flight. */
+/**
+ * Shows `fallback` (a skeleton) while a navigation is in flight — except for
+ * soft navigations that only change presentation (`view`). Those must keep the
+ * current results painted so grid ↔ list does not flash empty.
+ */
 export function PendingContent({ fallback, children }: { fallback: ReactNode; children: ReactNode }) {
-  const { isPending } = usePendingNavigation();
-  return <div aria-busy={isPending || undefined}>{isPending ? fallback : children}</div>;
+  const { isPending, target } = usePendingNavigation();
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const soft =
+    Boolean(target) && isPresentationOnlyNav(pathname, params.toString(), target!);
+  const showFallback = isPending && !soft;
+  return <div aria-busy={showFallback || undefined}>{showFallback ? fallback : children}</div>;
+}
+
+/** True when the destination differs from the current URL only by `view`. */
+function isPresentationOnlyNav(
+  pathname: string,
+  currentSearch: string,
+  targetHref: string,
+): boolean {
+  const url = new URL(targetHref, BASE);
+  if (url.pathname !== pathname) return false;
+  const current = new URLSearchParams(currentSearch);
+  const next = new URLSearchParams(url.search);
+  current.delete("view");
+  next.delete("view");
+  current.sort();
+  next.sort();
+  return current.toString() === next.toString();
 }

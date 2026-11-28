@@ -61,7 +61,7 @@ export function QuickActions({ content }: { content?: Record<string, unknown> })
             <li key={label} className="min-w-0">
               <Link
                 href={href}
-                className="group flex h-full flex-row items-start gap-3 rounded-control border border-line bg-surface p-3 transition-all hover:border-gold/30 hover:shadow-card-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:flex-col sm:gap-4 sm:p-5 lg:gap-5 lg:p-6"
+                className="group flex h-full flex-row items-start gap-3 rounded-control border border-line bg-surface p-3 transition-all hover:border-gold/30 hover:shadow-card-hover focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-navy/40 sm:flex-col sm:gap-4 sm:p-5 lg:gap-5 lg:p-6"
               >
                 <Icon className="mt-0.5 shrink-0 transition-transform group-hover:scale-110 sm:mt-0" />
                 <span className="flex min-w-0 flex-1 flex-col gap-1 sm:gap-0 sm:contents">

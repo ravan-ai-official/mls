@@ -157,18 +157,16 @@
   }
 
   /* Focus ring.
-     Kept — removing it outright would strand keyboard and screen-reader users
-     and fail WCAG 2.4.7. Toned down instead: navy rather than gold, 1px hugging
-     the control instead of a 2px halo floating 2px off it.
+     Kept for WCAG 2.4.7, but kept subtle: a soft navy edge so keyboard users
+     can still see focus without a heavy dark outline.
 
      Text inputs are excluded: browsers treat a clicked text field as
-     :focus-visible (you are about to type), so the global ring fired on every
-     click. They get their own border-colour treatment in the field styles,
-     which reads as "active" without stacking a ring on top of a border. */
+     :focus-visible, so the global ring fired on every click. Fields use their
+     own soft border/ring in Field.tsx instead. */
   :focus-visible {
-    outline: 1px solid var(--color-navy);
-    outline-offset: 1px;
-    border-radius: 3px;
+    outline: 1.5px solid color-mix(in srgb, var(--color-navy) 40%, transparent);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 
   input:focus-visible,
@@ -216,6 +214,15 @@
 
   ::selection {
     background: color-mix(in srgb, var(--color-gold) 30%, transparent);
+  }
+
+  /* Clip rather than scroll when a wide child misbehaves — property tabs,
+     marquees and long fact values used to shove the whole page sideways. */
+  html {
+    overflow-x: clip;
+  }
+  body {
+    overflow-x: clip;
   }
 
   /* Space for the fixed compare strip, so it never covers the footer or the
@@ -306,8 +313,23 @@
   }
 }
 
+@keyframes sheet-up {
+  from {
+    opacity: 0.6;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .animate-sheet-in {
-  animation: sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @media (width >= 640px) {
+    animation-name: sheet-in;
+  }
 }
 
 @keyframes shimmer {

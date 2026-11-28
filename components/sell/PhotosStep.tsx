@@ -134,7 +134,7 @@ function KindSelect({
       onChange={(event) => onChange(event.target.value as SubmissionMediaType)}
       className={cn(
         "h-9 shrink-0 rounded-control border border-line bg-surface px-2 text-caption text-ink",
-        "focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60",
+        "focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10 disabled:opacity-60",
       )}
     >
       {kinds.map((kind) => (

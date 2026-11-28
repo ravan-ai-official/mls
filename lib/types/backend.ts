@@ -37,6 +37,33 @@ export interface BackendRoom {
   /** Present on some detail payloads; RoomSerializer may omit it. */
   room_description?: string | null;
   room_length_width_units?: string | null;
+  /** Prefers metres for TREB (e.g. "5.4 × 5.1 m"). */
+  dimensions_display?: string | null;
+  /** Metric label from PropertyDetail (e.g. "5.4 × 5.1 m"). */
+  dimensions_m?: string | null;
+  /** Imperial companion (e.g. `17'9" × 16'9"`). */
+  dimensions_ft?: string | null;
+}
+
+/** REALM washroom summary: count × pieces on a level. */
+export interface BackendWashroomInfo {
+  count?: number | null;
+  pieces?: number | string | null;
+  level?: string | null;
+}
+
+/** Pre-filtered bath/washroom rows from PropertyDetailSerializer. */
+export interface BackendWashroom {
+  room_type?: string | null;
+  room_level?: string | null;
+  room_description?: string | null;
+  room_length?: string | null;
+  room_width?: string | null;
+  room_dimensions?: string | null;
+  room_length_width_units?: string | null;
+  dimensions_display?: string | null;
+  dimensions_m?: string | null;
+  dimensions_ft?: string | null;
 }
 
 /** PropertySerializer — the list/search shape. */
@@ -91,6 +118,11 @@ export interface BackendPropertySummary {
    */
   is_featured?: boolean | null;
   /**
+   * Featured rail / curated payloads may send a display badge string
+   * (e.g. `"Featured"`). Prefer this over inventing labels client-side.
+   */
+  badge?: string | null;
+  /**
    * Featured rail only (mls-backend FeaturedPropertiesAPIView):
    * pinned | history | local | curated | exclusive.
    */
@@ -132,6 +164,32 @@ export interface BackendPropertyDetail extends Omit<BackendPropertySummary, "med
   building_features?: string | null;
   garages?: number | null;
   garage_size?: string | null;
+  /** Detail aliases (PropertyDetailSerializer) — prefer these when present. */
+  garage_spaces?: number | null;
+  garage_type?: string | null;
+  garage_yn?: boolean | null;
+  style?: string | null;
+  exterior?: string | null;
+  fronting_on?: string | null;
+  direction_faces?: string | null;
+  listing_brokerage?: string | null;
+  list_office_name?: string | null;
+  original_list_price?: string | null;
+  living_area_range?: string | null;
+  square_feet_above_ground?: string | number | null;
+  parking_drive_spaces?: number | string | null;
+  open_parking_spaces?: number | string | null;
+  link?: boolean | string | null;
+  laundry_level?: string | null;
+  laundry_features?: string | null;
+  locker?: boolean | string | null;
+  rooms_count?: number | null;
+  rooms_total?: number | null;
+  lot_size?: string | null;
+  cross_street?: string | null;
+  possession?: string | null;
+  tax_legal_description?: string | null;
+  parcel_number?: string | null;
   kitchens?: number | null;
   bedrooms_above_grade?: number | null;
   bedrooms_below_grade?: number | null;
@@ -141,6 +199,17 @@ export interface BackendPropertyDetail extends Omit<BackendPropertySummary, "med
   water_source?: string | null;
   sewer?: string | null;
   bathrooms_partial: number | null;
+  bathrooms_full?: number | null;
+  /** REALM-style washroom summary rows (count / pieces / level). */
+  washroom_info?: BackendWashroomInfo[] | null;
+  /** Pre-filtered washroom room rows (prefer over scanning `rooms`). */
+  washrooms?: BackendWashroom[] | null;
+  /** Feature chips from PropertyDetail — prefer over RESO feature columns. */
+  features?: string[] | null;
+  /** Interior feature chips (separate from appliances / exterior). */
+  interior_features_list?: string[] | null;
+  /** Inclusion chips; prefer over raw `inclusions` / `appliances` strings. */
+  inclusions_list?: string[] | null;
   stories: number | null;
   tax_annual_amount: string | null;
   /** Assessment year for Property tax/year when the feed fills it. */
@@ -257,6 +326,8 @@ export interface BackendValuationEstimate {
     series?: Array<{ month?: string; median_sold_price?: number | null; units_sold?: number | null }>;
   };
   comps: Array<Record<string, unknown>>;
+  /** Alias of `comps` on some estimate payloads. */
+  comparables?: Array<Record<string, unknown>>;
   active_comps?: Array<Record<string, unknown>>;
   agent: Record<string, unknown> | null;
   beta: boolean;

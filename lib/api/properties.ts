@@ -9,13 +9,19 @@
  * Property TYPE is server-side too, via the backend's `home_type` filter
  * (2026-09). This feed's `property_sub_type` is "Single Family" for 4,114 of
  * 4,622 rows, so it cannot tell a condo from a house; `home_type` reads
- * `structure_type` + `property_attached_yn` instead. "Luxury" has no feed
- * field and is a price floor. Only a type with no server mapping still falls
- * back to the windowed client-side match (disclosed in the UI as "About N").
+ * `structure_type` + `property_attached_yn` instead. "Luxury" is a living-area
+ * band (effective sqft > 3500 → `sqft_min=3501`), not a structure or price
+ * floor. Only a type with no server mapping still falls back to the windowed
+ * client-side match (disclosed in the UI as "About N").
  */
 
 import { ApiError, apiFetch, type RequestOptions } from "@/lib/api/client";
 import { mapPropertyDetail, mapPropertySummary, mapPropertyTypeFacet, matchesUiType } from "@/lib/api/mappers";
+import {
+  DEFAULT_FILTER_SCHEMA,
+  normalizeFilterSchema,
+  type FilterSchema,
+} from "@/lib/search/filterSchema";
 import { backendStatusGroup, type BackendStatusGroup } from "@/lib/utils/status";
 import type {
   BackendListResponse,
@@ -47,16 +53,22 @@ export const HOME_TYPE_PARAM: Readonly<Record<string, string>> = {
   Townhome: "townhouse",
   Condo: "condo",
 };
-/** "Luxury" is a price band, not a structure. */
-export const LUXURY_MIN_PRICE = 2_000_000;
+/**
+ * Luxury = effective living area strictly greater than 3500 sq ft.
+ * Listing API uses gte, so pass 3501 (matches backend Coalesce(above_grade,
+ * living_area, building_area_total) > 3500).
+ */
+export const LUXURY_MIN_SQFT = 3501;
 
 function typeIsServerSide(type: string): boolean {
   return type in HOME_TYPE_PARAM || type === "Luxury";
 }
 
-/** Min price with the Luxury floor applied. */
-function effectivePriceMin(query: ListingQuery): number | undefined {
-  return query.type === "Luxury" ? Math.max(query.priceMin ?? 0, LUXURY_MIN_PRICE) : query.priceMin;
+/** Min sqft with the Luxury size floor applied (no price floor for Luxury). */
+function effectiveSqftMin(query: ListingQuery): number | undefined {
+  return query.type === "Luxury"
+    ? Math.max(query.sqftMin ?? 0, LUXURY_MIN_SQFT)
+    : query.sqftMin;
 }
 
 export const SORT_TO_ORDERBY: Record<ListingSort, string> = {
@@ -90,7 +102,18 @@ export function toBackendParams(query: ListingQuery, limit?: number, offset?: nu
   // Never ask the backend for relaxed / nearby / catalogue fallbacks. An empty
   // match must render the empty state — substitute listings are always wrong.
   // Status tabs select a GROUP ("Sold" also matches "Closed"/"Leased").
-  const group = backendStatusGroup(query.status);
+  const transaction = query.transaction ?? "sale";
+  // Prefer an explicit status group. When the URL has none, For Sale / For Rent
+  // must still exclude sold — otherwise map (and any caller that forgets
+  // status=Active) mixes closed homes into the active catalogue.
+  const explicitGroup = backendStatusGroup(query.status);
+  const group =
+    explicitGroup ??
+    (query.status
+      ? undefined
+      : transaction === "sold"
+        ? "sold"
+        : "active");
   const sortKey =
     query.sort === "relevance" && !query.semantic ? "newest" : (query.sort ?? "newest");
   // Omit default "newest" — sorted active+sale queries are intermittent and
@@ -105,16 +128,20 @@ export function toBackendParams(query: ListingQuery, limit?: number, offset?: nu
     city: query.city,
     status: group ? undefined : query.status,
     status_group: group ?? undefined,
-    transaction_type: query.transaction,
+    transaction_type: transaction,
     has_lease: query.hasLease ? "true" : undefined,
     orderby,
     semantic: query.semantic,
     // Server-side since G1 — exact counts, no window cap.
-    price_min: effectivePriceMin(query),
+    price_min: query.priceMin,
     price_max: query.priceMax,
+    bedrooms: query.bedsMin,
+    bathrooms: query.bathsMin,
     beds_min: query.bedsMin,
     baths_min: query.bathsMin,
-    sqft_min: query.sqftMin,
+    sold_within_days:
+      transaction === "sold" ? query.soldWithinDays : undefined,
+    sqft_min: effectiveSqftMin(query),
     sqft_max: query.sqftMax,
     year_built_min: query.yearBuiltMin,
     garages_min: query.garagesMin,
@@ -273,6 +300,21 @@ export async function searchProperties(
  * so tab counts match the result total. Polygon is still omitted — expensive
  * and rare on this strip. A failure returns null; tabs stay without counts.
  */
+/** Option sets + sheet visibility by transaction_type. Falls back on 404. */
+export async function getFilterSchema(
+  options: RequestOptions = {},
+): Promise<FilterSchema> {
+  try {
+    const data = await apiFetch<unknown>(`${MLS}/properties/filter-schema/`, {
+      revalidate: 3600,
+      ...options,
+    });
+    return normalizeFilterSchema(data);
+  } catch {
+    return DEFAULT_FILTER_SCHEMA;
+  }
+}
+
 export async function getPropertyFacets(
   query: ListingQuery = {},
   options: RequestOptions = {},
@@ -295,11 +337,11 @@ export async function getPropertyFacets(
         status_group: group ?? undefined,
         transaction_type: query.transaction,
         has_lease: query.hasLease ? "true" : undefined,
-        price_min: effectivePriceMin(query),
+        price_min: query.priceMin,
         price_max: query.priceMax,
         beds_min: query.bedsMin,
         baths_min: query.bathsMin,
-        sqft_min: query.sqftMin,
+        sqft_min: effectiveSqftMin(query),
         sqft_max: query.sqftMax,
         year_built_min: query.yearBuiltMin,
         garages_min: query.garagesMin,

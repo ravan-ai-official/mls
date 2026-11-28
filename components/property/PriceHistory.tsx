@@ -4,8 +4,9 @@ import { EMPTY, formatDate, formatPrice } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * Buy/Sell history table from HomeAtlasUI, filled with recorded snapshots.
- * Snapshots start when this catalogue began tracking the listing.
+ * Buy/Sell history table from HomeAtlasUI.
+ * Prefer API history[] fields: date_start, date_end, price, event, listing_id.
+ * Never put event/status text in the Date End column.
  */
 export function PriceHistory({
   snapshots,
@@ -15,7 +16,7 @@ export function PriceHistory({
   listingId: string;
 }) {
   const ordered = [...snapshots].sort((a, b) =>
-    (a.recordedAt ?? "") < (b.recordedAt ?? "") ? -1 : 1,
+    (a.dateStart ?? a.recordedAt ?? "") < (b.dateStart ?? b.recordedAt ?? "") ? -1 : 1,
   );
   const newestFirst = [...ordered].reverse();
   const changes = ordered.filter((row, index) => {
@@ -47,24 +48,21 @@ export function PriceHistory({
               </thead>
               <tbody>
                 {newestFirst.map((row, index) => {
-                  const newer = newestFirst[index - 1];
-                  const end =
-                    index === 0
-                      ? row.status
-                        ? statusLabel(normalizeStatus(row.status))
-                        : "Active"
-                      : formatDate(newer?.recordedAt ?? null);
+                  const start = row.dateStart ?? row.recordedAt;
+                  const end = row.dateEnd ? formatDate(row.dateEnd) : EMPTY;
+                  const eventText = row.event ?? row.status;
+                  const rowListingId = row.listingId || listingId || EMPTY;
                   return (
-                    <tr key={`${row.recordedAt}-${index}`} className="border-b border-line-soft">
-                      <td className="px-4 py-4 sm:px-6">{formatDate(row.recordedAt)}</td>
+                    <tr key={`${start}-${index}`} className="border-b border-line-soft">
+                      <td className="px-4 py-4 sm:px-6">{formatDate(start)}</td>
                       <td className="px-4 py-4 text-ink-muted sm:px-6">{end}</td>
                       <td className="px-4 py-4 font-semibold text-navy sm:px-6">
                         {formatPrice(row.listPrice)}
                       </td>
                       <td className="px-4 py-4 sm:px-6">
-                        <EventBadge status={row.status} />
+                        <EventBadge event={eventText} />
                       </td>
-                      <td className="px-4 py-4 text-ink-muted sm:px-6">{listingId || EMPTY}</td>
+                      <td className="px-4 py-4 text-ink-muted sm:px-6">{rowListingId}</td>
                     </tr>
                   );
                 })}
@@ -81,8 +79,8 @@ export function PriceHistory({
         ) : (
           <ul className="space-y-2 text-[13px]">
             {changes.map((row) => (
-              <li key={row.recordedAt} className="flex justify-between gap-3">
-                <span className="text-ink-muted">{formatDate(row.recordedAt)}</span>
+              <li key={row.dateStart ?? row.recordedAt ?? String(row.listPrice)} className="flex justify-between gap-3">
+                <span className="text-ink-muted">{formatDate(row.dateStart ?? row.recordedAt)}</span>
                 <span className="font-medium text-ink">{formatPrice(row.listPrice)}</span>
               </li>
             ))}
@@ -93,9 +91,14 @@ export function PriceHistory({
   );
 }
 
-function EventBadge({ status }: { status: string | null }) {
-  const normalized = status ? normalizeStatus(status) : "other";
-  const label = status ? statusLabel(normalized) : EMPTY;
+function EventBadge({ event }: { event: string | null }) {
+  if (!event) {
+    return <span className="text-ink-muted">{EMPTY}</span>;
+  }
+  const normalized = normalizeStatus(event);
+  const label = statusLabel(normalized);
+  // If normalizeStatus collapses unknown strings to "other", keep the feed event text.
+  const display = normalized === "other" && event.trim() ? event.trim() : label;
   return (
     <span
       className={cn(
@@ -105,7 +108,7 @@ function EventBadge({ status }: { status: string | null }) {
         normalized !== "sold" && normalized !== "active" && "bg-surface-alt text-ink-muted",
       )}
     >
-      {label}
+      {display}
     </span>
   );
 }

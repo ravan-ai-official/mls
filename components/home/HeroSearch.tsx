@@ -30,7 +30,7 @@ const DEFAULT_TRY_PROMPTS = [
 ];
 
 const DEFAULT_INTENTS: HeroOption[] = [
-  { value: "buy", label: "Buy" },
+  { value: "buy", label: "For Sale" },
   { value: "rent", label: "Rent" },
   { value: "sold", label: "Sold" },
 ];
@@ -81,7 +81,7 @@ const DEFAULT_BATH_OPTIONS: HeroOption[] = [
 const INTENT_QUERY: Record<HeroIntentValue, { status?: string; tx?: string }> = {
   buy: { status: "Active" },
   rent: { tx: "rent" },
-  sold: { status: "Sold" },
+  sold: { status: "Sold", tx: "sold" },
 };
 
 type HeroMode = "ai" | "filters";
@@ -257,7 +257,7 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <HeroSelect
-          label="Listing type"
+          label="Transaction type"
           value={intent}
           onChange={(value) => {
             if (!isHeroIntentValue(value)) return;
@@ -267,7 +267,13 @@ function FilterSearch({ content }: { content?: Record<string, unknown> }) {
         >
           {intents.map((item) => (
             <option key={item.value} value={item.value}>
-              {item.label}
+              {item.value === "buy"
+                ? "For Sale"
+                : item.value === "rent"
+                  ? "Rent"
+                  : item.value === "sold"
+                    ? "Sold"
+                    : item.label}
             </option>
           ))}
         </HeroSelect>
@@ -352,7 +358,7 @@ function HeroSelect({
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 w-full cursor-pointer appearance-none rounded-control border border-line bg-surface px-3.5 pr-8 text-small text-ink transition-colors hover:border-gold focus:border-navy focus:outline-none"
+        className="h-11 w-full cursor-pointer appearance-none rounded-control border border-line bg-surface px-3.5 pr-8 text-small text-ink transition-colors hover:border-gold focus:border-navy/35 focus:outline-none focus:ring-2 focus:ring-navy/10"
       >
         {children}
       </select>

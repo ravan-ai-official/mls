@@ -28,11 +28,13 @@ export function listingsSearchKey(search: string | URLSearchParams): string {
         : search
       : search,
   );
+  // Presentation-only — must not bust the search cache or refetch.
+  params.delete("view");
   params.sort();
   return params.toString();
 }
 
-/** Same defaults as the listings page (For Sale when unset). */
+/** Same defaults as the listings page (For sale when unset). */
 export function listingQueryFromSearch(params: URLSearchParams | string): ListingQuery {
   const parsed = parseListingSearch(params);
   const cityFromSearch =
@@ -40,7 +42,17 @@ export function listingQueryFromSearch(params: URLSearchParams | string): Listin
   const query = cityFromSearch
     ? { ...parsed, city: cityFromSearch, search: undefined }
     : parsed;
-  return query.status || query.openHouse ? query : { ...query, status: "Active" };
+  const transaction = query.transaction ?? "sale";
+  if (transaction === "sold") {
+    return {
+      ...query,
+      transaction: "sold",
+      status: query.status ?? "Sold",
+      openHouse: undefined,
+    };
+  }
+  if (query.status || query.openHouse) return { ...query, transaction };
+  return { ...query, transaction, status: "Active" };
 }
 
 /**

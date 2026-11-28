@@ -23,7 +23,7 @@ export interface MarketDeal {
 
 export const marketDeals: MarketDeal[] = [
   {
-    title: "Distress Deals",
+    title: "Below-Market Deals",
     desc: "Properties priced to move fast — motivated sellers, below-market opportunities.",
     icon: "distress",
     badge: "Urgent",

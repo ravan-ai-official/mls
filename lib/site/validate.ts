@@ -24,7 +24,17 @@ import { parsePostalList } from "@/lib/utils/postal";
 export type FieldErrors = Record<string, string>;
 
 const QUICK = new Set(["buy", "rent", "precon", "sell"]);
-const TYPES = new Set(["detached", "condo", "townhome", "luxury", "semi", "openHouse", "rental"]);
+const TYPES = new Set([
+  "detached",
+  "semiDetached",
+  "semi",
+  "condo",
+  "townhome",
+  "luxury",
+  "openHouse",
+  // Legacy CMS rows — still accepted so old publishes validate.
+  "rental",
+]);
 const ADVANTAGE = new Set(["mls", "precon", "local", "guidance"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -195,7 +205,7 @@ function validateSection(id: SectionId, content: Record<string, unknown>, errors
     rail();
     return;
   }
-  if (id === "featuredListings" || id === "soldBelow") {
+  if (id === "featuredListings" || id === "soldBelow" || id === "profitableInvestments") {
     rail(true);
     return;
   }
@@ -525,8 +535,14 @@ export function validateCurated(document: unknown): FieldErrors {
       errors[`${path}.group`] = "Pick a group.";
     }
     const query = isRecord(row.query) ? row.query : {};
-    if (query.transaction != null && query.transaction !== "" && query.transaction !== "sale" && query.transaction !== "rent") {
-      errors[`${path}.query.transaction`] = "Choose sale or rent.";
+    if (
+      query.transaction != null &&
+      query.transaction !== "" &&
+      query.transaction !== "sale" &&
+      query.transaction !== "rent" &&
+      query.transaction !== "sold"
+    ) {
+      errors[`${path}.query.transaction`] = "Choose sale, rent, or sold.";
     }
     if (query.type != null && query.type !== "" && !CURATED_TYPE_SET.has(String(query.type))) {
       errors[`${path}.query.type`] = "Pick a property type.";

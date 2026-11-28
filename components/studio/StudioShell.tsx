@@ -397,7 +397,7 @@ export function StudioShell({
               aria-label="Search admin console"
               aria-autocomplete="list"
               aria-controls="studio-nav-results"
-              className="h-9 w-full rounded-control border border-line bg-surface-alt/70 pl-9 pr-14 text-small text-ink placeholder:text-ink-subtle focus:border-navy focus:bg-surface focus:outline-none focus:ring-1 focus:ring-navy"
+              className="h-9 w-full rounded-control border border-line bg-surface-alt/70 pl-9 pr-14 text-small text-ink placeholder:text-ink-subtle focus:border-navy/35 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-navy/10"
             />
             <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-line bg-surface px-1.5 py-0.5 text-[0.65rem] font-medium text-ink-subtle sm:inline">
               ⌘K

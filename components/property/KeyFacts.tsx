@@ -49,8 +49,8 @@ function FactColumn({
           key={item.label}
           className="flex items-baseline justify-between gap-3 border-b border-line-soft px-4 py-3 text-[13px] sm:px-6"
         >
-          <dt className="text-ink-muted">{item.label}</dt>
-          <dd className="text-right font-medium text-ink">{item.value}</dd>
+          <dt className="shrink-0 text-ink-muted">{item.label}</dt>
+          <dd className="min-w-0 break-words text-right font-medium text-ink">{item.value}</dd>
         </div>
       ))}
     </dl>

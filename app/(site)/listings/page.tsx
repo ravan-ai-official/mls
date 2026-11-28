@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { PendingContent, PendingNavigationProvider } from "@/components/navigation/PendingNavigation";
 import { ListingFiltersChrome } from "@/components/property/ListingFiltersChrome";
 import { ListingsResults } from "@/components/property/ListingsResults";
+import { ListingsScrollRestore } from "@/components/property/ListingsScrollRestore";
 import { PropertyGridSkeleton } from "@/components/ui/States";
 import { getCurrentUser } from "@/lib/auth/session";
 import { matchKnownCity } from "@/lib/constants/cities";
@@ -24,39 +25,28 @@ export const metadata: Metadata = {
 export default async function ListingsPage({ searchParams }: PageProps<"/listings">) {
   const params = await searchParams;
   await stripDelistedForPublic(params);
-  const rent = parseListingParams(params).transaction === "rent";
   const user = await getCurrentUser();
   const isStaff = Boolean(user?.isStaff);
 
   return (
-    <>
-      <header className="border-b border-line bg-surface-alt py-4 sm:py-10">
-        <div className="container-page">
-          <h1 className="text-h2 sm:text-h1 text-ink">
-            {rent ? "GTA homes for rent" : "GTA homes for sale"}
-          </h1>
-          <p className="mt-0.5 hidden text-small text-ink-muted sm:mt-1 sm:block">
-            Live MLS® data, updated daily.
-          </p>
-        </div>
-      </header>
-
-      <PendingNavigationProvider>
-        <div className="container-page py-4 sm:py-8">
-          <Suspense fallback={<div className="h-24" />}>
+    <PendingNavigationProvider>
+      <ListingsScrollRestore />
+      <div className="container-page pb-24 pt-4 sm:pb-8 sm:py-8 md:pb-8">
+        <div className="sticky top-[72px] z-30 -mx-4 border-b border-line bg-surface px-4 py-3 sm:-mx-8 sm:px-8 lg:top-20">
+          <Suspense fallback={<div className="h-12" />}>
             <ListingFiltersChrome />
           </Suspense>
-
-          <div className="mt-4 sm:mt-8">
-            <PendingContent fallback={<PropertyGridSkeleton />}>
-              <Suspense fallback={<PropertyGridSkeleton />}>
-                <ListingsResults isStaff={isStaff} />
-              </Suspense>
-            </PendingContent>
-          </div>
         </div>
-      </PendingNavigationProvider>
-    </>
+
+        <div className="mt-4 sm:mt-6">
+          <PendingContent fallback={<PropertyGridSkeleton />}>
+            <Suspense fallback={<PropertyGridSkeleton />}>
+              <ListingsResults isStaff={isStaff} />
+            </Suspense>
+          </PendingContent>
+        </div>
+      </div>
+    </PendingNavigationProvider>
   );
 }
 

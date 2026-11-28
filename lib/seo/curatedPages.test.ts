@@ -27,7 +27,8 @@ describe("curated pages", () => {
 
   it("types filter server-side", () => {
     expect(toBackendParams(getCuratedPage("condos-under-500k")!.query)).toMatchObject({ home_type: "condo", price_max: 500000 });
-    expect(toBackendParams(getCuratedPage("luxury-homes")!.query).price_min).toBe(2_000_000);
+    expect(toBackendParams(getCuratedPage("luxury-homes")!.query).price_min).toBeUndefined();
+    expect(toBackendParams(getCuratedPage("luxury-homes")!.query).sqft_min).toBe(3501);
   });
 
   it("groups exclude city pages unless asked", () => {

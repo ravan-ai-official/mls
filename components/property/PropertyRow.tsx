@@ -1,11 +1,14 @@
 "use client";
 
-import { SafeImage } from "@/components/ui/SafeImage";
+import { motion } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { SafeImage } from "@/components/ui/SafeImage";
 import { cn } from "@/lib/utils/cn";
 import { PropertyBadgePill } from "@/components/ui/Badge";
 import { SaveButton } from "@/components/property/SaveButton";
 import { CompareButton } from "@/components/property/CompareButton";
+import { rememberListingsScroll } from "@/lib/hooks/useListingsScrollRestore";
 import type { PropertySummary } from "@/lib/types/domain";
 import {
   EMPTY,
@@ -14,6 +17,8 @@ import {
   formatPrice,
   formatDate,
 } from "@/lib/utils/format";
+
+const LAYOUT_SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
 
 /**
  * List-view row — the horizontal counterpart to <PropertyCard>.
@@ -28,10 +33,18 @@ import {
 export function PropertyRow({
   property,
   priority = false,
+  layout = false,
 }: {
   property: PropertySummary;
   priority?: boolean;
+  /** Shared-element morph with grid cards via layoutId. */
+  layout?: boolean;
 }) {
+  const router = useRouter();
+  const href = `/property/${encodeURIComponent(property.id)}`;
+  const prefetch = () => {
+    router.prefetch(href);
+  };
   const {
     id,
     address,
@@ -64,14 +77,24 @@ export function PropertyRow({
   const soldOn = closeDate ?? statusChangedAt;
 
   return (
-    <article
+    <motion.article
+      layout={layout || undefined}
+      layoutId={layout ? `listing-shell-${id}` : undefined}
+      transition={LAYOUT_SPRING}
       className={cn(
         "group relative flex flex-col gap-0 overflow-hidden rounded-surface border border-line bg-surface",
         "shadow-card transition-shadow duration-200 hover:shadow-card-hover",
         "has-[a:focus-visible]:border-navy sm:flex-row sm:gap-4",
       )}
+      onPointerEnter={prefetch}
+      onFocusCapture={prefetch}
     >
-      <div className="relative h-48 w-full shrink-0 bg-surface-alt sm:h-auto sm:w-44 sm:self-stretch">
+      <motion.div
+        layout={layout || undefined}
+        layoutId={layout ? `listing-photo-${id}` : undefined}
+        transition={LAYOUT_SPRING}
+        className="relative h-48 w-full shrink-0 bg-surface-alt sm:h-auto sm:w-44 sm:self-stretch"
+      >
         <SafeImage
           src={image}
           alt={`Photo of ${address}`}
@@ -83,18 +106,23 @@ export function PropertyRow({
         {badge && (
           <PropertyBadgePill badge={badge} className="absolute left-2 top-2 z-10" />
         )}
-      </div>
+      </motion.div>
 
       <div className="flex min-w-0 flex-1 flex-col p-4 sm:py-4 sm:pl-0 sm:pr-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-h2 text-ink">
+            <motion.p
+              layout={layout || undefined}
+              layoutId={layout ? `listing-price-${id}` : undefined}
+              transition={LAYOUT_SPRING}
+              className="text-h2 text-ink"
+            >
               {headlinePrice === null
                 ? EMPTY
                 : isLease
                   ? formatLeasePrice(headlinePrice)
                   : formatPrice(headlinePrice)}
-            </p>
+            </motion.p>
 
             {isSold && closePrice !== null && price !== null && (
               <p className="mt-0.5 text-caption text-ink-muted">
@@ -115,9 +143,10 @@ export function PropertyRow({
 
             <h3 className="mt-1 truncate text-small font-medium text-ink">
               <Link
-                href={`/property/${encodeURIComponent(id)}`}
+                href={href}
+                onClick={rememberListingsScroll}
                 aria-label={`${address}${headlinePrice === null ? "" : `, ${isSold ? "sold for " : ""}${isLease ? formatLeasePrice(headlinePrice) : formatPrice(headlinePrice)}`}`}
-                className="outline-none before:absolute before:inset-0 before:rounded-surface focus-visible:before:outline-1 focus-visible:before:outline-offset-2 focus-visible:before:outline-navy"
+                className="outline-none before:absolute before:inset-0 before:rounded-surface focus-visible:before:outline-1 focus-visible:before:outline-offset-2 focus-visible:before:outline-navy/40"
               >
                 {address}
               </Link>
@@ -150,7 +179,7 @@ export function PropertyRow({
           <span className="text-ink-muted">MLS® {mls}</span>
         </dl>
       </div>
-    </article>
+    </motion.article>
   );
 }
 

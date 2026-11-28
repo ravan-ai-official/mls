@@ -131,7 +131,7 @@ export function Modal({
   return createPortal(
     <div
       className={cn(
-        "fixed inset-0 z-[200] flex justify-center overscroll-contain",
+        "fixed inset-0 z-[600] flex justify-center overscroll-contain",
         size === "full" ? "items-center p-2 sm:p-4" : "items-end sm:items-center sm:p-4",
       )}
     >

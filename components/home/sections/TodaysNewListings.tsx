@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { PropertyCard } from "@/components/property/PropertyCard";
 import { EmptyState, PropertyGridSkeleton } from "@/components/ui/States";
-import { getNewlyListed } from "@/lib/api/properties";
+import { HOME_RAIL_LIMIT, loadTodaysNewRail } from "@/lib/home/rails";
 import { useMlsQuery } from "@/lib/queries/useMlsQuery";
 import type { PropertySummary } from "@/lib/types/domain";
 import { textOf } from "@/lib/site/read";
@@ -12,19 +12,14 @@ import { cn } from "@/lib/utils/cn";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Today's new listings — client fetch so Network shows `/api/mls/…` JSON.
+ * Today's new listings — exactly three cards. "View All" opens /todays-new.
  */
 export function TodaysNewListings({ content }: { content?: Record<string, unknown> }) {
+  const viewAllHref = textOf(content, "actionHref", "/todays-new");
+  const viewAllLabel = textOf(content, "actionLabel", "View All");
   const { data: listings = [], isPending } = useMlsQuery<PropertySummary[]>(
-    ["home", "todays-new"],
-    async () => {
-      const today = await getNewlyListed(4, {
-        params: { since_hours: 24 },
-        timeoutMs: 8_000,
-      }).catch(() => [] as PropertySummary[]);
-      if (today.length > 0) return today;
-      return getNewlyListed(4).catch(() => [] as PropertySummary[]);
-    },
+    ["home", "todays-new", HOME_RAIL_LIMIT],
+    () => loadTodaysNewRail(HOME_RAIL_LIMIT),
     [],
   );
 
@@ -67,15 +62,15 @@ export function TodaysNewListings({ content }: { content?: Record<string, unknow
             </p>
           </div>
           <Link
-            href={textOf(content, "actionHref", "/listings?sort=newest")}
+            href={viewAllHref}
             className="text-small font-semibold text-navy transition-colors hover:text-gold"
           >
-            {textOf(content, "actionLabel", "View All")} →
+            {viewAllLabel} →
           </Link>
         </div>
 
         {isPending && listings.length === 0 ? (
-          <PropertyGridSkeleton count={4} />
+          <PropertyGridSkeleton count={HOME_RAIL_LIMIT} />
         ) : listings.length === 0 ? (
           <EmptyState
             title="Listings are unavailable right now"
@@ -83,8 +78,8 @@ export function TodaysNewListings({ content }: { content?: Record<string, unknow
             action={{ label: "Browse listings", href: "/listings" }}
           />
         ) : (
-          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {listings.slice(0, 4).map((property) => (
+          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {listings.slice(0, HOME_RAIL_LIMIT).map((property) => (
               <li key={property.id} className="relative h-full">
                 <PropertyCard property={property} className="h-full" />
                 {isToday(property) && (

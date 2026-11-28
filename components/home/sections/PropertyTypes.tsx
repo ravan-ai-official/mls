@@ -6,7 +6,7 @@ import {
   IconCondo,
   IconDetached,
   IconLuxury,
-  IconRental,
+  IconOpenHouse,
   IconSemi,
   IconTownhome,
 } from "@/components/home/icons";
@@ -17,8 +17,11 @@ import type { PropertyTypeFacet, UiPropertyType } from "@/lib/types/domain";
 import { textOf } from "@/lib/site/read";
 import { formatNumber } from "@/lib/utils/format";
 
+/** Canonical explore tiles — order matches GET property-types. */
 const TILES: Array<{
   icon: string;
+  /** Alternate CMS icon keys that map onto this tile. */
+  iconAliases?: string[];
   label: string;
   href: string;
   Icon: ComponentType<{ className?: string }>;
@@ -27,46 +30,51 @@ const TILES: Array<{
   {
     icon: "detached",
     label: "Detached",
-    href: "/listings?home_type=detached",
+    href: "/listings?type=Detached",
     Icon: IconDetached,
     uiType: "Detached",
   },
   {
-    icon: "semi",
+    icon: "semiDetached",
+    iconAliases: ["semi"],
     label: "Semi-Detached",
-    href: "/listings?home_type=semi",
+    href: "/listings?type=Semi-Detached",
     Icon: IconSemi,
     uiType: "Semi-Detached",
   },
   {
     icon: "townhome",
     label: "Townhomes",
-    href: "/listings?home_type=townhouse",
+    href: "/listings?type=Townhome",
     Icon: IconTownhome,
     uiType: "Townhome",
   },
   {
-    icon: "luxury",
-    label: "Luxury",
-    href: "/listings?price_min=2000000",
-    Icon: IconLuxury,
-    uiType: "Luxury",
-  },
-  {
     icon: "condo",
     label: "Condos",
-    href: "/listings?home_type=condo",
+    href: "/listings?type=Condo",
     Icon: IconCondo,
     uiType: "Condo",
   },
   {
-    icon: "rental",
-    label: "Rentals",
-    href: "/listings?transaction_type=rent",
-    Icon: IconRental,
-    uiType: "Rental",
+    icon: "luxury",
+    label: "Luxury",
+    href: "/listings?sqftMin=3501",
+    Icon: IconLuxury,
+    uiType: "Luxury",
+  },
+  {
+    icon: "openHouse",
+    label: "Open Houses",
+    href: "/listings?openHouse=1",
+    Icon: IconOpenHouse,
+    uiType: "Open Houses",
   },
 ];
+
+function tileKeys(tile: (typeof TILES)[number]): string[] {
+  return [tile.icon, ...(tile.iconAliases ?? [])];
+}
 
 export function PropertyTypes({ content }: { content?: Record<string, unknown> }) {
   const { data: facets = [] } = useMlsQuery<PropertyTypeFacet[]>(
@@ -86,12 +94,24 @@ export function PropertyTypes({ content }: { content?: Record<string, unknown> }
   for (const item of custom) {
     if (!item || typeof item !== "object") continue;
     const row = item as { icon?: string; label?: string; href?: string };
-    const icon = row.icon === "openHouse" ? "semi" : row.icon;
-    if (icon) customByIcon.set(icon, row);
+    if (row.icon) customByIcon.set(row.icon, row);
   }
 
-  const tiles = TILES.map((tile) => {
-    const override = customByIcon.get(tile.icon);
+  // Prefer API order when every tile has a matching facet; otherwise keep TILES order.
+  const byUiType = new Map(TILES.map((tile) => [tile.uiType, tile]));
+  const fromApi = facets
+    .map((facet) => (facet.uiType ? byUiType.get(facet.uiType) : undefined))
+    .filter((tile): tile is (typeof TILES)[number] => Boolean(tile));
+  const ordered =
+    fromApi.length === TILES.length
+      ? fromApi
+      : TILES;
+
+  const tiles = ordered.map((tile) => {
+    const override =
+      tileKeys(tile)
+        .map((key) => customByIcon.get(key))
+        .find(Boolean) ?? undefined;
     return {
       ...tile,
       label: override?.label || tile.label,
@@ -107,12 +127,12 @@ export function PropertyTypes({ content }: { content?: Record<string, unknown> }
     >
       <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map(({ label, href, Icon, uiType }) => {
-          const count = uiType ? counts.get(uiType) : undefined;
+          const count = counts.get(uiType);
           return (
-            <li key={label} className="h-full">
+            <li key={uiType} className="h-full">
               <Link
                 href={href}
-                className="group flex h-full flex-col items-start gap-5 rounded-control border border-transparent bg-surface p-5 shadow-card transition-all hover:border-gold/20 hover:shadow-card-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+                className="group flex h-full flex-col items-start gap-5 rounded-control border border-transparent bg-surface p-5 shadow-card transition-all hover:border-gold/20 hover:shadow-card-hover focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-navy/40"
               >
                 <Icon className="transition-transform group-hover:scale-110" />
                 <span className="flex w-full items-baseline justify-between gap-2">

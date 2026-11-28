@@ -25,9 +25,19 @@ const money = (value: number | null) => (value === null ? EMPTY : formatPrice(va
  * AVM sample rows. Missing feed values render as a dash.
  */
 const ROWS: Row[] = [
-  { label: "Municipality", value: (c) => dash(c.details.city ?? (c.kind === "comp" ? c.comp.city : null)) },
+  {
+    label: "Municipality",
+    value: (c) => dash(c.details.city ?? (c.kind === "comp" ? c.comp.city || null : null)),
+  },
   { label: "Community", value: (c) => dash(c.details.community) },
-  { label: "Address", value: (c) => dash(c.details.address ?? (c.kind === "comp" ? c.comp.address : null)) },
+  {
+    label: "Address",
+    value: (c) =>
+      dash(
+        (c.kind === "comp" ? c.comp.address || null : null) ??
+          c.details.address,
+      ),
+  },
   { label: "Level", value: (c) => dash(c.details.level) },
   { label: "Unit #", value: (c) => dash(c.details.unitNumber) },
   { label: "Locker", value: (c) => yesNo(c.details.locker) },
@@ -44,16 +54,38 @@ const ROWS: Row[] = [
   { label: "Style", value: (c) => dash(c.details.propertyStyle) },
   { label: "Lot frontage", value: (c) => dash(c.details.frontageFt === null ? null : `${num(c.details.frontageFt, 2)} ft`) },
   { label: "Lot depth", value: (c) => dash(c.details.depthFt === null ? null : `${num(c.details.depthFt, 2)} ft`) },
-  { label: "List price", value: (c) => money(c.details.listPrice) },
-  { label: "Last sold price", value: (c) => money(c.details.lastSoldPrice) },
+  {
+    label: "List price",
+    value: (c) =>
+      money(c.details.listPrice ?? (c.kind === "comp" ? c.comp.listPrice : null)),
+  },
+  {
+    label: "Last sold price",
+    value: (c) =>
+      money(
+        c.details.lastSoldPrice ??
+          (c.kind === "comp" ? c.comp.closePrice ?? c.comp.price : null),
+      ),
+  },
   { label: "Property taxes", value: (c) => money(c.details.taxAnnualAmount) },
   {
     label: "Days on market",
-    value: (c) => dash(c.details.daysOnMarket === null ? null : String(c.details.daysOnMarket)),
+    value: (c) => {
+      const days =
+        c.details.daysOnMarket ?? (c.kind === "comp" ? c.comp.daysOnMarket : null);
+      return dash(days === null ? null : String(days));
+    },
   },
   {
     label: "Square feet above ground",
-    value: (c) => dash(num(c.details.aboveGradeSqft ?? c.details.floorAreaSqft)),
+    value: (c) =>
+      dash(
+        num(
+          c.details.aboveGradeSqft ??
+            c.details.floorAreaSqft ??
+            (c.kind === "comp" ? c.comp.livingArea : null),
+        ),
+      ),
   },
   { label: "Garage parking spaces", value: (c) => dash(num(c.details.garageSpaces)) },
   { label: "Total parking spaces", value: (c) => dash(num(c.details.parkingTotal)) },
@@ -61,14 +93,21 @@ const ROWS: Row[] = [
   {
     label: "Number of bedrooms",
     value: (c) => {
-      const { bedrooms, bedroomsBelowGrade } = c.details;
+      const bedrooms =
+        c.details.bedrooms ?? (c.kind === "comp" ? c.comp.beds : null);
+      const { bedroomsBelowGrade } = c.details;
       if (bedrooms === null) return EMPTY;
       return bedroomsBelowGrade ? `${bedrooms} + ${bedroomsBelowGrade}` : String(bedrooms);
     },
   },
   {
     label: "Number of washrooms",
-    value: (c) => pair(num(c.details.bathroomsFull), num(c.details.bathroomsHalf)),
+    value: (c) => {
+      if (c.details.bathroomsFull !== null || c.details.bathroomsHalf !== null) {
+        return pair(num(c.details.bathroomsFull), num(c.details.bathroomsHalf));
+      }
+      return dash(c.kind === "comp" ? num(c.comp.baths) : null);
+    },
   },
   { label: "Family room", value: (c) => yesNo(c.details.familyRoom) },
   { label: "Basement (finished/unfinished)", value: (c) => dash(c.details.basement) },
@@ -84,7 +123,9 @@ const ROWS: Row[] = [
         "Subject"
       ) : (
         <>
-          {formatPrice(c.comp.closePrice ?? c.comp.price)}
+          {formatPrice(
+            c.comp.closePrice ?? c.comp.price ?? c.comp.details.lastSoldPrice,
+          )}
           <span className="block text-caption text-ink-subtle">
             {c.comp.source === "sold_proxy" ? "Last asking (off market)" : "Sold (close price)"}
           </span>
@@ -106,6 +147,13 @@ const ROWS: Row[] = [
           )}
         </>
       ),
+  },
+  {
+    label: "Distance (km)",
+    value: (c) =>
+      c.kind === "subject"
+        ? EMPTY
+        : dash(c.comp.distanceKm === null ? null : num(c.comp.distanceKm, 2)),
   },
   { label: "Province", value: (c) => dash(c.details.province) },
   { label: "Postal Code", value: (c) => dash(c.details.postalCode) },
@@ -163,19 +211,23 @@ const ROWS: Row[] = [
  * on narrow screens; the first column stays pinned.
  */
 export function AvmReport({ result }: { result: ValuationResult }) {
-  // Sold comparison table: sold + sold_proxy only — never fall back to for-sale rows.
+  // Sold table from estimate comps only (sold + sold_proxy). Never use active_comps.
+  // Keep rows without photos / with null source — comps[] is the sold feed.
   const soldComps = [
     ...result.comps.filter((c) => c.source === "sold"),
     ...result.comps.filter((c) => c.source === "sold_proxy"),
+    ...result.comps.filter(
+      (c) => c.source !== "sold" && c.source !== "sold_proxy" && c.source !== "active_listing",
+    ),
   ].slice(0, AVM_COMP_COLUMNS);
   const columns: Column[] = [
     { kind: "subject", details: result.subjectDetails },
     ...soldComps.map((comp) => ({ kind: "comp" as const, comp, details: comp.details })),
   ];
   const anyProxy = soldComps.some((comp) => comp.source === "sold_proxy");
-  // For-sale suggestions come only from active_comps (active_listing), never comps[].
+  // For-sale suggestion cards only — never mixed into the sold table.
   const active = result.activeComps
-    .filter((c) => c.source === "active_listing")
+    .filter((c) => c.source !== "sold" && c.source !== "sold_proxy")
     .slice(0, 5);
   const hedonic = result.breakdown.filter((b) => b.source !== "ai" && b.delta !== 0).slice(0, 8);
   const aiAdj = result.breakdown.filter((b) => b.source === "ai").slice(0, 8);
@@ -266,7 +318,7 @@ export function AvmReport({ result }: { result: ValuationResult }) {
         <h3 className="text-h3 text-navy">Comparable information</h3>
         {soldComps.length === 0 ? (
           <p className="mt-3 text-small text-ink-muted">
-            Not enough nearby solds to compare yet.
+            No nearby sold comparables found.
           </p>
         ) : (
           <>
